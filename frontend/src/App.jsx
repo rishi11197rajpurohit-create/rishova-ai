@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
 import "./App.css";
 
@@ -251,8 +253,15 @@ export default function App() {
                 {m.attachedFile && (
                   <div className="file-badge">📎 {m.attachedFile}</div>
                 )}
-                <div className="message-body" style={{ whiteSpace: "pre-wrap" }}>
-                  {m.content}
+                
+                <div className="message-body markdown-content">
+                  {m.role === "user" ? (
+                    <p>{m.content}</p>
+                  ) : (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {m.content}
+                    </ReactMarkdown>
+                  )}
                 </div>
 
                 {m.mermaid && (
