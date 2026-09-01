@@ -1,5 +1,4 @@
 import os
-import json
 import re
 import io
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
@@ -27,80 +26,88 @@ class UniversalRequest(BaseModel):
     prompt: str
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, an intelligent universal multi-agent task orchestrator.
-Analyze the user prompt and classify the intent into one of these types:
-1. "DIAGRAM" (User wants an architecture diagram, ERD, DFD, flowchart, or workflow).
-2. "BUILDER" (User wants to write code, create an app, build a script, generate a component, or terminal commands).
-3. "LEARNING" (User wants to learn a concept from zero, exam prep, practice, or step-by-step tutorial).
-4. "CHAT" (General question, reasoning, conversation, or advice).
+You are RISHOVA AI, an intelligent universal software architect and task orchestrator.
+When responding to user requests:
+1. If the user asks to build an app, API, code, or software, provide:
+   - Clear markdown explanation and directory structure.
+   - Complete working source code in standard markdown code blocks (e.g., ```javascript or ```python).
+   - Terminal setup/installation commands inside a ```bash block.
+2. If the user asks for a diagram, architecture flow, flowchart, or ERD:
+   - Provide the diagram strictly inside a ```mermaid code block.
+3. If the user asks a general conceptual or learning question:
+   - Provide structured, beautifully formatted markdown explanations with tables and lists.
 
-You must respond ONLY with a valid JSON object matching this schema:
-{
-  "intent": "BUILDER",
-  "title": "Short Task Title",
-  "data": {
-     "mermaid": "",
-     "markdown_response": "Full detailed explanation with architecture and code walkthrough.",
-     "code_snippet": "// Primary source code here\\nconsole.log('Hello World');",
-     "language": "javascript",
-     "commands": ["npm init -y", "npm install express jsonwebtoken bcryptjs dotenv"],
-     "summary": "Brief 1-line summary"
-  }
-}
-Note for BUILDER: Place the complete primary source code in data.code_snippet and commands in data.commands.
-Note for DIAGRAM: Place ONLY valid Mermaid syntax inside data.mermaid.
+Write clean, standard markdown directly.
 """
 
-def extract_json_safely(text: str):
-    """Clean markdown artifacts and parse JSON safely"""
-    text = text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
+def parse_llm_markdown_response(text: str, user_prompt: str):
+    """Accurately extract Mermaid, Code Snippets, Commands and Intent from Markdown"""
+    intent = "CHAT"
+    mermaid_code = ""
+    code_snippet = ""
+    language = "javascript"
+    commands = []
 
-    match = re.search(r'\{.*\}', text, re.DOTALL)
-    json_str = match.group(0) if match else text
+    # 1. Check for Mermaid Diagram
+    mermaid_match = re.search(r"```(?:mermaid)?\n([\s\S]*?)```", text)
+    if "graph " in text or "flowchart " in text or "sequenceDiagram" in text or "classDiagram" in text:
+        if mermaid_match and ("graph" in mermaid_match.group(1) or "flowchart" in mermaid_match.group(1) or "sequenceDiagram" in mermaid_match.group(1)):
+            mermaid_code = mermaid_match.group(1).strip()
+            intent = "DIAGRAM"
 
-    try:
-        return json.loads(json_str, strict=False)
-    except Exception:
-        cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', lambda m: ' ' if m.group(0) in '\r\n\t' else '', json_str)
-        try:
-            return json.loads(cleaned, strict=False)
-        except Exception:
-            return {
-                "intent": "BUILDER",
-                "title": "Generated Code & Guide",
-                "data": {
-                    "mermaid": "",
-                    "markdown_response": text,
-                    "code_snippet": text,
-                    "language": "javascript",
-                    "commands": [],
-                    "summary": "Generated response successfully"
-                }
-            }
+    # 2. Extract Bash / Terminal Commands
+    bash_matches = re.findall(r"```(?:bash|sh|shell|cmd|powershell)?\n([\s\S]*?)```", text)
+    for b in bash_matches:
+        lines = [line.strip() for line in b.strip().split("\n") if line.strip() and not line.startswith("#")]
+        if lines:
+            commands.extend(lines)
 
-def run_groq_inference(messages: list, temperature: float = 0.1):
-    """Dynamically discover currently active chat models on user's API key"""
+    # 3. Extract Primary Code Block
+    code_matches = re.finditer(r"```([a-zA-Z0-9_+-]+)?\n([\s\S]*?)```", text)
+    for m in code_matches:
+        lang = (m.group(1) or "").lower()
+        block = m.group(2).strip()
+        if lang not in ["mermaid", "bash", "sh", "shell", "cmd", "powershell", "json"] and len(block) > 40:
+            code_snippet = block
+            language = lang if lang else "javascript"
+            intent = "BUILDER"
+            break
+
+    # Keyword check for Builder/Diagram intent
+    prompt_lower = user_prompt.lower()
+    if any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "develop", "function", "component"]):
+        intent = "BUILDER"
+    elif any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "dfd", "workflow"]):
+        intent = "DIAGRAM"
+
+    return {
+        "intent": intent,
+        "title": "Rishova Universal Task",
+        "data": {
+            "mermaid": mermaid_code,
+            "markdown_response": text,
+            "code_snippet": code_snippet,
+            "language": language,
+            "commands": commands,
+            "summary": "Task processed successfully"
+        }
+    }
+
+def run_groq_inference(messages: list, temperature: float = 0.2):
+    """Query currently active chat models on user's API key"""
     active_chat_models = []
     try:
         model_list = client.models.list().data
         for m in model_list:
             mid = m.id.lower()
-            # Filter out non-chat, audio, vision, preview, and decommissioned models
             if not any(x in mid for x in ["whisper", "vision", "embed", "orpheus", "guard", "audio", "decommissioned"]):
                 if getattr(m, 'active', True):
                     active_chat_models.append(m.id)
     except Exception as e:
-        print("Model list fetch error:", e)
+        print("Model fetch error:", e)
 
     if not active_chat_models:
-        active_chat_models = ["llama-3.1-8b-instant", "llama3-8b-8192"]
+        active_chat_models = ["llama-3.1-8b-instant"]
 
     last_err = None
     for model_id in active_chat_models:
@@ -115,7 +122,7 @@ def run_groq_inference(messages: list, temperature: float = 0.1):
             last_err = e
             continue
 
-    raise HTTPException(status_code=500, detail=f"All active Groq models failed: {str(last_err)}")
+    raise HTTPException(status_code=500, detail=f"All Groq models failed: {str(last_err)}")
 
 @app.get("/")
 def read_root():
@@ -128,8 +135,8 @@ async def handle_universal_prompt(req: UniversalRequest):
             {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
             {"role": "user", "content": req.prompt}
         ]
-        raw_text = run_groq_inference(messages, temperature=0.1)
-        return extract_json_safely(raw_text)
+        raw_markdown = run_groq_inference(messages, temperature=0.2)
+        return parse_llm_markdown_response(raw_markdown, req.prompt)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
