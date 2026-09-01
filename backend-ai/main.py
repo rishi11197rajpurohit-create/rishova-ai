@@ -36,7 +36,7 @@ Analyze the user prompt and classify the intent into one of these types:
 
 You must respond with a clean, strictly valid JSON object using this exact structure:
 {
-  "intent": "DIAGRAM" | "LEARNING" | "BUILDER" | "CHAT",
+  "intent": "DIAGRAM",
   "title": "Title of the task",
   "data": {
      "mermaid": "graph TD\\n  User[User] --> Pay[Payment]",
@@ -101,38 +101,39 @@ async def handle_universal_prompt(req: UniversalRequest):
 @app.post("/api/ai/document")
 async def handle_document_upload(
     file: UploadFile = File(...),
-    prompt: str = Form("Summarize this document and list key points")
+    prompt: str = Form("Summarize this document and explain key points")
 ):
     try:
         extracted_text = ""
         filename = file.filename.lower()
-
-        # Read file contents
         content = await file.read()
 
         if filename.endswith(".pdf"):
             pdf_reader = PdfReader(io.BytesIO(content))
             for page in pdf_reader.pages:
-                extracted_text += (page.extract_text() or "") + "\n"
+                text = page.extract_text()
+                if text:
+                    extracted_text += text + "\n"
         else:
-            # Handle text/code/markdown files
             extracted_text = content.decode("utf-8", errors="ignore")
 
         if not extracted_text.strip():
-            raise HTTPException(status_code=400, detail="Could not extract text from uploaded file.")
+            extracted_text = f"File {file.filename} was uploaded but contained mostly tabular/binary data or scanned images."
 
-        # Truncate text if excessively long for context window
-        truncated_text = extracted_text[:15000]
+        # Keep context safe
+        truncated_text = extracted_text[:12000]
 
         model_id = get_active_model()
         system_doc_prompt = f"""
 You are RISHOVA AI Document Intelligence Agent.
-The user has uploaded a file named: '{file.filename}'.
-Document Content:
+The user has uploaded a document named: '{file.filename}'.
+
+Document Text Extracted:
 ---
 {truncated_text}
 ---
-Analyze the document and answer the user query accurately with markdown structure.
+
+Provide a clear, detailed, and structured breakdown answering the user's prompt. Use markdown formatting with bullet points and bold highlights.
 """
         completion = client.chat.completions.create(
             model=model_id,
@@ -149,8 +150,10 @@ Analyze the document and answer the user query accurately with markdown structur
             "filename": file.filename,
             "data": {
                 "markdown_response": response_text,
+                "mermaid": "",
+                "commands": [],
                 "summary": f"Analyzed file: {file.filename}"
             }
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Document processing error: {str(e)}")

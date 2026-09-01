@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import mermaid from "mermaid";
 import "./App.css";
 
-const AUTH_API = "[https://rishova-auth-backend.onrender.com/api/auth](https://rishova-auth-backend.onrender.com/api/auth)";
-const AI_API = "[https://rishova-ai-backend.onrender.com/api/ai](https://rishova-ai-backend.onrender.com/api/ai)";
+const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
+const AI_API = "https://rishova-ai-backend.onrender.com/api/ai";
 
 mermaid.initialize({
   startOnLoad: false,
@@ -108,7 +108,6 @@ export default function App() {
     try {
       let res, data;
       if (fileToUpload) {
-        // Document API Call
         const formData = new FormData();
         formData.append("file", fileToUpload);
         formData.append("prompt", userText);
@@ -117,18 +116,22 @@ export default function App() {
           method: "POST",
           body: formData,
         });
-        data = await res.json();
       } else {
-        // Universal Intent Router API Call
         res = await fetch(`${AI_API}/universal`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt: userText }),
         });
-        data = await res.json();
       }
 
-      if (!res.ok) throw new Error(data.detail || "AI Processing Error");
+      const rawText = await res.text();
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseErr) {
+        throw new Error(`Server returned non-JSON response: ${rawText.slice(0, 100)}...`);
+      }
+
+      if (!res.ok) throw new Error(data.detail || data.message || "AI Processing Error");
 
       setMessages((prev) => [
         ...prev,
