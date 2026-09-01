@@ -7,8 +7,8 @@
 
 body, html {
   height: 100%;
-  background-color: #0d1117;
-  color: #c9d1d9;
+  background-color: #0e1117;
+  color: #e6edf3;
 }
 
 .app-container {
@@ -54,7 +54,6 @@ body, html {
   align-items: center;
   gap: 16px;
   font-weight: 600;
-  color: #f0f6fc;
 }
 
 .logout-btn {
@@ -67,11 +66,7 @@ body, html {
   font-weight: 600;
 }
 
-.logout-btn:hover {
-  background: #b62324;
-}
-
-/* Split-Screen 50-50 Layout */
+/* 50-50 Split View */
 .main-content {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -101,7 +96,7 @@ body, html {
 .chat-message {
   padding: 14px 18px;
   border-radius: 10px;
-  max-width: 90%;
+  max-width: 95%;
   line-height: 1.6;
 }
 
@@ -114,9 +109,9 @@ body, html {
 .chat-message.assistant {
   background-color: #161b22;
   border: 1px solid #30363d;
-  color: #c9d1d9;
+  color: #e6edf3;
   align-self: flex-start;
-  width: 95%;
+  width: 96%;
 }
 
 .message-header {
@@ -135,66 +130,70 @@ body, html {
   border-radius: 4px;
 }
 
-.file-badge {
-  background: #21262d;
-  border: 1px solid #388bfd;
-  color: #58a6ff;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  margin-bottom: 8px;
-}
-
-/* VS Code Style Code Blocks */
-.code-block-wrapper {
+/* Gemini / VS Code Style Code Card */
+.studio-code-card {
   margin: 14px 0;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid #30363d;
-  background-color: #1e1e1e;
+  border: 1px solid #27272a;
+  background-color: #18181b;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
-.code-block-header {
+.studio-code-card.full-height {
+  height: 100%;
+}
+
+.studio-code-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #252526;
-  padding: 6px 14px;
-  border-bottom: 1px solid #333;
+  background-color: #202023;
+  padding: 8px 16px;
+  border-bottom: 1px solid #2e2e32;
 }
 
-.code-lang-tag {
-  font-size: 0.75rem;
-  color: #9cdcfe;
+.studio-lang-title {
+  font-size: 0.8rem;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  color: #a1a1aa;
+  letter-spacing: 0.8px;
 }
 
-.copy-code-btn {
-  background: #333;
-  color: #fff;
-  border: 1px solid #444;
-  padding: 3px 10px;
-  border-radius: 4px;
+.studio-code-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-action-btn {
+  background: #27272a;
+  color: #e4e4e7;
+  border: 1px solid #3f3f46;
+  padding: 4px 10px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 0.75rem;
-  transition: all 0.2s;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.copy-code-btn:hover {
-  background: #0e639c;
+.icon-action-btn:hover {
+  background: #3f3f46;
 }
 
-.code-block-wrapper pre {
-  margin: 0 !important;
-  padding: 14px !important;
-  background-color: #1e1e1e !important;
-  overflow-x: auto;
-  font-size: 0.9rem;
+.inline-code-badge {
+  background: #27272a;
+  color: #ec4899;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  font-family: monospace;
 }
 
 .cmd-box {
-  background: #010409;
+  background: #090d13;
   border: 1px solid #30363d;
   border-radius: 8px;
   margin-top: 12px;
@@ -259,11 +258,11 @@ body, html {
   cursor: pointer;
 }
 
-/* Right Panel Styling */
+/* Right Panel */
 .preview-panel {
   display: flex;
   flex-direction: column;
-  background-color: #090d13;
+  background-color: #0d1117;
   height: 100%;
   overflow: hidden;
 }
@@ -315,20 +314,13 @@ body, html {
   font-weight: 700;
 }
 
-.action-btn {
-  background: #21262d;
-  color: #c9d1d9;
-  border: 1px solid #30363d;
-  padding: 4px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.8rem;
-}
-
 .download-btn {
   background: #238636;
   color: white;
   border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .workspace-content {
@@ -345,38 +337,20 @@ body, html {
   overflow: auto;
 }
 
-.code-pre {
-  margin: 0;
-  padding: 16px;
-  border-radius: 8px;
-  background-color: #1e1e1e !important;
-  border: 1px solid #30363d;
-  font-size: 0.95rem;
-  line-height: 1.5;
-}
-
-.canvas-area {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  overflow: auto;
-}
-
 .canvas-placeholder {
   text-align: center;
   color: #8b949e;
-  margin-top: 15%;
+  margin-top: 20%;
 }
 
 .canvas-placeholder p {
   font-size: 1.2rem;
-  color: #c9d1d9;
+  color: #e6edf3;
   font-weight: 600;
   margin-bottom: 6px;
 }
 
-/* Auth Pages */
+/* Auth Modal */
 .auth-wrapper {
   display: flex;
   justify-content: center;

@@ -2,13 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
-import Prism from "prismjs";
-import "prismjs/themes/prism-tomorrow.css";
-import "prismjs/components/prism-javascript";
-import "prismjs/components/prism-python";
-import "prismjs/components/prism-bash";
-import "prismjs/components/prism-json";
-import "prismjs/components/prism-typescript";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import "./App.css";
 
 const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
@@ -20,38 +15,61 @@ mermaid.initialize({
   securityLevel: "loose",
 });
 
-// Custom Code Block with direct Copy button & VS Code Styling
-const CodeBlock = ({ inline, className, children, ...props }) => {
+// Gemini / VS Code Studio Code Block Component
+const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
-  const lang = match ? match[1] : "text";
-  const codeContent = String(children).replace(/\n$/, "");
+  const lang = match ? match[1] : "javascript";
+  const codeString = String(children).replace(/\n$/, "");
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(codeContent);
+    navigator.clipboard.writeText(codeString);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  useEffect(() => {
-    Prism.highlightAll();
-  }, [children]);
+  const handleDownload = () => {
+    const blob = new Blob([codeString], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `code-snippet.${lang === "javascript" ? "js" : lang === "python" ? "py" : lang}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (inline) {
-    return <code className="inline-code" {...props}>{children}</code>;
+    return <code className="inline-code-badge" {...props}>{children}</code>;
   }
 
   return (
-    <div className="code-block-wrapper">
-      <div className="code-block-header">
-        <span className="code-lang-tag">{lang.toUpperCase()}</span>
-        <button className="copy-code-btn" onClick={handleCopy}>
-          {copied ? "✔ Copied!" : "📋 Copy"}
-        </button>
+    <div className="studio-code-card">
+      <div className="studio-code-header">
+        <span className="studio-lang-title">{lang.toUpperCase()}</span>
+        <div className="studio-code-actions">
+          <button className="icon-action-btn" title="Download File" onClick={handleDownload}>
+            ⬇
+          </button>
+          <button className="icon-action-btn copy-btn" title="Copy Code" onClick={handleCopy}>
+            {copied ? "✔ Copied" : "📋 Copy"}
+          </button>
+        </div>
       </div>
-      <pre className={`language-${lang}`}>
-        <code className={`language-${lang}`}>{codeContent}</code>
-      </pre>
+      <SyntaxHighlighter
+        language={lang}
+        style={vscDarkPlus}
+        customStyle={{
+          margin: 0,
+          padding: "16px",
+          backgroundColor: "#18181b",
+          fontSize: "0.92rem",
+          lineHeight: "1.6",
+          fontFamily: "'Fira Code', 'Consolas', monospace",
+        }}
+      >
+        {codeString}
+      </SyntaxHighlighter>
     </div>
   );
 };
@@ -79,7 +97,7 @@ export default function App() {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "Namaste! Main **RISHOVA AI** hoon. Aap mujhse diagram banwa sakte hain, PDF analyze karwa sakte hain, ya complete software & APIs build karwa sakte hain.",
+      content: "Namaste! Main **RISHOVA AI Studio** hoon. Aap mujhse kisi bhi language ka complete code, terminal commands, diagrams ya PDF intelligence build karwa sakte hain.",
       intent: "CHAT"
     }
   ]);
@@ -98,10 +116,6 @@ export default function App() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
-
-  useEffect(() => {
-    Prism.highlightAll();
-  }, [messages, activeCode, activeTab]);
 
   useEffect(() => {
     if (activeTab === "canvas" && activeDiagram && diagramRef.current) {
@@ -219,24 +233,6 @@ export default function App() {
     alert("Copied to clipboard!");
   };
 
-  const downloadSVG = () => {
-    if (!diagramRef.current) return;
-    const svgElement = diagramRef.current.querySelector("svg");
-    if (!svgElement) {
-      alert("No rendered diagram found to download!");
-      return;
-    }
-    const svgData = new XMLSerializer().serializeToString(svgElement);
-    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "rishova-diagram.svg";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   if (!token) {
     return (
       <div className="auth-wrapper">
@@ -291,7 +287,7 @@ export default function App() {
       </header>
 
       <div className="main-content">
-        {/* Left 50% Panel: Conversational Intelligence */}
+        {/* Chat / Left Panel */}
         <div className="chat-panel">
           <div className="chat-history">
             {messages.map((m, idx) => (
@@ -311,7 +307,7 @@ export default function App() {
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        code: CodeBlock
+                        code: StudioCodeBlock
                       }}
                     >
                       {m.content}
@@ -322,15 +318,21 @@ export default function App() {
                 {m.commands && m.commands.length > 0 && (
                   <div className="cmd-box">
                     <div className="cmd-header">
-                      <span>⚡ Step-by-Step Terminal Commands</span>
-                      <button onClick={() => copyToClipboard(m.commands.join("\n"))}>📋 Copy All Commands</button>
+                      <span>⚡ Quick Execution Terminal Commands</span>
+                      <button onClick={() => copyToClipboard(m.commands.join("\n"))}>📋 Copy All</button>
                     </div>
-                    <pre className="language-bash"><code className="language-bash">{m.commands.join("\n")}</code></pre>
+                    <SyntaxHighlighter
+                      language="bash"
+                      style={vscDarkPlus}
+                      customStyle={{ margin: 0, padding: "12px", backgroundColor: "#0f141c", borderRadius: "6px" }}
+                    >
+                      {m.commands.join("\n")}
+                    </SyntaxHighlighter>
                   </div>
                 )}
               </div>
             ))}
-            {loading && <div className="chat-message assistant loading">⚡ Rishova AI is generating full code & commands...</div>}
+            {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating code with syntax highlights...</div>}
             <div ref={chatBottomRef} />
           </div>
 
@@ -372,7 +374,7 @@ export default function App() {
           </form>
         </div>
 
-        {/* Right 50% Panel: Universal Workspace */}
+        {/* Right / Studio Workspace Panel */}
         <div className="preview-panel">
           <div className="panel-header">
             <div className="tab-switchers">
@@ -396,31 +398,33 @@ export default function App() {
                 <button className="action-btn download-btn" onClick={() => copyToClipboard(activeCode)}>📋 Copy Full Code</button>
               </div>
             )}
-
-            {activeTab === "canvas" && activeDiagram && (
-              <div className="canvas-controls">
-                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.max(0.4, z - 0.2))}>🔍 -</button>
-                <span className="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
-                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.2))}>🔍 +</button>
-                <button className="action-btn download-btn" onClick={downloadSVG}>⬇ SVG</button>
-                <button className="action-btn" onClick={() => copyToClipboard(activeDiagram)}>📋 Copy</button>
-              </div>
-            )}
           </div>
 
           <div className="workspace-content">
             {activeTab === "code" ? (
               <div className="code-viewer-area">
                 {activeCode ? (
-                  <pre className={`code-pre language-${activeLang}`}>
-                    <code className={`language-${activeLang}`}>
+                  <div className="studio-code-card full-height">
+                    <SyntaxHighlighter
+                      language={activeLang}
+                      style={vscDarkPlus}
+                      showLineNumbers={true}
+                      customStyle={{
+                        margin: 0,
+                        padding: "16px",
+                        backgroundColor: "#18181b",
+                        height: "100%",
+                        fontSize: "0.95rem",
+                        lineHeight: "1.6",
+                      }}
+                    >
                       {activeCode}
-                    </code>
-                  </pre>
+                    </SyntaxHighlighter>
+                  </div>
                 ) : (
                   <div className="canvas-placeholder">
                     <p>💻 VS Code Workspace Ready</p>
-                    <span>Ask Rishova AI to build an API or app to view full syntax highlighted code here.</span>
+                    <span>Ask Rishova AI to build an API or app to view full syntax-highlighted code here.</span>
                   </div>
                 )}
               </div>
@@ -430,7 +434,7 @@ export default function App() {
                   <div
                     ref={diagramRef}
                     className="mermaid-wrapper"
-                    style={{ transform: `scale(${zoomLevel})`, transformOrigin: "top center", transition: "transform 0.2s ease" }}
+                    style={{ transform: `scale(${zoomLevel})`, transformOrigin: "top center" }}
                   />
                 ) : (
                   <div className="canvas-placeholder">
