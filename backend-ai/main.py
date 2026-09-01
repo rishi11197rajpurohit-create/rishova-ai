@@ -50,7 +50,6 @@ Do not output anything outside the JSON object.
 def extract_json(text: str):
     """Clean and extract JSON from model output safely"""
     text = text.strip()
-    # Remove markdown codeblocks if present
     if text.startswith("```json"):
         text = text[7:]
     elif text.startswith("```"):
@@ -59,7 +58,6 @@ def extract_json(text: str):
         text = text[:-3]
     text = text.strip()
     
-    # Extract outermost JSON brackets
     match = re.search(r'\{.*\}', text, re.DOTALL)
     if match:
         return json.loads(match.group(0))
@@ -72,30 +70,34 @@ def read_root():
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
     try:
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
-                {"role": "user", "content": req.prompt}
-            ],
-            temperature=0.1
-        )
+        # Get active chat models directly from Groq account
+        models_data = client.models.list().data
+        active_models = [
+            m.id for m in models_data 
+            if not any(x in m.id for x in ["whisper", "guard", "vision", "embed"])
+        ]
         
-        raw_text = completion.choices[0].message.content
-        result = extract_json(raw_text)
-        return result
+        if not active_models:
+            active_models = ["llama-3.1-70b-versatile", "llama-3.2-3b-preview"]
+        
+        last_error = None
+        for model_id in active_models:
+            try:
+                completion = client.chat.completions.create(
+                    model=model_id,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
+                        {"role": "user", "content": req.prompt}
+                    ],
+                    temperature=0.1
+                )
+                raw_text = completion.choices[0].message.content
+                return extract_json(raw_text)
+            except Exception as model_err:
+                last_error = model_err
+                continue
+
+        raise HTTPException(status_code=500, detail=f"All models failed: {str(last_error)}")
+
     except Exception as e:
-        # Fallback to secondary model if first has issue
-        try:
-            fallback_completion = client.chat.completions.create(
-                model="gemma2-9b-it",
-                messages=[
-                    {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
-                    {"role": "user", "content": req.prompt}
-                ],
-                temperature=0.1
-            )
-            raw_text = fallback_completion.choices[0].message.content
-            return extract_json(raw_text)
-        except Exception as fallback_error:
-            raise HTTPException(status_code=500, detail=f"AI Error: {str(e)} | Fallback: {str(fallback_error)}")
+        raise HTTPException(status_code=500, detail=str(e))
