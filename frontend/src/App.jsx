@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { ghcolors } from "react-syntax-highlighter/dist/esm/styles/prism";
 import "./App.css";
 
 const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
@@ -11,11 +11,11 @@ const AI_API = "https://rishova-ai-backend.onrender.com/api/ai";
 
 mermaid.initialize({
   startOnLoad: false,
-  theme: "dark",
+  theme: "default",
   securityLevel: "loose",
 });
 
-// Clean Multi-line Code Block Component with Copy & Download
+// Clean Light-Themed Code Block Component
 const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
@@ -51,7 +51,7 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
         <span className="studio-lang-title">{lang.toUpperCase()}</span>
         <div className="studio-code-actions">
           <button className="icon-action-btn" title="Download File" onClick={handleDownload}>
-            ⬇
+            ⬇ Download
           </button>
           <button className="icon-action-btn copy-btn" title="Copy Code" onClick={handleCopy}>
             {copied ? "✔ Copied" : "📋 Copy"}
@@ -60,12 +60,12 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
       </div>
       <SyntaxHighlighter
         language={lang}
-        style={vscDarkPlus}
+        style={ghcolors}
         wrapLongLines={false}
         customStyle={{
           margin: 0,
           padding: "16px",
-          backgroundColor: "#18181b",
+          backgroundColor: "#f8fafc",
           fontSize: "0.92rem",
           lineHeight: "1.6",
           fontFamily: "'Fira Code', 'Consolas', monospace",
@@ -304,7 +304,7 @@ export default function App() {
           <span className="badge">Universal Studio</span>
         </div>
         <div className="user-section">
-          <span>{userName}</span>
+          <span className="user-name-text">👤 {userName}</span>
           <button className="logout-btn" onClick={() => { localStorage.clear(); setToken(null); }}>Logout</button>
         </div>
       </header>
@@ -346,11 +346,11 @@ export default function App() {
                     </div>
                     <SyntaxHighlighter
                       language="bash"
-                      style={vscDarkPlus}
+                      style={ghcolors}
                       customStyle={{
                         margin: 0,
                         padding: "12px",
-                        backgroundColor: "#0f141c",
+                        backgroundColor: "#f1f5f9",
                         borderRadius: "6px",
                         whiteSpace: "pre-wrap"
                       }}
@@ -361,7 +361,7 @@ export default function App() {
                 )}
               </div>
             ))}
-            {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating code with syntax highlights...</div>}
+            {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating response...</div>}
             <div ref={chatBottomRef} />
           </div>
 
@@ -403,7 +403,7 @@ export default function App() {
           </form>
         </div>
 
-        {/* Right Studio Panel */}
+        {/* Right Panel */}
         <div className="preview-panel">
           <div className="panel-header">
             <div className="tab-switchers">
@@ -411,7 +411,7 @@ export default function App() {
                 className={`tab-btn ${activeTab === "code" ? "active" : ""}`}
                 onClick={() => setActiveTab("code")}
               >
-                💻 Code Workspace (VS Code View)
+                💻 Code Workspace
               </button>
               <button
                 className={`tab-btn ${activeTab === "canvas" ? "active" : ""}`}
@@ -446,13 +446,13 @@ export default function App() {
                   <div className="studio-code-card full-height">
                     <SyntaxHighlighter
                       language={activeLang}
-                      style={vscDarkPlus}
+                      style={ghcolors}
                       showLineNumbers={true}
                       wrapLongLines={false}
                       customStyle={{
                         margin: 0,
                         padding: "16px",
-                        backgroundColor: "#18181b",
+                        backgroundColor: "#ffffff",
                         minHeight: "100%",
                         fontSize: "0.95rem",
                         lineHeight: "1.6",
@@ -465,8 +465,8 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="canvas-placeholder">
-                    <p>💻 VS Code Workspace Ready</p>
-                    <span>Ask Rishova AI to build an API or app to view full syntax-highlighted code here.</span>
+                    <p>💻 Code Workspace Ready</p>
+                    <span>Ask Rishova AI to build an API or app to view clean syntax-highlighted code here.</span>
                   </div>
                 )}
               </div>
