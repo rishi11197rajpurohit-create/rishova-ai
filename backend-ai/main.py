@@ -36,7 +36,7 @@ Analyze the user prompt and classify the intent into one of these types:
 
 You must respond with a clean, strictly valid JSON object using this exact structure:
 {
-  "intent": "BUILDER" | "DIAGRAM" | "LEARNING" | "CHAT",
+  "intent": "BUILDER",
   "title": "Short Task Title",
   "data": {
      "mermaid": "graph TD\\n  A --> B",
@@ -68,14 +68,18 @@ def extract_json(text: str):
     return json.loads(text)
 
 def get_active_model():
-    """Dynamically get an active production model ID from Groq"""
+    """Ensure reliable and stable Groq production chat models"""
+    preferred_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768"
+    ]
     try:
-        models_data = client.models.list().data
-        active_models = [
-            m.id for m in models_data 
-            if not any(x in m.id for x in ["whisper", "guard", "vision", "embed"])
-        ]
-        return active_models[0] if active_models else "llama-3.3-70b-versatile"
+        available = [m.id for m in client.models.list().data]
+        for model in preferred_models:
+            if model in available:
+                return model
+        return "llama-3.3-70b-versatile"
     except Exception:
         return "llama-3.3-70b-versatile"
 
