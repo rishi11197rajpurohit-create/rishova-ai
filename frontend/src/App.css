@@ -2,263 +2,6 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-body {
-  background-color: #0b0f19;
-  color: #f8fafc;
-  overflow: hidden;
-}
-
-.auth-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.auth-card {
-  background: #1e293b;
-  padding: 32px;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 400px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-}
-
-.auth-card h2 {
-  margin-bottom: 20px;
-  text-align: center;
-  color: #38bdf8;
-}
-
-.auth-card input {
-  width: 100%;
-  padding: 12px;
-  margin-bottom: 14px;
-  border-radius: 6px;
-  border: 1px solid #334155;
-  background: #0f172a;
-  color: #fff;
-  outline: none;
-}
-
-.auth-card button {
-  width: 100%;
-  padding: 12px;
-  background: #0284c7;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-.toggle-link {
-  margin-top: 15px;
-  text-align: center;
-  font-size: 14px;
-  color: #94a3b8;
-  cursor: pointer;
-}
-
-.toggle-link span {
-  color: #38bdf8;
-  text-decoration: underline;
-}
-
-.app-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-.navbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 24px;
-  background: #111827;
-  border-bottom: 1px solid #1f2937;
-}
-
-.workspace {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
-
-.left-panel {
-  width: 380px;
-  background: #111827;
-  border-right: 1px solid #1f2937;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.panel-tabs {
-  display: flex;
-  background: #0b0f19;
-  border-bottom: 1px solid #1f2937;
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 10px;
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 13px;
-  transition: all 0.2s;
-}
-
-.tab-btn.active {
-  color: #38bdf8;
-  border-bottom: 2px solid #38bdf8;
-  background: #111827;
-}
-
-.tab-content {
-  flex: 1;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-}
-
-.tab-content textarea {
-  flex: 1;
-  background: #0b0f19;
-  color: #38bdf8;
-  border: 1px solid #1f2937;
-  border-radius: 8px;
-  padding: 12px;
-  font-family: "Fira Code", monospace;
-  font-size: 13px;
-  resize: none;
-  outline: none;
-}
-
-.history-item {
-  background: #1e293b;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #334155;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: background 0.2s;
-}
-
-.history-item:hover {
-  background: #253349;
-}
-
-.history-item-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #f8fafc;
-}
-
-.history-item-date {
-  font-size: 11px;
-  color: #64748b;
-  margin-top: 4px;
-}
-
-.viewer-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: #07090e;
-  position: relative;
-  overflow: hidden;
-}
-
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 20px;
-  background: #111827;
-  border-bottom: 1px solid #1f2937;
-  z-index: 10;
-}
-
-.controls-group {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.btn-action {
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid #334155;
-  background: #1e293b;
-  color: #f8fafc;
-  transition: all 0.2s;
-}
-
-.btn-action:hover {
-  background: #334155;
-}
-
-.btn-primary {
-  background: #0284c7;
-  border-color: #0284c7;
-}
-
-.btn-primary:hover {
-  background: #0369a1;
-}
-
-.btn-success {
-  background: #059669;
-  border-color: #059669;
-}
-
-.btn-success:hover {
-  background: #047857;
-}
-
-.canvas-viewport {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-  cursor: grab;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.canvas-viewport:active {
-  cursor: grabbing;
-}
-
-.diagram-plane {
-  transform-origin: center center;
-  transition: transform 0.05s ease-out;
-  user-select: none;
-}
-
-.diagram-plane svg {
-  max-width: 100%;
-  height: auto;
-}* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
@@ -517,6 +260,19 @@ body, html, #root {
   color: #8b949e;
 }
 
+.canvas-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoom-indicator {
+  font-size: 12px;
+  color: #8b949e;
+  min-width: 40px;
+  text-align: center;
+}
+
 .action-btn {
   background: #21262d;
   border: 1px solid #30363d;
@@ -526,18 +282,38 @@ body, html, #root {
   cursor: pointer;
 }
 
+.download-btn {
+  background: #238636 !important;
+  color: white !important;
+}
+
 .canvas-area {
   flex: 1;
   overflow: auto;
   padding: 20px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+}
+
+.mermaid-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  padding: 20px;
+}
+
+.mermaid-wrapper svg {
+  max-width: 100%;
+  height: auto;
 }
 
 .canvas-placeholder {
   text-align: center;
   color: #8b949e;
+  margin-top: auto;
+  margin-bottom: auto;
 }
 
 .canvas-placeholder p {

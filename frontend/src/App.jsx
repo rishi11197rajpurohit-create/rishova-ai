@@ -39,6 +39,7 @@ export default function App() {
   ]);
   const [loading, setLoading] = useState(false);
   const [activeDiagram, setActiveDiagram] = useState("");
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   const diagramRef = useRef(null);
   const chatBottomRef = useRef(null);
@@ -52,7 +53,7 @@ export default function App() {
       diagramRef.current.removeAttribute("data-processed");
       diagramRef.current.innerHTML = activeDiagram;
       mermaid.init(undefined, diagramRef.current).catch((err) => {
-        console.error("Mermaid error:", err);
+        console.error("Mermaid render error:", err);
       });
     }
   }, [activeDiagram]);
@@ -116,6 +117,7 @@ export default function App() {
 
       if (data.intent === "DIAGRAM" && data.data.mermaid) {
         setActiveDiagram(data.data.mermaid);
+        setZoomLevel(1);
       }
     } catch (err) {
       setMessages((prev) => [
@@ -125,6 +127,34 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openInCanvas = (mermaidCode) => {
+    setActiveDiagram(mermaidCode);
+    setZoomLevel(1);
+    const canvasEl = document.querySelector(".canvas-area");
+    if (canvasEl) {
+      canvasEl.scrollTop = 0;
+      canvasEl.scrollLeft = 0;
+    }
+  };
+
+  const downloadSVG = () => {
+    if (!diagramRef.current) return;
+    const svgElement = diagramRef.current.querySelector("svg");
+    if (!svgElement) {
+      alert("No rendered diagram found to download!");
+      return;
+    }
+    const svgData = new XMLSerializer().serializeToString(svgElement);
+    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "rishova-diagram.svg";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const copyToClipboard = (text) => {
@@ -199,8 +229,8 @@ export default function App() {
                 </div>
 
                 {m.mermaid && (
-                  <button className="view-diagram-btn" onClick={() => setActiveDiagram(m.mermaid)}>
-                    📊 Open Diagram in Canvas
+                  <button className="view-diagram-btn" onClick={() => openInCanvas(m.mermaid)}>
+                    📊 Focus & Reset Canvas
                   </button>
                 )}
 
@@ -235,14 +265,22 @@ export default function App() {
           <div className="panel-header">
             <h3>Visual & Canvas Workspace</h3>
             {activeDiagram && (
-              <button className="action-btn" onClick={() => copyToClipboard(activeDiagram)}>
-                Copy Mermaid
-              </button>
+              <div className="canvas-controls">
+                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.max(0.4, z - 0.2))}>🔍 -</button>
+                <span className="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
+                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.2))}>🔍 +</button>
+                <button className="action-btn download-btn" onClick={downloadSVG}>⬇ SVG</button>
+                <button className="action-btn" onClick={() => copyToClipboard(activeDiagram)}>📋 Copy</button>
+              </div>
             )}
           </div>
           <div className="canvas-area">
             {activeDiagram ? (
-              <div ref={diagramRef} className="mermaid" />
+              <div
+                ref={diagramRef}
+                className="mermaid-wrapper"
+                style={{ transform: `scale(${zoomLevel})`, transformOrigin: "top center", transition: "transform 0.2s ease" }}
+              />
             ) : (
               <div className="canvas-placeholder">
                 <p>🎨 Interactive Canvas is Ready</p>
