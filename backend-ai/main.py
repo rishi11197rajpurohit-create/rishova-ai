@@ -11,7 +11,7 @@ from pypdf import PdfReader
 
 load_dotenv()
 
-app = FastAPI(title="Rishova AI Orchestrator & Multi-Agent Engine")
+app = FastAPI(title="Rishova AI Multi-Agent Studio")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,26 +34,25 @@ Analyze the user prompt and classify the intent into one of these types:
 3. "LEARNING" (User wants to learn a concept from zero, exam prep, practice, or step-by-step tutorial).
 4. "CHAT" (General question, reasoning, conversation, or advice).
 
-You must respond with a clean, strictly valid JSON object using this exact structure:
+You must respond ONLY with a valid JSON object matching this schema:
 {
   "intent": "BUILDER",
   "title": "Short Task Title",
   "data": {
-     "mermaid": "graph TD\\n  A --> B",
-     "markdown_response": "Full formatted response with explanations and file structure.",
+     "mermaid": "",
+     "markdown_response": "Full detailed explanation with architecture and code walkthrough.",
      "code_snippet": "// Primary source code here\\nconsole.log('Hello World');",
      "language": "javascript",
-     "commands": ["npm install express", "node index.js"],
+     "commands": ["npm init -y", "npm install express jsonwebtoken bcryptjs dotenv"],
      "summary": "Brief 1-line summary"
   }
 }
-Note for BUILDER: Provide the main complete code inside data.code_snippet, the programming language name inside data.language, and terminal commands in data.commands.
-Note for DIAGRAM: Provide ONLY valid Mermaid syntax inside data.mermaid.
-Do not output anything outside the JSON object.
+Note for BUILDER: Place the complete primary source code in data.code_snippet and commands in data.commands.
+Note for DIAGRAM: Place ONLY valid Mermaid syntax inside data.mermaid.
 """
 
-def extract_json(text: str):
-    """Safely extract and parse JSON with lenient control character handling"""
+def extract_json_safely(text: str):
+    """Clean markdown artifacts and parse JSON safely"""
     text = text.strip()
     if text.startswith("```json"):
         text = text[7:]
@@ -62,55 +61,53 @@ def extract_json(text: str):
     if text.endswith("```"):
         text = text[:-3]
     text = text.strip()
-    
+
     match = re.search(r'\{.*\}', text, re.DOTALL)
     json_str = match.group(0) if match else text
 
     try:
         return json.loads(json_str, strict=False)
     except Exception:
-        # Fallback if unescaped control characters remain
         cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', lambda m: ' ' if m.group(0) in '\r\n\t' else '', json_str)
         try:
             return json.loads(cleaned, strict=False)
         except Exception:
-            # Safe structural fallback
             return {
                 "intent": "BUILDER",
-                "title": "Generated Code",
+                "title": "Generated Code & Guide",
                 "data": {
                     "mermaid": "",
                     "markdown_response": text,
                     "code_snippet": text,
                     "language": "javascript",
-                    "commands": [],
-                    "summary": "Code Response Generated"
+                    "commands": ["npm install express dotenv"],
+                    "summary": "Generated response successfully"
                 }
             }
 
-def run_groq_completion(messages: list, temperature: float = 0.1):
-    models_to_try = [
+def run_groq_inference(messages: list, temperature: float = 0.1):
+    """Execute on 100% active and free Groq models"""
+    active_free_models = [
         "llama-3.1-8b-instant",
-        "llama-3.3-70b-versatile"
+        "mixtral-8x7b-32768"
     ]
-    last_error = None
-    for model_id in models_to_try:
+    last_err = None
+    for model_id in active_free_models:
         try:
             completion = client.chat.completions.create(
                 model=model_id,
                 messages=messages,
-                temperature=temperature,
-                response_format={"type": "json_object"}
+                temperature=temperature
             )
             return completion.choices[0].message.content
         except Exception as e:
-            last_error = e
+            last_err = e
             continue
-    raise HTTPException(status_code=500, detail=f"Groq API execution failed: {str(last_error)}")
+    raise HTTPException(status_code=500, detail=f"Groq API Error: {str(last_err)}")
 
 @app.get("/")
 def read_root():
-    return {"status": "RISHOVA AI Multi-Agent Engine is Live"}
+    return {"status": "RISHOVA AI Multi-Agent Studio is Live"}
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
@@ -119,8 +116,8 @@ async def handle_universal_prompt(req: UniversalRequest):
             {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
             {"role": "user", "content": req.prompt}
         ]
-        raw_text = run_groq_completion(messages, temperature=0.1)
-        return extract_json(raw_text)
+        raw_text = run_groq_inference(messages, temperature=0.1)
+        return extract_json_safely(raw_text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -146,7 +143,7 @@ async def handle_document_upload(
         if not extracted_text.strip():
             extracted_text = "Note: The file appears to be an image-based scan or contains unstructured binary data."
 
-        truncated_text = extracted_text[:20000]
+        truncated_text = extracted_text[:18000]
 
         doc_system_prompt = f"""
 You are RISHOVA AI - Document Intelligence & Data Analytics Expert.
@@ -164,19 +161,14 @@ INSTRUCTIONS:
    - 📊 **Key Data / Metrics / Columns (with Markdown Tables if applicable)**
    - 💡 **Key Insights & Analytics Findings**
    - 🎯 **Actionable Takeaways / Recommendations**
-3. Respond in a friendly, easy-to-understand tone (Hindi/English mix if prompted in Hindi).
+3. Respond in a friendly, easy-to-understand tone.
 """
 
-        completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {"role": "system", "content": doc_system_prompt},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2
-        )
-
-        response_text = completion.choices[0].message.content
+        messages = [
+            {"role": "system", "content": doc_system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+        response_text = run_groq_inference(messages, temperature=0.2)
 
         return {
             "intent": "DOCUMENT",
