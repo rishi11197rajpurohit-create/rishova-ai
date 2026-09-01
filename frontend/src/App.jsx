@@ -3,12 +3,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
 import Prism from "prismjs";
-import "prismjs/themes/prism-tomorrow.css"; // VS Code Dark Theme Colors
+import "prismjs/themes/prism-tomorrow.css";
 import "prismjs/components/prism-javascript";
 import "prismjs/components/prism-python";
 import "prismjs/components/prism-bash";
 import "prismjs/components/prism-json";
-import "prismjs/components/prism-jsx";
 import "prismjs/components/prism-typescript";
 import "./App.css";
 
@@ -20,6 +19,42 @@ mermaid.initialize({
   theme: "dark",
   securityLevel: "loose",
 });
+
+// Custom Code Block with direct Copy button & VS Code Styling
+const CodeBlock = ({ inline, className, children, ...props }) => {
+  const [copied, setCopied] = useState(false);
+  const match = /language-(\w+)/.exec(className || "");
+  const lang = match ? match[1] : "text";
+  const codeContent = String(children).replace(/\n$/, "");
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(codeContent);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  useEffect(() => {
+    Prism.highlightAll();
+  }, [children]);
+
+  if (inline) {
+    return <code className="inline-code" {...props}>{children}</code>;
+  }
+
+  return (
+    <div className="code-block-wrapper">
+      <div className="code-block-header">
+        <span className="code-lang-tag">{lang.toUpperCase()}</span>
+        <button className="copy-code-btn" onClick={handleCopy}>
+          {copied ? "✔ Copied!" : "📋 Copy"}
+        </button>
+      </div>
+      <pre className={`language-${lang}`}>
+        <code className={`language-${lang}`}>{codeContent}</code>
+      </pre>
+    </div>
+  );
+};
 
 export default function App() {
   const getCleanUserName = () => {
@@ -50,8 +85,7 @@ export default function App() {
   ]);
   const [loading, setLoading] = useState(false);
   
-  // Right Workspace State
-  const [activeTab, setActiveTab] = useState("code"); // 'canvas' or 'code'
+  const [activeTab, setActiveTab] = useState("code");
   const [activeDiagram, setActiveDiagram] = useState("");
   const [activeCode, setActiveCode] = useState("");
   const [activeLang, setActiveLang] = useState("javascript");
@@ -180,18 +214,6 @@ export default function App() {
     }
   };
 
-  const openInCanvas = (mermaidCode) => {
-    setActiveDiagram(mermaidCode);
-    setActiveTab("canvas");
-    setZoomLevel(1);
-  };
-
-  const openInCodeViewer = (code, lang) => {
-    setActiveCode(code);
-    setActiveLang(lang || "javascript");
-    setActiveTab("code");
-  };
-
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     alert("Copied to clipboard!");
@@ -269,6 +291,7 @@ export default function App() {
       </header>
 
       <div className="main-content">
+        {/* Left 50% Panel: Conversational Intelligence */}
         <div className="chat-panel">
           <div className="chat-history">
             {messages.map((m, idx) => (
@@ -285,7 +308,12 @@ export default function App() {
                   {m.role === "user" ? (
                     <p>{m.content}</p>
                   ) : (
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code: CodeBlock
+                      }}
+                    >
                       {m.content}
                     </ReactMarkdown>
                   )}
@@ -299,18 +327,6 @@ export default function App() {
                     </div>
                     <pre className="language-bash"><code className="language-bash">{m.commands.join("\n")}</code></pre>
                   </div>
-                )}
-
-                {m.mermaid && (
-                  <button className="view-diagram-btn" onClick={() => openInCanvas(m.mermaid)}>
-                    📊 Focus & View Diagram in Canvas
-                  </button>
-                )}
-
-                {m.code_snippet && (
-                  <button className="view-code-btn" onClick={() => openInCodeViewer(m.code_snippet, m.language)}>
-                    💻 Focus Code in Right Workspace
-                  </button>
                 )}
               </div>
             ))}
@@ -356,6 +372,7 @@ export default function App() {
           </form>
         </div>
 
+        {/* Right 50% Panel: Universal Workspace */}
         <div className="preview-panel">
           <div className="panel-header">
             <div className="tab-switchers">
@@ -376,7 +393,7 @@ export default function App() {
             {activeTab === "code" && activeCode && (
               <div className="canvas-controls">
                 <span className="lang-badge">{activeLang.toUpperCase()}</span>
-                <button className="action-btn download-btn" onClick={() => copyToClipboard(activeCode)}>📋 Copy Code</button>
+                <button className="action-btn download-btn" onClick={() => copyToClipboard(activeCode)}>📋 Copy Full Code</button>
               </div>
             )}
 
@@ -403,7 +420,7 @@ export default function App() {
                 ) : (
                   <div className="canvas-placeholder">
                     <p>💻 VS Code Workspace Ready</p>
-                    <span>Ask Rishova AI to build an app, component or API to view colored syntax code here.</span>
+                    <span>Ask Rishova AI to build an API or app to view full syntax highlighted code here.</span>
                   </div>
                 )}
               </div>
