@@ -11,7 +11,7 @@ from pypdf import PdfReader
 
 load_dotenv()
 
-app = FastAPI(title="Rishova AI Multi-Agent Studio")
+app = FastAPI(title="Rishova AI Universal Orchestrator")
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,19 +80,30 @@ def extract_json_safely(text: str):
                     "markdown_response": text,
                     "code_snippet": text,
                     "language": "javascript",
-                    "commands": ["npm install express dotenv"],
+                    "commands": [],
                     "summary": "Generated response successfully"
                 }
             }
 
 def run_groq_inference(messages: list, temperature: float = 0.1):
-    """Execute on 100% active and free Groq models"""
-    active_free_models = [
-        "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768"
-    ]
+    """Dynamically discover currently active chat models on user's API key"""
+    active_chat_models = []
+    try:
+        model_list = client.models.list().data
+        for m in model_list:
+            mid = m.id.lower()
+            # Filter out non-chat, audio, vision, preview, and decommissioned models
+            if not any(x in mid for x in ["whisper", "vision", "embed", "orpheus", "guard", "audio", "decommissioned"]):
+                if getattr(m, 'active', True):
+                    active_chat_models.append(m.id)
+    except Exception as e:
+        print("Model list fetch error:", e)
+
+    if not active_chat_models:
+        active_chat_models = ["llama-3.1-8b-instant", "llama3-8b-8192"]
+
     last_err = None
-    for model_id in active_free_models:
+    for model_id in active_chat_models:
         try:
             completion = client.chat.completions.create(
                 model=model_id,
@@ -103,11 +114,12 @@ def run_groq_inference(messages: list, temperature: float = 0.1):
         except Exception as e:
             last_err = e
             continue
-    raise HTTPException(status_code=500, detail=f"Groq API Error: {str(last_err)}")
+
+    raise HTTPException(status_code=500, detail=f"All active Groq models failed: {str(last_err)}")
 
 @app.get("/")
 def read_root():
-    return {"status": "RISHOVA AI Multi-Agent Studio is Live"}
+    return {"status": "RISHOVA AI Universal Studio is Live"}
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
