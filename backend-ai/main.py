@@ -68,16 +68,23 @@ def extract_json(text: str):
     return json.loads(text)
 
 def run_groq_completion(messages: list, temperature: float = 0.1):
-    """Try preferred reliable models in sequence with auto-fallback"""
-    models_to_try = [
-        "llama-3.1-8b-instant",
-        "llama3-70b-8192",
-        "llama3-8b-8192",
-        "mixtral-8x7b-32768",
-        "gemma2-9b-it"
-    ]
+    """Dynamically query Groq API for currently active chat models and execute"""
+    try:
+        all_models = client.models.list().data
+        # Filter strictly for text chat models, exclude whisper/vision/audio/preview terms models
+        valid_models = [
+            m.id for m in all_models 
+            if not any(x in m.id.lower() for x in ["whisper", "vision", "embed", "orpheus", "guard", "audio"])
+            and m.active
+        ]
+    except Exception:
+        valid_models = ["llama-3.1-8b-instant"]
+
+    if not valid_models:
+        valid_models = ["llama-3.1-8b-instant"]
+
     last_error = None
-    for model_id in models_to_try:
+    for model_id in valid_models:
         try:
             completion = client.chat.completions.create(
                 model=model_id,
@@ -88,7 +95,8 @@ def run_groq_completion(messages: list, temperature: float = 0.1):
         except Exception as e:
             last_error = e
             continue
-    raise HTTPException(status_code=500, detail=f"All Groq models failed: {str(last_error)}")
+
+    raise HTTPException(status_code=500, detail=f"Groq execution failed: {str(last_error)}")
 
 @app.get("/")
 def read_root():
