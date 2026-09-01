@@ -53,7 +53,7 @@ def read_root():
 async def handle_universal_prompt(req: UniversalRequest):
     try:
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
                 {"role": "user", "content": req.prompt}

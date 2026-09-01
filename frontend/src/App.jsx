@@ -12,8 +12,19 @@ mermaid.initialize({
 });
 
 export default function App() {
+  const getCleanUserName = () => {
+    const raw = localStorage.getItem("rishova_user");
+    if (!raw) return "";
+    try {
+      const parsed = JSON.parse(raw);
+      return typeof parsed === "object" ? parsed.name || "User" : parsed;
+    } catch {
+      return raw;
+    }
+  };
+
   const [token, setToken] = useState(localStorage.getItem("rishova_token") || null);
-  const [userName, setUserName] = useState(localStorage.getItem("rishova_user") || "");
+  const [userName, setUserName] = useState(getCleanUserName());
   const [isRegister, setIsRegister] = useState(false);
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authMsg, setAuthMsg] = useState("");
@@ -63,10 +74,11 @@ export default function App() {
         setAuthMsg("अकाउंट बन गया! अब लॉगिन करें।");
         setIsRegister(false);
       } else {
+        const cleanName = data.user && typeof data.user === "object" ? data.user.name : (data.user || "User");
         localStorage.setItem("rishova_token", data.token);
-        localStorage.setItem("rishova_user", data.user?.name || "User");
+        localStorage.setItem("rishova_user", cleanName);
         setToken(data.token);
-        setUserName(data.user?.name || "User");
+        setUserName(cleanName);
       }
     } catch (err) {
       setAuthMsg(err.message);
