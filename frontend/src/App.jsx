@@ -15,12 +15,13 @@ mermaid.initialize({
   securityLevel: "loose",
 });
 
-// Gemini / VS Code Studio Code Block Component
+// Clean Multi-line Code Block Component with Copy & Download
 const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
   const lang = match ? match[1] : "javascript";
-  const codeString = String(children).replace(/\n$/, "");
+  const rawCode = Array.isArray(children) ? children.join("") : String(children || "");
+  const codeString = rawCode.replace(/\n$/, "");
 
   const handleCopy = () => {
     navigator.clipboard.writeText(codeString);
@@ -29,11 +30,12 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   };
 
   const handleDownload = () => {
+    const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html" };
     const blob = new Blob([codeString], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `code-snippet.${lang === "javascript" ? "js" : lang === "python" ? "py" : lang}`;
+    link.download = `code-snippet.${extMap[lang] || "txt"}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -59,6 +61,7 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
       <SyntaxHighlighter
         language={lang}
         style={vscDarkPlus}
+        wrapLongLines={false}
         customStyle={{
           margin: 0,
           padding: "16px",
@@ -66,6 +69,8 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
           fontSize: "0.92rem",
           lineHeight: "1.6",
           fontFamily: "'Fira Code', 'Consolas', monospace",
+          whiteSpace: "pre",
+          overflowX: "auto",
         }}
       >
         {codeString}
@@ -97,7 +102,7 @@ export default function App() {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "Namaste! Main **RISHOVA AI Studio** hoon. Aap mujhse kisi bhi language ka complete code, terminal commands, diagrams ya PDF intelligence build karwa sakte hain.",
+      content: "Namaste! Main **RISHOVA AI Studio** hoon. Aap mujhse diagram banwa sakte hain, PDF analyze karwa sakte hain, ya complete software & APIs build karwa sakte hain.",
       intent: "CHAT"
     }
   ]);
@@ -233,6 +238,24 @@ export default function App() {
     alert("Copied to clipboard!");
   };
 
+  const downloadSVG = () => {
+    if (!diagramRef.current) return;
+    const svgElement = diagramRef.current.querySelector("svg");
+    if (!svgElement) {
+      alert("No rendered diagram found to download!");
+      return;
+    }
+    const svgData = new XMLSerializer().serializeToString(svgElement);
+    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "rishova-diagram.svg";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (!token) {
     return (
       <div className="auth-wrapper">
@@ -287,7 +310,7 @@ export default function App() {
       </header>
 
       <div className="main-content">
-        {/* Chat / Left Panel */}
+        {/* Left Panel */}
         <div className="chat-panel">
           <div className="chat-history">
             {messages.map((m, idx) => (
@@ -324,7 +347,13 @@ export default function App() {
                     <SyntaxHighlighter
                       language="bash"
                       style={vscDarkPlus}
-                      customStyle={{ margin: 0, padding: "12px", backgroundColor: "#0f141c", borderRadius: "6px" }}
+                      customStyle={{
+                        margin: 0,
+                        padding: "12px",
+                        backgroundColor: "#0f141c",
+                        borderRadius: "6px",
+                        whiteSpace: "pre-wrap"
+                      }}
                     >
                       {m.commands.join("\n")}
                     </SyntaxHighlighter>
@@ -374,7 +403,7 @@ export default function App() {
           </form>
         </div>
 
-        {/* Right / Studio Workspace Panel */}
+        {/* Right Studio Panel */}
         <div className="preview-panel">
           <div className="panel-header">
             <div className="tab-switchers">
@@ -398,6 +427,16 @@ export default function App() {
                 <button className="action-btn download-btn" onClick={() => copyToClipboard(activeCode)}>📋 Copy Full Code</button>
               </div>
             )}
+
+            {activeTab === "canvas" && activeDiagram && (
+              <div className="canvas-controls">
+                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.max(0.4, z - 0.2))}>🔍 -</button>
+                <span className="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
+                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.2))}>🔍 +</button>
+                <button className="action-btn download-btn" onClick={downloadSVG}>⬇ SVG</button>
+                <button className="action-btn" onClick={() => copyToClipboard(activeDiagram)}>📋 Copy</button>
+              </div>
+            )}
           </div>
 
           <div className="workspace-content">
@@ -409,13 +448,16 @@ export default function App() {
                       language={activeLang}
                       style={vscDarkPlus}
                       showLineNumbers={true}
+                      wrapLongLines={false}
                       customStyle={{
                         margin: 0,
                         padding: "16px",
                         backgroundColor: "#18181b",
-                        height: "100%",
+                        minHeight: "100%",
                         fontSize: "0.95rem",
                         lineHeight: "1.6",
+                        whiteSpace: "pre",
+                        overflowX: "auto",
                       }}
                     >
                       {activeCode}

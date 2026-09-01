@@ -29,19 +29,22 @@ SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an elite Senior Software Architect and Universal AI Studio.
 When the user asks to build an application, script, API, or software:
 1. Provide a step-by-step setup guide with terminal commands in a ```bash code block.
-2. Provide the complete production-grade source code with proper imports, clean architecture, and comments in a code block like ```javascript or ```python.
-3. If applicable, provide the project directory structure.
+2. Provide complete production-grade source code with proper imports, clean architecture, and comments in code blocks like ```javascript or ```python.
+3. Keep clean multi-line formatting with proper line breaks.
 
 When the user asks for diagrams/architecture:
 1. Provide the valid diagram syntax strictly in a ```mermaid block.
 
-Be thorough, clear, and complete. Do not truncate the code.
+Be thorough, complete, and write standard clean Markdown.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str):
+    # Normalize newline characters
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    
     intent = "CHAT"
     mermaid_code = ""
-    code_snippet_parts = []
+    code_snippets = []
     language = "javascript"
     commands = []
 
@@ -49,30 +52,30 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
     mermaid_match = re.search(r"```mermaid\n([\s\S]*?)```", text)
     if not mermaid_match:
         mermaid_match = re.search(r"```\n(graph [\s\S]*?|flowchart [\s\S]*?|sequenceDiagram[\s\S]*?|classDiagram[\s\S]*?)```", text)
-    
     if mermaid_match:
         mermaid_code = mermaid_match.group(1).strip()
         intent = "DIAGRAM"
 
-    # 2. Bash / Terminal Commands Extraction
+    # 2. Terminal Commands Extraction
     bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\n([\s\S]*?)```", text, re.IGNORECASE)
     for b in bash_blocks:
-        lines = [line.strip() for line in b.strip().split("\n") if line.strip() and not line.strip().startswith("#")]
-        commands.extend(lines)
+        for line in b.strip().split("\n"):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                commands.append(line)
 
-    # 3. Source Code Blocks Extraction
-    code_matches = list(re.finditer(r"```([a-zA-Z0-9_+-]+)?\n([\s\S]*?)```", text))
+    # 3. Code Blocks Extraction
+    code_matches = re.finditer(r"```([a-zA-Z0-9_+-]+)?\n([\s\S]*?)```", text)
     for m in code_matches:
         lang = (m.group(1) or "").lower()
         block = m.group(2).strip()
-        if lang not in ["mermaid", "bash", "sh", "shell", "cmd", "powershell"]:
-            if len(block) > 20:
-                code_snippet_parts.append(f"// ==================== [FILE / MODULE] ====================\n\n{block}")
-                if lang and lang != "json":
-                    language = lang
-                intent = "BUILDER"
+        if lang not in ["mermaid", "bash", "sh", "shell", "cmd", "powershell"] and len(block) > 15:
+            code_snippets.append(block)
+            if lang and lang != "json":
+                language = lang
+            intent = "BUILDER"
 
-    combined_code = "\n\n".join(code_snippet_parts) if code_snippet_parts else ""
+    full_code_workspace = "\n\n// --------------------------------------------------\n\n".join(code_snippets)
 
     prompt_lower = user_prompt.lower()
     if any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "develop", "function"]):
@@ -89,7 +92,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         "data": {
             "mermaid": mermaid_code,
             "markdown_response": text,
-            "code_snippet": combined_code or text,
+            "code_snippet": full_code_workspace or text,
             "language": language,
             "commands": commands,
             "summary": "Task processed successfully"
