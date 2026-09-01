@@ -53,6 +53,7 @@ Do not output anything outside the JSON object.
 """
 
 def extract_json(text: str):
+    """Safely extract and parse JSON with lenient control character handling"""
     text = text.strip()
     if text.startswith("```json"):
         text = text[7:]
@@ -63,40 +64,49 @@ def extract_json(text: str):
     text = text.strip()
     
     match = re.search(r'\{.*\}', text, re.DOTALL)
-    if match:
-        return json.loads(match.group(0))
-    return json.loads(text)
+    json_str = match.group(0) if match else text
+
+    try:
+        return json.loads(json_str, strict=False)
+    except Exception:
+        # Fallback if unescaped control characters remain
+        cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', lambda m: ' ' if m.group(0) in '\r\n\t' else '', json_str)
+        try:
+            return json.loads(cleaned, strict=False)
+        except Exception:
+            # Safe structural fallback
+            return {
+                "intent": "BUILDER",
+                "title": "Generated Code",
+                "data": {
+                    "mermaid": "",
+                    "markdown_response": text,
+                    "code_snippet": text,
+                    "language": "javascript",
+                    "commands": [],
+                    "summary": "Code Response Generated"
+                }
+            }
 
 def run_groq_completion(messages: list, temperature: float = 0.1):
-    """Dynamically query Groq API for currently active chat models and execute"""
-    try:
-        all_models = client.models.list().data
-        # Filter strictly for text chat models, exclude whisper/vision/audio/preview terms models
-        valid_models = [
-            m.id for m in all_models 
-            if not any(x in m.id.lower() for x in ["whisper", "vision", "embed", "orpheus", "guard", "audio"])
-            and m.active
-        ]
-    except Exception:
-        valid_models = ["llama-3.1-8b-instant"]
-
-    if not valid_models:
-        valid_models = ["llama-3.1-8b-instant"]
-
+    models_to_try = [
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile"
+    ]
     last_error = None
-    for model_id in valid_models:
+    for model_id in models_to_try:
         try:
             completion = client.chat.completions.create(
                 model=model_id,
                 messages=messages,
-                temperature=temperature
+                temperature=temperature,
+                response_format={"type": "json_object"}
             )
             return completion.choices[0].message.content
         except Exception as e:
             last_error = e
             continue
-
-    raise HTTPException(status_code=500, detail=f"Groq execution failed: {str(last_error)}")
+    raise HTTPException(status_code=500, detail=f"Groq API execution failed: {str(last_error)}")
 
 @app.get("/")
 def read_root():
@@ -157,11 +167,16 @@ INSTRUCTIONS:
 3. Respond in a friendly, easy-to-understand tone (Hindi/English mix if prompted in Hindi).
 """
 
-        messages = [
-            {"role": "system", "content": doc_system_prompt},
-            {"role": "user", "content": prompt}
-        ]
-        response_text = run_groq_completion(messages, temperature=0.2)
+        completion = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": doc_system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2
+        )
+
+        response_text = completion.choices[0].message.content
 
         return {
             "intent": "DOCUMENT",
