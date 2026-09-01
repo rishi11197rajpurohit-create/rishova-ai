@@ -9,9 +9,9 @@ mermaid.initialize({
   securityLevel: "loose",
 });
 
-const AUTH_API = "http://localhost:5000/api/auth";
-const DIAGRAM_API = "http://localhost:5000/api/diagrams";
-const AI_API = "http://localhost:8000/api/ai";
+const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
+const DIAGRAM_API = "https://rishova-auth-backend.onrender.com/api/diagrams";
+const AI_API = "https://rishova-ai-backend.onrender.com/api/ai";
 
 export default function App() {
   const [user, setUser] = useState(null);
