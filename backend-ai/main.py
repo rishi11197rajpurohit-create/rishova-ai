@@ -67,21 +67,28 @@ def extract_json(text: str):
         return json.loads(match.group(0))
     return json.loads(text)
 
-def get_active_model():
-    """Ensure reliable and stable Groq production chat models"""
-    preferred_models = [
-        "llama-3.3-70b-versatile",
+def run_groq_completion(messages: list, temperature: float = 0.1):
+    """Try preferred reliable models in sequence with auto-fallback"""
+    models_to_try = [
         "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768"
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it"
     ]
-    try:
-        available = [m.id for m in client.models.list().data]
-        for model in preferred_models:
-            if model in available:
-                return model
-        return "llama-3.3-70b-versatile"
-    except Exception:
-        return "llama-3.3-70b-versatile"
+    last_error = None
+    for model_id in models_to_try:
+        try:
+            completion = client.chat.completions.create(
+                model=model_id,
+                messages=messages,
+                temperature=temperature
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            last_error = e
+            continue
+    raise HTTPException(status_code=500, detail=f"All Groq models failed: {str(last_error)}")
 
 @app.get("/")
 def read_root():
@@ -90,16 +97,11 @@ def read_root():
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
     try:
-        model_id = get_active_model()
-        completion = client.chat.completions.create(
-            model=model_id,
-            messages=[
-                {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
-                {"role": "user", "content": req.prompt}
-            ],
-            temperature=0.1
-        )
-        raw_text = completion.choices[0].message.content
+        messages = [
+            {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
+            {"role": "user", "content": req.prompt}
+        ]
+        raw_text = run_groq_completion(messages, temperature=0.1)
         return extract_json(raw_text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -127,7 +129,6 @@ async def handle_document_upload(
             extracted_text = "Note: The file appears to be an image-based scan or contains unstructured binary data."
 
         truncated_text = extracted_text[:20000]
-        model_id = get_active_model()
 
         doc_system_prompt = f"""
 You are RISHOVA AI - Document Intelligence & Data Analytics Expert.
@@ -148,16 +149,11 @@ INSTRUCTIONS:
 3. Respond in a friendly, easy-to-understand tone (Hindi/English mix if prompted in Hindi).
 """
 
-        completion = client.chat.completions.create(
-            model=model_id,
-            messages=[
-                {"role": "system", "content": doc_system_prompt},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2
-        )
-
-        response_text = completion.choices[0].message.content
+        messages = [
+            {"role": "system", "content": doc_system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+        response_text = run_groq_completion(messages, temperature=0.2)
 
         return {
             "intent": "DOCUMENT",
