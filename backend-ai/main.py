@@ -42,7 +42,7 @@ You must respond ONLY with a valid JSON object strictly matching this schema:
      "summary": "Brief 1-line action summary"
   }
 }
-Do not wrap JSON in backticks. Return raw JSON only.
+Do not wrap JSON in markdown backticks. Return raw JSON only.
 """
 
 @app.get("/")
@@ -51,19 +51,31 @@ def read_root():
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
-    try:
-        completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
-                {"role": "user", "content": req.prompt}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.2
-        )
-        
-        response_text = completion.choices[0].message.content
-        result = json.loads(response_text)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Groq के उपलब्ध मॉडल्स की लिस्ट में से क्रमशः प्रयास करेगा
+    available_models = [
+        "llama-3.3-70b-versatile",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768"
+    ]
+    
+    last_error = None
+    for model_name in available_models:
+        try:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
+                    {"role": "user", "content": req.prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.2
+            )
+            response_text = completion.choices[0].message.content
+            result = json.loads(response_text)
+            return result
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise HTTPException(status_code=500, detail=f"All models failed. Error: {str(last_error)}")
