@@ -11,7 +11,7 @@ from pypdf import PdfReader
 
 load_dotenv()
 
-app = FastAPI(title="Rishova AI Orchestrator & Document Engine")
+app = FastAPI(title="Rishova AI Orchestrator & Multi-Agent Engine")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,27 +30,29 @@ SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an intelligent universal multi-agent task orchestrator.
 Analyze the user prompt and classify the intent into one of these types:
 1. "DIAGRAM" (User wants an architecture diagram, ERD, DFD, flowchart, or workflow).
-2. "LEARNING" (User wants to learn a concept from zero, exam prep, practice, or step-by-step tutorial).
-3. "BUILDER" (User wants to write code, create an app, build a script, or terminal commands).
+2. "BUILDER" (User wants to write code, create an app, build a script, generate a component, or terminal commands).
+3. "LEARNING" (User wants to learn a concept from zero, exam prep, practice, or step-by-step tutorial).
 4. "CHAT" (General question, reasoning, conversation, or advice).
 
 You must respond with a clean, strictly valid JSON object using this exact structure:
 {
-  "intent": "DIAGRAM",
-  "title": "Title of the task",
+  "intent": "BUILDER" | "DIAGRAM" | "LEARNING" | "CHAT",
+  "title": "Short Task Title",
   "data": {
-     "mermaid": "graph TD\\n  User[User] --> Pay[Payment]",
-     "markdown_response": "Full formatted response and explanation here.",
-     "commands": [],
+     "mermaid": "graph TD\\n  A --> B",
+     "markdown_response": "Full formatted response with explanations and file structure.",
+     "code_snippet": "// Primary source code here\\nconsole.log('Hello World');",
+     "language": "javascript",
+     "commands": ["npm install express", "node index.js"],
      "summary": "Brief 1-line summary"
   }
 }
+Note for BUILDER: Provide the main complete code inside data.code_snippet, the programming language name inside data.language, and terminal commands in data.commands.
 Note for DIAGRAM: Provide ONLY valid Mermaid syntax inside data.mermaid.
 Do not output anything outside the JSON object.
 """
 
 def extract_json(text: str):
-    """Clean and extract JSON from model output safely"""
     text = text.strip()
     if text.startswith("```json"):
         text = text[7:]
@@ -66,20 +68,20 @@ def extract_json(text: str):
     return json.loads(text)
 
 def get_active_model():
-    """Dynamically get an active model ID from Groq"""
+    """Dynamically get an active production model ID from Groq"""
     try:
         models_data = client.models.list().data
         active_models = [
             m.id for m in models_data 
             if not any(x in m.id for x in ["whisper", "guard", "vision", "embed"])
         ]
-        return active_models[0] if active_models else "llama-3.1-70b-versatile"
+        return active_models[0] if active_models else "llama-3.3-70b-versatile"
     except Exception:
-        return "llama-3.1-70b-versatile"
+        return "llama-3.3-70b-versatile"
 
 @app.get("/")
 def read_root():
-    return {"status": "RISHOVA AI Orchestrator & Document Engine is Live"}
+    return {"status": "RISHOVA AI Multi-Agent Engine is Live"}
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
@@ -101,7 +103,7 @@ async def handle_universal_prompt(req: UniversalRequest):
 @app.post("/api/ai/document")
 async def handle_document_upload(
     file: UploadFile = File(...),
-    prompt: str = Form("Summarize this document and explain key points")
+    prompt: str = Form("Summarize this document and extract key metrics, tables, and insights")
 ):
     try:
         extracted_text = ""
@@ -110,50 +112,61 @@ async def handle_document_upload(
 
         if filename.endswith(".pdf"):
             pdf_reader = PdfReader(io.BytesIO(content))
-            for page in pdf_reader.pages:
-                text = page.extract_text()
-                if text:
-                    extracted_text += text + "\n"
+            for idx, page in enumerate(pdf_reader.pages):
+                page_text = page.extract_text()
+                if page_text:
+                    extracted_text += f"\n--- [PAGE {idx + 1}] ---\n" + page_text
         else:
             extracted_text = content.decode("utf-8", errors="ignore")
 
         if not extracted_text.strip():
-            extracted_text = f"File {file.filename} was uploaded but contained mostly tabular/binary data or scanned images."
+            extracted_text = "Note: The file appears to be an image-based scan or contains unstructured binary data."
 
-        # Keep context safe
-        truncated_text = extracted_text[:12000]
-
+        truncated_text = extracted_text[:20000]
         model_id = get_active_model()
-        system_doc_prompt = f"""
-You are RISHOVA AI Document Intelligence Agent.
-The user has uploaded a document named: '{file.filename}'.
 
-Document Text Extracted:
----
+        doc_system_prompt = f"""
+You are RISHOVA AI - Document Intelligence & Data Analytics Expert.
+Analyze the following document named '{file.filename}'.
+
+DOCUMENT CONTENT:
+========================================
 {truncated_text}
----
+========================================
 
-Provide a clear, detailed, and structured breakdown answering the user's prompt. Use markdown formatting with bullet points and bold highlights.
+INSTRUCTIONS:
+1. Provide a comprehensive, professional breakdown in response to the user query.
+2. Structure your answer using clear Markdown:
+   - 📌 **Document Overview & Purpose**
+   - 📊 **Key Data / Metrics / Columns (with Markdown Tables if applicable)**
+   - 💡 **Key Insights & Analytics Findings**
+   - 🎯 **Actionable Takeaways / Recommendations**
+3. Respond in a friendly, easy-to-understand tone (Hindi/English mix if prompted in Hindi).
 """
+
         completion = client.chat.completions.create(
             model=model_id,
             messages=[
-                {"role": "system", "content": system_doc_prompt},
+                {"role": "system", "content": doc_system_prompt},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.2
         )
 
         response_text = completion.choices[0].message.content
+
         return {
             "intent": "DOCUMENT",
             "filename": file.filename,
             "data": {
                 "markdown_response": response_text,
                 "mermaid": "",
+                "code_snippet": "",
+                "language": "",
                 "commands": [],
-                "summary": f"Analyzed file: {file.filename}"
+                "summary": f"Deep analysis completed for {file.filename}"
             }
         }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Document processing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Document Intelligence Error: {str(e)}")

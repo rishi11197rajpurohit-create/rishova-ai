@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
+import Prism from "prismjs";
+import "prismjs/themes/prism-tomorrow.css";
 import "./App.css";
 
-const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
-const AI_API = "https://rishova-ai-backend.onrender.com/api/ai";
+const AUTH_API = "[https://rishova-auth-backend.onrender.com/api/auth](https://rishova-auth-backend.onrender.com/api/auth)";
+const AI_API = "[https://rishova-ai-backend.onrender.com/api/ai](https://rishova-ai-backend.onrender.com/api/ai)";
 
 mermaid.initialize({
   startOnLoad: false,
@@ -36,12 +38,17 @@ export default function App() {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "नमस्ते! मैं **RISHOVA AI** हूँ। आप मुझसे कोई सवाल पूछ सकते हैं, डायग्राम बनवा सकते हैं, या 📎 बटन से PDF/फाइल अपलोड करके विश्लेषण करवा सकते हैं।",
+      content: "नमस्ते! मैं **RISHOVA AI** हूँ। आप मुझसे डायग्राम बनवा सकते हैं, PDF फाइल एनालाइज करवा सकते हैं, या पूरा सॉफ्टवेयर/कोड बिल्ड करवा सकते हैं।",
       intent: "CHAT"
     }
   ]);
   const [loading, setLoading] = useState(false);
+  
+  // Right Workspace State
+  const [activeTab, setActiveTab] = useState("canvas"); // 'canvas' or 'code'
   const [activeDiagram, setActiveDiagram] = useState("");
+  const [activeCode, setActiveCode] = useState("");
+  const [activeLang, setActiveLang] = useState("javascript");
   const [zoomLevel, setZoomLevel] = useState(1);
 
   const diagramRef = useRef(null);
@@ -53,14 +60,20 @@ export default function App() {
   }, [messages, loading]);
 
   useEffect(() => {
-    if (activeDiagram && diagramRef.current) {
+    if (activeTab === "canvas" && activeDiagram && diagramRef.current) {
       diagramRef.current.removeAttribute("data-processed");
       diagramRef.current.innerHTML = activeDiagram;
       mermaid.init(undefined, diagramRef.current).catch((err) => {
         console.error("Mermaid render error:", err);
       });
     }
-  }, [activeDiagram]);
+  }, [activeDiagram, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "code" && activeCode) {
+      Prism.highlightAll();
+    }
+  }, [activeCode, activeTab]);
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -135,20 +148,29 @@ export default function App() {
 
       if (!res.ok) throw new Error(data.detail || data.message || "AI Processing Error");
 
+      const responseData = data.data || {};
+
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: data.data.markdown_response,
+          content: responseData.markdown_response || "",
           intent: data.intent,
-          mermaid: data.data.mermaid,
-          commands: data.data.commands
+          mermaid: responseData.mermaid || "",
+          code_snippet: responseData.code_snippet || "",
+          language: responseData.language || "javascript",
+          commands: responseData.commands || []
         }
       ]);
 
-      if (data.intent === "DIAGRAM" && data.data.mermaid) {
-        setActiveDiagram(data.data.mermaid);
+      if (data.intent === "DIAGRAM" && responseData.mermaid) {
+        setActiveDiagram(responseData.mermaid);
+        setActiveTab("canvas");
         setZoomLevel(1);
+      } else if (data.intent === "BUILDER" && responseData.code_snippet) {
+        setActiveCode(responseData.code_snippet);
+        setActiveLang(responseData.language || "javascript");
+        setActiveTab("code");
       }
     } catch (err) {
       setMessages((prev) => [
@@ -162,7 +184,14 @@ export default function App() {
 
   const openInCanvas = (mermaidCode) => {
     setActiveDiagram(mermaidCode);
+    setActiveTab("canvas");
     setZoomLevel(1);
+  };
+
+  const openInCodeViewer = (code, lang) => {
+    setActiveCode(code);
+    setActiveLang(lang || "javascript");
+    setActiveTab("code");
   };
 
   const downloadSVG = () => {
@@ -258,7 +287,7 @@ export default function App() {
                   {m.role === "user" ? (
                     <p>{m.content}</p>
                   ) : (
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins="{[remarkGfm]}">
                       {m.content}
                     </ReactMarkdown>
                   )}
@@ -266,14 +295,20 @@ export default function App() {
 
                 {m.mermaid && (
                   <button className="view-diagram-btn" onClick={() => openInCanvas(m.mermaid)}>
-                    📊 Focus & Reset Canvas
+                    📊 Focus & View Diagram in Canvas
+                  </button>
+                )}
+
+                {m.code_snippet && (
+                  <button className="view-code-btn" onClick={() => openInCodeViewer(m.code_snippet, m.language)}>
+                    💻 Open Code in Workspace Viewer
                   </button>
                 )}
 
                 {m.commands && m.commands.length > 0 && (
                   <div className="cmd-box">
                     <div className="cmd-header">
-                      <span>Terminal Commands</span>
+                      <span>⚡ Terminal Commands</span>
                       <button onClick={() => copyToClipboard(m.commands.join("\n"))}>Copy Command</button>
                     </div>
                     <pre>{m.commands.join("\n")}</pre>
@@ -281,7 +316,7 @@ export default function App() {
                 )}
               </div>
             ))}
-            {loading && <div className="chat-message assistant loading">⚡ Rishova AI is analyzing & processing...</div>}
+            {loading && <div className="chat-message assistant loading">⚡ Rishova AI is orchestrating & building...</div>}
             <div ref={chatBottomRef} />
           </div>
 
@@ -314,7 +349,7 @@ export default function App() {
             </button>
             <input
               type="text"
-              placeholder={selectedFile ? "Ask a question about this file (or press Send for summary)..." : "Ask anything, build software, or attach a file..."}
+              placeholder={selectedFile ? "Ask a question about this file..." : "Ask anything, build an app, generate diagrams..."}
               value={inputPrompt}
               onChange={(e) => setInputPrompt(e.target.value)}
               disabled={loading}
@@ -325,8 +360,22 @@ export default function App() {
 
         <div className="preview-panel">
           <div className="panel-header">
-            <h3>Visual & Canvas Workspace</h3>
-            {activeDiagram && (
+            <div className="tab-switchers">
+              <button
+                className={`tab-btn ${activeTab === "canvas" ? "active" : ""}`}
+                onClick={() => setActiveTab("canvas")}
+              >
+                🎨 Canvas & Architecture
+              </button>
+              <button
+                className={`tab-btn ${activeTab === "code" ? "active" : ""}`}
+                onClick={() => setActiveTab("code")}
+              >
+                💻 Code Workspace
+              </button>
+            </div>
+
+            {activeTab === "canvas" && activeDiagram && (
               <div className="canvas-controls">
                 <button className="action-btn" onClick={() => setZoomLevel((z) => Math.max(0.4, z - 0.2))}>🔍 -</button>
                 <span className="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
@@ -335,18 +384,45 @@ export default function App() {
                 <button className="action-btn" onClick={() => copyToClipboard(activeDiagram)}>📋 Copy</button>
               </div>
             )}
+
+            {activeTab === "code" && activeCode && (
+              <div className="canvas-controls">
+                <span className="lang-badge">{activeLang.toUpperCase()}</span>
+                <button className="action-btn download-btn" onClick={() => copyToClipboard(activeCode)}>📋 Copy Code</button>
+              </div>
+            )}
           </div>
-          <div className="canvas-area">
-            {activeDiagram ? (
-              <div
-                ref={diagramRef}
-                className="mermaid-wrapper"
-                style={{ transform: `scale(${zoomLevel})`, transformOrigin: "top center", transition: "transform 0.2s ease" }}
-              />
+
+          <div className="workspace-content">
+            {activeTab === "canvas" ? (
+              <div className="canvas-area">
+                {activeDiagram ? (
+                  <div
+                    ref={diagramRef}
+                    className="mermaid-wrapper"
+                    style={{ transform: `scale(${zoomLevel})`, transformOrigin: "top center", transition: "transform 0.2s ease" }}
+                  />
+                ) : (
+                  <div className="canvas-placeholder">
+                    <p>🎨 Interactive Canvas is Ready</p>
+                    <span>Ask Rishova to generate a diagram or architecture flow.</span>
+                  </div>
+                )}
+              </div>
             ) : (
-              <div className="canvas-placeholder">
-                <p>🎨 Interactive Canvas is Ready</p>
-                <span>Ask Rishova to generate a diagram or upload documents for analysis.</span>
+              <div className="code-viewer-area">
+                {activeCode ? (
+                  <pre className="code-pre">
+                    <code className={`language-${activeLang}`}>
+                      {activeCode}
+                    </code>
+                  </pre>
+                ) : (
+                  <div className="canvas-placeholder">
+                    <p>💻 Software Workspace Ready</p>
+                    <span>Ask Rishova AI to create a component, API, or full application script to view and edit code here.</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
