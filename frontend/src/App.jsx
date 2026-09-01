@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import mermaid from "mermaid";
 import "./App.css";
 
-const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
-const AI_API = "https://rishova-ai-backend.onrender.com/api/ai";
+const AUTH_API = "[https://rishova-auth-backend.onrender.com/api/auth](https://rishova-auth-backend.onrender.com/api/auth)";
+const AI_API = "[https://rishova-ai-backend.onrender.com/api/ai](https://rishova-ai-backend.onrender.com/api/ai)";
 
 mermaid.initialize({
   startOnLoad: false,
@@ -30,10 +30,11 @@ export default function App() {
   const [authMsg, setAuthMsg] = useState("");
 
   const [inputPrompt, setInputPrompt] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "नमस्ते! मैं **RISHOVA AI** हूँ। आप मुझसे कुछ भी पूछ सकते हैं — जैसे 'Create an E-Commerce Architecture Diagram', 'Teach me Python Loops from zero', या 'Build a Node.js Auth API'।",
+      content: "नमस्ते! मैं **RISHOVA AI** हूँ। आप मुझसे कोई सवाल पूछ सकते हैं, डायग्राम बनवा सकते हैं, या 📎 बटन से PDF/फाइल अपलोड करके विश्लेषण करवा सकते हैं।",
       intent: "CHAT"
     }
   ]);
@@ -43,6 +44,7 @@ export default function App() {
 
   const diagramRef = useRef(null);
   const chatBottomRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -88,20 +90,44 @@ export default function App() {
 
   const handleSendPrompt = async (e) => {
     e.preventDefault();
-    if (!inputPrompt.trim() || loading) return;
+    if ((!inputPrompt.trim() && !selectedFile) || loading) return;
 
-    const userText = inputPrompt;
+    const userText = inputPrompt || (selectedFile ? `Analyze file: ${selectedFile.name}` : "");
+    const fileToUpload = selectedFile;
+    
     setInputPrompt("");
-    setMessages((prev) => [...prev, { role: "user", content: userText }]);
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: userText, attachedFile: fileToUpload ? fileToUpload.name : null }
+    ]);
     setLoading(true);
 
     try {
-      const res = await fetch(`${AI_API}/universal`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: userText }),
-      });
-      const data = await res.json();
+      let res, data;
+      if (fileToUpload) {
+        // Document API Call
+        const formData = new FormData();
+        formData.append("file", fileToUpload);
+        formData.append("prompt", userText);
+
+        res = await fetch(`${AI_API}/document`, {
+          method: "POST",
+          body: formData,
+        });
+        data = await res.json();
+      } else {
+        // Universal Intent Router API Call
+        res = await fetch(`${AI_API}/universal`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: userText }),
+        });
+        data = await res.json();
+      }
+
       if (!res.ok) throw new Error(data.detail || "AI Processing Error");
 
       setMessages((prev) => [
@@ -132,11 +158,6 @@ export default function App() {
   const openInCanvas = (mermaidCode) => {
     setActiveDiagram(mermaidCode);
     setZoomLevel(1);
-    const canvasEl = document.querySelector(".canvas-area");
-    if (canvasEl) {
-      canvasEl.scrollTop = 0;
-      canvasEl.scrollLeft = 0;
-    }
   };
 
   const downloadSVG = () => {
@@ -224,6 +245,9 @@ export default function App() {
                   <strong>{m.role === "user" ? "You" : "Rishova AI"}</strong>
                   {m.intent && <span className="intent-tag">{m.intent}</span>}
                 </div>
+                {m.attachedFile && (
+                  <div className="file-badge">📎 {m.attachedFile}</div>
+                )}
                 <div className="message-body" style={{ whiteSpace: "pre-wrap" }}>
                   {m.content}
                 </div>
@@ -245,19 +269,45 @@ export default function App() {
                 )}
               </div>
             ))}
-            {loading && <div className="chat-message assistant loading">⚡ Rishova AI is thinking & orchestrating...</div>}
+            {loading && <div className="chat-message assistant loading">⚡ Rishova AI is analyzing & processing...</div>}
             <div ref={chatBottomRef} />
           </div>
 
+          {selectedFile && (
+            <div className="selected-file-preview">
+              <span>📎 {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+              <button onClick={() => setSelectedFile(null)}>✖</button>
+            </div>
+          )}
+
           <form className="chat-input-area" onSubmit={handleSendPrompt}>
             <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: "none" }}
+              accept=".pdf,.txt,.md,.js,.py,.json,.csv"
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  setSelectedFile(e.target.files[0]);
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload PDF or Document"
+            >
+              📎
+            </button>
+            <input
               type="text"
-              placeholder="Ask anything, build software, learn concepts, or generate diagrams..."
+              placeholder={selectedFile ? "Ask a question about this file (or press Send for summary)..." : "Ask anything, build software, or attach a file..."}
               value={inputPrompt}
               onChange={(e) => setInputPrompt(e.target.value)}
               disabled={loading}
             />
-            <button type="submit" disabled={loading || !inputPrompt.trim()}>Send</button>
+            <button type="submit" disabled={loading || (!inputPrompt.trim() && !selectedFile)}>Send</button>
           </form>
         </div>
 
@@ -284,7 +334,7 @@ export default function App() {
             ) : (
               <div className="canvas-placeholder">
                 <p>🎨 Interactive Canvas is Ready</p>
-                <span>Ask Rishova to generate a diagram or architecture flow to see it rendered live here.</span>
+                <span>Ask Rishova to generate a diagram or upload documents for analysis.</span>
               </div>
             )}
           </div>

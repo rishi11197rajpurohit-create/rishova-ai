@@ -3,3 +3,5 @@ uvicorn
 groq
 python-dotenv
 pydantic
+pypdf
+python-multipart

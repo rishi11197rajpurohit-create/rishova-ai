@@ -1,15 +1,17 @@
 import os
 import json
 import re
-from fastapi import FastAPI, HTTPException
+import io
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
+from pypdf import PdfReader
 
 load_dotenv()
 
-app = FastAPI(title="Rishova AI Orchestrator")
+app = FastAPI(title="Rishova AI Orchestrator & Document Engine")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,7 +36,7 @@ Analyze the user prompt and classify the intent into one of these types:
 
 You must respond with a clean, strictly valid JSON object using this exact structure:
 {
-  "intent": "DIAGRAM",
+  "intent": "DIAGRAM" | "LEARNING" | "BUILDER" | "CHAT",
   "title": "Title of the task",
   "data": {
      "mermaid": "graph TD\\n  User[User] --> Pay[Payment]",
@@ -63,41 +65,92 @@ def extract_json(text: str):
         return json.loads(match.group(0))
     return json.loads(text)
 
-@app.get("/")
-def read_root():
-    return {"status": "RISHOVA AI Orchestrator is Live"}
-
-@app.post("/api/ai/universal")
-async def handle_universal_prompt(req: UniversalRequest):
+def get_active_model():
+    """Dynamically get an active model ID from Groq"""
     try:
-        # Get active chat models directly from Groq account
         models_data = client.models.list().data
         active_models = [
             m.id for m in models_data 
             if not any(x in m.id for x in ["whisper", "guard", "vision", "embed"])
         ]
-        
-        if not active_models:
-            active_models = ["llama-3.1-70b-versatile", "llama-3.2-3b-preview"]
-        
-        last_error = None
-        for model_id in active_models:
-            try:
-                completion = client.chat.completions.create(
-                    model=model_id,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
-                        {"role": "user", "content": req.prompt}
-                    ],
-                    temperature=0.1
-                )
-                raw_text = completion.choices[0].message.content
-                return extract_json(raw_text)
-            except Exception as model_err:
-                last_error = model_err
-                continue
+        return active_models[0] if active_models else "llama-3.1-70b-versatile"
+    except Exception:
+        return "llama-3.1-70b-versatile"
 
-        raise HTTPException(status_code=500, detail=f"All models failed: {str(last_error)}")
+@app.get("/")
+def read_root():
+    return {"status": "RISHOVA AI Orchestrator & Document Engine is Live"}
 
+@app.post("/api/ai/universal")
+async def handle_universal_prompt(req: UniversalRequest):
+    try:
+        model_id = get_active_model()
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
+                {"role": "user", "content": req.prompt}
+            ],
+            temperature=0.1
+        )
+        raw_text = completion.choices[0].message.content
+        return extract_json(raw_text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ai/document")
+async def handle_document_upload(
+    file: UploadFile = File(...),
+    prompt: str = Form("Summarize this document and list key points")
+):
+    try:
+        extracted_text = ""
+        filename = file.filename.lower()
+
+        # Read file contents
+        content = await file.read()
+
+        if filename.endswith(".pdf"):
+            pdf_reader = PdfReader(io.BytesIO(content))
+            for page in pdf_reader.pages:
+                extracted_text += (page.extract_text() or "") + "\n"
+        else:
+            # Handle text/code/markdown files
+            extracted_text = content.decode("utf-8", errors="ignore")
+
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="Could not extract text from uploaded file.")
+
+        # Truncate text if excessively long for context window
+        truncated_text = extracted_text[:15000]
+
+        model_id = get_active_model()
+        system_doc_prompt = f"""
+You are RISHOVA AI Document Intelligence Agent.
+The user has uploaded a file named: '{file.filename}'.
+Document Content:
+---
+{truncated_text}
+---
+Analyze the document and answer the user query accurately with markdown structure.
+"""
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": system_doc_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2
+        )
+
+        response_text = completion.choices[0].message.content
+        return {
+            "intent": "DOCUMENT",
+            "filename": file.filename,
+            "data": {
+                "markdown_response": response_text,
+                "summary": f"Analyzed file: {file.filename}"
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
