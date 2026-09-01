@@ -1,14 +1,14 @@
 import os
-import re
+import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from dotenv import load_dotenv
 from groq import Groq
+from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI(title="Rishova AI Diagram Engine")
+app = FastAPI(title="Rishova AI Orchestrator")
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,72 +18,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class DiagramRequest(BaseModel):
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+
+class UniversalRequest(BaseModel):
     prompt: str
 
-def extract_clean_mermaid(text: str) -> str:
-    match = re.search(r"```(?:mermaid)?\s*([\s\S]*?)```", text, re.IGNORECASE)
-    raw = match.group(1) if match else text
-    lines = raw.strip().split("\n")
-    valid_starts = ("graph", "flowchart", "sequencediagram", "classdiagram", "erdiagram", "statediagram", "gantt", "pie")
-    
-    clean_lines = []
-    started = False
-    for line in lines:
-        stripped = line.strip()
-        if not started:
-            if any(stripped.lower().startswith(kw) for kw in valid_starts):
-                started = True
-                clean_lines.append(line)
-        else:
-            if not stripped.startswith("```"):
-                clean_lines.append(line)
-                
-    result = "\n".join(clean_lines).strip()
-    return result if result else raw.replace("```", "").strip()
+SYSTEM_ORCHESTRATOR_PROMPT = """
+You are RISHOVA AI, an intelligent task orchestrator.
+Analyze the user prompt and classify the intent into one of these types:
+1. "DIAGRAM" (User wants an architecture diagram, ERD, DFD, flowchart, or workflow).
+2. "LEARNING" (User wants to learn a concept from zero, exam prep, practice, or step-by-step tutorial).
+3. "BUILDER" (User wants to write code, create an app, build a script, or terminal commands).
+4. "CHAT" (General question, reasoning, conversation, or advice).
 
-@app.post("/api/ai/diagram")
-async def generate_diagram(req: DiagramRequest):
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="GROQ_API_KEY not found in .env")
+You must respond ONLY with a valid JSON object strictly matching this schema:
+{
+  "intent": "DIAGRAM" | "LEARNING" | "BUILDER" | "CHAT",
+  "title": "Short title of the task",
+  "data": {
+     "mermaid": "ONLY valid Mermaid.js code if intent is DIAGRAM, else empty string",
+     "markdown_response": "Full formatted markdown response with code/steps/explanation",
+     "commands": ["terminal commands if applicable"],
+     "summary": "Brief 1-line action summary"
+  }
+}
+Do not wrap JSON in backticks. Return raw JSON only.
+"""
 
-    client = Groq(api_key=api_key)
+@app.get("/")
+def read_root():
+    return {"status": "RISHOVA AI Orchestrator is Live"}
 
-    # Fetch active models dynamically from your account
-    active_models = []
+@app.post("/api/ai/universal")
+async def handle_universal_prompt(req: UniversalRequest):
     try:
-        models_data = client.models.list().data
-        active_models = [m.id for m in models_data if "whisper" not in m.id and "preview" not in m.id]
-    except Exception:
-        active_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
-
-    system_prompt = (
-        "You are an automated Mermaid.js generator engine. "
-        "Output ONLY valid Mermaid diagram syntax starting with graph TD or sequenceDiagram. "
-        "Do not include any explanations, markdown comments, or introductory text."
-    )
-
-    last_error = None
-    for model_name in active_models:
-        try:
-            completion = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Generate clean mermaid diagram: {req.prompt}"}
-                ],
-                temperature=0.1,
-            )
-            raw_output = completion.choices[0].message.content
-            cleaned = extract_clean_mermaid(raw_output)
-            return {"mermaid": cleaned, "model": model_name}
-        except Exception as e:
-            last_error = str(e)
-            continue
-
-    raise HTTPException(status_code=500, detail=f"Failed to generate diagram: {last_error}")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
+                {"role": "user", "content": req.prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2
+        )
+        
+        response_text = completion.choices[0].message.content
+        result = json.loads(response_text)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
