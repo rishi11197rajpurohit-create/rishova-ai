@@ -2,12 +2,10 @@ import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
-import Prism from "prismjs";
-import "prismjs/themes/prism-tomorrow.css";
 import "./App.css";
 
-const AUTH_API = "[https://rishova-auth-backend.onrender.com/api/auth](https://rishova-auth-backend.onrender.com/api/auth)";
-const AI_API = "[https://rishova-ai-backend.onrender.com/api/ai](https://rishova-ai-backend.onrender.com/api/ai)";
+const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
+const AI_API = "https://rishova-ai-backend.onrender.com/api/ai";
 
 mermaid.initialize({
   startOnLoad: false,
@@ -68,12 +66,6 @@ export default function App() {
       });
     }
   }, [activeDiagram, activeTab]);
-
-  useEffect(() => {
-    if (activeTab === "code" && activeCode) {
-      Prism.highlightAll();
-    }
-  }, [activeCode, activeTab]);
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -287,7 +279,7 @@ export default function App() {
                   {m.role === "user" ? (
                     <p>{m.content}</p>
                   ) : (
-                    <ReactMarkdown remarkPlugins="{[remarkGfm]}">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {m.content}
                     </ReactMarkdown>
                   )}
@@ -413,7 +405,7 @@ export default function App() {
               <div className="code-viewer-area">
                 {activeCode ? (
                   <pre className="code-pre">
-                    <code className={`language-${activeLang}`}>
+                    <code>
                       {activeCode}
                     </code>
                   </pre>
