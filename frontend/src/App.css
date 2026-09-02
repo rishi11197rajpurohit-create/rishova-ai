@@ -925,4 +925,59 @@ body {
 .ai-action-btn {
   flex-shrink: 0;
   white-space: nowrap;
+}/* Fix header button clipping and enable full scrolling */
+.preview-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.panel-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  white-space: nowrap !important;
+  padding: 8px 12px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #38bdf8 #18181b !important;
+}
+
+/* Chrome, Safari, Edge Scrollbar */
+.panel-header::-webkit-scrollbar {
+  height: 5px !important;
+}
+
+.panel-header::-webkit-scrollbar-track {
+  background: #18181b !important;
+}
+
+.panel-header::-webkit-scrollbar-thumb {
+  background: #0284c7 !important;
+  border-radius: 4px !important;
+}
+
+.tab-switchers,
+.canvas-controls {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-shrink: 0 !important;
+}
+
+.canvas-controls {
+  margin-left: auto !important;
+}
+
+.tab-btn,
+.action-btn,
+.ai-action-btn {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
 }
