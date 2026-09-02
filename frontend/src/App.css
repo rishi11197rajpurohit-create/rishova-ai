@@ -11,7 +11,6 @@ body {
   overflow: hidden;
 }
 
-/* Main Container */
 .app-container {
   display: flex;
   flex-direction: column;
@@ -20,7 +19,6 @@ body {
   overflow: hidden;
 }
 
-/* Header */
 .app-header {
   height: 56px;
   background-color: #121216;
@@ -108,7 +106,6 @@ body {
   opacity: 0.9;
 }
 
-/* Studio Body Layout */
 .studio-body-layout {
   display: flex;
   flex: 1;
@@ -118,7 +115,7 @@ body {
   position: relative;
 }
 
-/* Collapsible Sidebar */
+/* Sidebar */
 .sessions-sidebar {
   width: 230px;
   background-color: #101014;
@@ -211,7 +208,7 @@ body {
   color: #ef4444;
 }
 
-/* Main Split View */
+/* Chat & Split Main */
 .main-content {
   display: flex;
   flex: 1;
@@ -220,7 +217,6 @@ body {
   overflow: hidden;
 }
 
-/* Left Chat Panel */
 .chat-panel {
   flex: 1;
   min-width: 0;
@@ -288,7 +284,6 @@ body {
   word-break: break-word;
 }
 
-/* Code Blocks Inside Chat */
 .studio-code-card {
   background: #131316;
   border: 1px solid #27272a;
@@ -337,7 +332,6 @@ body {
   overflow: auto;
 }
 
-/* Command Box */
 .cmd-box {
   margin-top: 10px;
   background: #16161c;
@@ -366,7 +360,6 @@ body {
   cursor: pointer;
 }
 
-/* Chat Input Bar */
 .chat-input-area {
   padding: 10px 14px;
   background: #121216;
@@ -425,7 +418,6 @@ body {
   overflow: hidden;
 }
 
-/* Workspace Header */
 .panel-header {
   min-height: 48px;
   padding: 6px 12px;
@@ -498,7 +490,70 @@ body {
   padding: 0 4px;
 }
 
-/* Workspace Content & Tabs */
+/* Universal Export Dropdown */
+.export-dropdown-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.export-trigger-btn {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+}
+
+.export-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background-color: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.dropdown-label {
+  padding: 6px 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #71717a;
+  border-bottom: 1px solid #27272a;
+}
+
+.export-dropdown-menu button {
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.export-dropdown-menu button span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #f4f4f5;
+}
+
+.export-dropdown-menu button small {
+  font-size: 0.7rem;
+  color: #a1a1aa;
+}
+
+.export-dropdown-menu button:hover {
+  background-color: #27272a;
+}
+
+/* Solid Workspace Content (NO TRANSPARENCY / GHOSTING) */
 .workspace-content {
   flex: 1;
   min-height: 0;
@@ -506,6 +561,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  background-color: #131316 !important;
 }
 
 .code-viewer-area {
@@ -513,6 +569,8 @@ body {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  background-color: #131316 !important;
+  z-index: 2;
 }
 
 .multi-file-workspace {
@@ -555,10 +613,10 @@ body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: #131316;
+  background-color: #1e1e1e !important;
 }
 
-/* Interactive Canvas */
+/* Canvas Area */
 .canvas-area {
   flex: 1;
   height: 100%;
@@ -568,7 +626,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle, #1a1a22 15%, #0b0b0e 90%);
+  background-color: #0b0b0e !important;
+  z-index: 2;
 }
 
 .canvas-area.grabbable {
@@ -593,7 +652,6 @@ body {
   height: auto !important;
 }
 
-/* Fullscreen Mode */
 .fullscreen-canvas-mode {
   position: fixed !important;
   top: 0;
@@ -613,4 +671,13 @@ body {
   color: #71717a;
   text-align: center;
   padding: 20px;
+}
+
+.active-file-indicator {
+  background: #27272a;
+  color: #38bdf8;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
 }

@@ -16,7 +16,7 @@ mermaid.initialize({
   startOnLoad: false,
   theme: "dark",
   securityLevel: "loose",
-  suppressErrorRendering: true, // डिफॉल्ट बॉम्ब/एरर बॉक्स को रोकेगा
+  suppressErrorRendering: true,
 });
 
 const StudioCodeBlock = ({ inline, className, children, ...props }) => {
@@ -34,7 +34,7 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   const handleDownload = () => {
     const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html", sql: "sql" };
     const blob = new Blob([codeContent], { type: "text/plain;charset=utf-8" });
-    saveAs(blob, `code.${extMap[lang] || "txt"}`);
+    saveAs(blob, `snippet.${extMap[lang] || "txt"}`);
   };
 
   if (inline || (!match && !codeContent.includes("\n") && codeContent.length < 40)) {
@@ -47,17 +47,15 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
         <span className="studio-lang-title">{(lang || "CODE").toUpperCase()}</span>
         <div className="studio-code-actions">
           <button className="circle-action-btn" title="Download Code" onClick={handleDownload}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
           </button>
           <button className="circle-action-btn" title="Copy Code" onClick={handleCopy}>
-            {copied ? (
-              <span className="copied-badge">✔</span>
-            ) : (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            {copied ? "✔" : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
               </svg>
@@ -74,17 +72,17 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
           lineProps={{ style: { display: "block", width: "100%" } }}
           customStyle={{
             margin: 0,
-            padding: "16px 20px",
+            padding: "14px 16px",
             backgroundColor: "#131316",
-            fontSize: "0.93rem",
-            lineHeight: "1.7",
-            fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
+            fontSize: "0.9rem",
+            lineHeight: "1.6",
+            fontFamily: "'Fira Code', 'Consolas', monospace",
             overflowX: "auto",
           }}
           codeTagProps={{
             style: {
               display: "block",
-              fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
+              fontFamily: "'Fira Code', 'Consolas', monospace",
               whiteSpace: "pre",
             }
           }}
@@ -114,7 +112,6 @@ export default function App() {
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authMsg, setAuthMsg] = useState("");
 
-  // Sessions / Chat History State
   const [sessions, setSessions] = useState(() => {
     const saved = localStorage.getItem("rishova_sessions");
     return saved ? JSON.parse(saved) : [{
@@ -131,20 +128,19 @@ export default function App() {
       commands: []
     }];
   });
+
   const [activeSessionId, setActiveSessionId] = useState("default-session");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Active Session Shortcut
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
 
   const [inputPrompt, setInputPrompt] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(false);
-  
+
   const [activeTab, setActiveTab] = useState("code");
   const [showExportMenu, setShowExportMenu] = useState(false);
 
-  // Canvas Pan/Zoom/Fullscreen State
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -157,7 +153,6 @@ export default function App() {
   const fileInputRef = useRef(null);
   const exportDropdownRef = useRef(null);
 
-  // Persist sessions
   useEffect(() => {
     localStorage.setItem("rishova_sessions", JSON.stringify(sessions));
   }, [sessions]);
@@ -166,16 +161,21 @@ export default function App() {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, loading]);
 
- // Modern Safe Mermaid v11 Renderer
+  // Mermaid Renderer
   useEffect(() => {
     let isMounted = true;
 
     const renderMermaidDiagram = async () => {
       if (activeTab === "canvas" && activeSession?.activeDiagram && diagramRef.current) {
         try {
-          // Clean diagram text
           let cleanSyntax = activeSession.activeDiagram.trim();
-          if (!cleanSyntax.startsWith("graph") && !cleanSyntax.startsWith("flowchart") && !cleanSyntax.startsWith("sequenceDiagram") && !cleanSyntax.startsWith("erDiagram") && !cleanSyntax.startsWith("classDiagram")) {
+          if (
+            !cleanSyntax.startsWith("graph") &&
+            !cleanSyntax.startsWith("flowchart") &&
+            !cleanSyntax.startsWith("sequenceDiagram") &&
+            !cleanSyntax.startsWith("erDiagram") &&
+            !cleanSyntax.startsWith("classDiagram")
+          ) {
             cleanSyntax = "graph TD\n" + cleanSyntax;
           }
 
@@ -189,9 +189,8 @@ export default function App() {
           console.error("Mermaid Render Catch:", renderError);
           if (isMounted && diagramRef.current) {
             diagramRef.current.innerHTML = `
-              <div style="color: #f87171; padding: 20px; background: #1f1215; border: 1px solid #7f1d1d; border-radius: 8px; font-family: monospace; font-size: 0.85rem;">
-                <strong>⚠️ Diagram Render Notice:</strong><br/>
-                Syntax needs adjustment. You can view or copy raw syntax from above controls.
+              <div style="color: #f87171; padding: 16px; background: #1f1215; border: 1px solid #7f1d1d; border-radius: 8px; font-family: monospace; font-size: 0.85rem;">
+                ⚠️ Diagram Notice: Mermaid syntax parsing issue. Please check or copy raw syntax.
               </div>
             `;
           }
@@ -200,13 +199,9 @@ export default function App() {
     };
 
     renderMermaidDiagram();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [activeSession?.activeDiagram, activeTab]);
 
-  // Export menu outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target)) {
@@ -262,6 +257,7 @@ export default function App() {
     };
     setSessions((prev) => [newSession, ...prev]);
     setActiveSessionId(newId);
+    setActiveTab("code");
     setPanPosition({ x: 0, y: 0 });
     setZoomLevel(1);
   };
@@ -285,21 +281,19 @@ export default function App() {
 
     const userText = inputPrompt || (selectedFile ? `Analyze file: ${selectedFile.name}` : "");
     const fileToUpload = selectedFile;
-    
+
     setInputPrompt("");
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
 
-    // Append user message to active session
     const updatedMessages = [
       ...activeSession.messages,
       { role: "user", content: userText, attachedFile: fileToUpload ? fileToUpload.name : null }
     ];
 
-    // Update Title if default
     let sessionTitle = activeSession.title;
     if (sessionTitle === "New Workspace Project" || sessionTitle === "New Project") {
-      sessionTitle = userText.slice(0, 30) + (userText.length > 30 ? "..." : "");
+      sessionTitle = userText.slice(0, 26) + (userText.length > 26 ? "..." : "");
     }
 
     setSessions((prev) =>
@@ -399,7 +393,6 @@ export default function App() {
     }
   };
 
-  // Monaco Editor live changes handler
   const handleEditorCodeChange = (newCode) => {
     if (!activeSession?.selectedFileName) return;
     setSessions((prev) =>
@@ -419,7 +412,6 @@ export default function App() {
     );
   };
 
-  // Canvas Pan & Drag Handlers
   const handleMouseDown = (e) => {
     if (activeTab !== "canvas") return;
     setIsDragging(true);
@@ -441,7 +433,6 @@ export default function App() {
     alert("Copied to clipboard!");
   };
 
-  // Universal Export Handlers
   const downloadActiveFile = () => {
     const current = activeSession.workspaceFiles[activeSession.selectedFileName];
     if (!current) return;
@@ -566,7 +557,6 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Top Main Navigation */}
       <header className="app-header">
         <div className="header-left">
           <button 
@@ -588,7 +578,6 @@ export default function App() {
       </header>
 
       <div className="studio-body-layout">
-        {/* Collapsible Left Sessions Sidebar */}
         {sidebarOpen && (
           <aside className="sessions-sidebar">
             <div className="sidebar-header">
@@ -619,9 +608,7 @@ export default function App() {
           </aside>
         )}
 
-        {/* Center Split Screen: Chat on Left, Workspace on Right */}
         <div className="main-content">
-          {/* Chat Panel */}
           <div className="chat-panel">
             <div className="chat-history">
               {activeSession.messages.map((m, idx) => (
@@ -633,7 +620,7 @@ export default function App() {
                   {m.attachedFile && (
                     <div className="file-badge">📎 {m.attachedFile}</div>
                   )}
-                  
+
                   <div className="message-body markdown-content">
                     {m.role === "user" ? (
                       <p>{m.content}</p>
@@ -665,9 +652,9 @@ export default function App() {
                           lineProps={{ style: { display: "block", width: "100%" } }}
                           customStyle={{
                             margin: 0,
-                            padding: "14px 16px",
+                            padding: "12px 14px",
                             backgroundColor: "#131316",
-                            fontSize: "0.9rem",
+                            fontSize: "0.88rem",
                             lineHeight: "1.6"
                           }}
                           codeTagProps={{
@@ -723,7 +710,6 @@ export default function App() {
             </form>
           </div>
 
-          {/* Right Workspace Panel */}
           <div className={`preview-panel ${isFullScreenCanvas ? "fullscreen-canvas-mode" : ""}`}>
             <div className="panel-header">
               <div className="tab-switchers">
@@ -750,7 +736,6 @@ export default function App() {
                     📋 Copy Code
                   </button>
 
-                  {/* Universal Download Dropdown */}
                   <div className="export-dropdown-wrapper" ref={exportDropdownRef}>
                     <button 
                       className="action-btn download-btn export-trigger-btn"
@@ -760,7 +745,7 @@ export default function App() {
                     </button>
                     {showExportMenu && (
                       <div className="export-dropdown-menu">
-                        <div className="dropdown-label">Export Project</div>
+                        <div className="dropdown-label">Export Options</div>
                         <button onClick={downloadProjectZip}>
                           <span>📦 Complete ZIP Project</span>
                           <small>All workspace files</small>
@@ -805,11 +790,11 @@ export default function App() {
             </div>
 
             <div className="workspace-content">
-              {activeTab === "code" ? (
+              {/* Isolate Code Tab: Keeps Canvas out of the DOM when code is viewed */}
+              {activeTab === "code" && (
                 <div className="code-viewer-area">
                   {Object.keys(activeSession.workspaceFiles).length > 0 ? (
                     <div className="multi-file-workspace">
-                      {/* Interactive File Tabs */}
                       <div className="file-tabs-bar">
                         {Object.keys(activeSession.workspaceFiles).map((fname) => (
                           <button
@@ -826,8 +811,7 @@ export default function App() {
                         ))}
                       </div>
 
-                      {/* Official Monaco VS Code Editor */}
-                      <div className="active-code-card monaco-container">
+                      <div className="active-code-card">
                         <Editor
                           height="100%"
                           language={getMonacoLang(activeSession.selectedFileName)}
@@ -855,7 +839,10 @@ export default function App() {
                     </div>
                   )}
                 </div>
-              ) : (
+              )}
+
+              {/* Isolate Canvas Tab: Keeps Monaco out of the DOM when diagram is viewed */}
+              {activeTab === "canvas" && (
                 <div 
                   className={`canvas-area ${isDragging ? "grabbing" : "grabbable"}`}
                   ref={canvasContainerRef}
