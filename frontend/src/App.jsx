@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
+import Editor from "@monaco-editor/react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import JSZip from "jszip";
@@ -13,7 +14,7 @@ const AI_API = "https://rishova-ai-backend.onrender.com/api/ai";
 
 mermaid.initialize({
   startOnLoad: false,
-  theme: "default",
+  theme: "dark",
   securityLevel: "loose",
 });
 
@@ -112,47 +113,70 @@ export default function App() {
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authMsg, setAuthMsg] = useState("");
 
+  // Sessions / Chat History State
+  const [sessions, setSessions] = useState(() => {
+    const saved = localStorage.getItem("rishova_sessions");
+    return saved ? JSON.parse(saved) : [{
+      id: "default-session",
+      title: "New Workspace Project",
+      messages: [{
+        role: "assistant",
+        content: "Namaste! Main **RISHOVA AI Studio** hoon. Aap mujhse kisi bhi software, API, ya system architecture ka complete code generate karwa sakte hain.",
+        intent: "CHAT"
+      }],
+      workspaceFiles: {},
+      selectedFileName: "",
+      activeDiagram: "",
+      commands: []
+    }];
+  });
+  const [activeSessionId, setActiveSessionId] = useState("default-session");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Active Session Shortcut
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
+
   const [inputPrompt, setInputPrompt] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  const [messages, setMessages] = useState([
-    {
-      role: "assistant",
-      content: "Namaste! Main **RISHOVA AI Studio** hoon. Aap mujhse kisi bhi software, API, ya architecture ka complete code generate karwa sakte hain.",
-      intent: "CHAT"
-    }
-  ]);
   const [loading, setLoading] = useState(false);
   
   const [activeTab, setActiveTab] = useState("code");
-  const [activeDiagram, setActiveDiagram] = useState("");
-  
-  const [workspaceFiles, setWorkspaceFiles] = useState({});
-  const [selectedFileName, setSelectedFileName] = useState("");
-  const [currentCommands, setCurrentCommands] = useState([]);
-  const [currentFullMarkdown, setCurrentFullMarkdown] = useState("");
   const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Canvas Pan/Zoom/Fullscreen State
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isFullScreenCanvas, setIsFullScreenCanvas] = useState(false);
 
   const diagramRef = useRef(null);
+  const canvasContainerRef = useRef(null);
   const chatBottomRef = useRef(null);
   const fileInputRef = useRef(null);
   const exportDropdownRef = useRef(null);
 
+  // Persist sessions
+  useEffect(() => {
+    localStorage.setItem("rishova_sessions", JSON.stringify(sessions));
+  }, [sessions]);
+
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [activeSession?.messages, loading]);
 
+  // Mermaid Diagram Renderer
   useEffect(() => {
-    if (activeTab === "canvas" && activeDiagram && diagramRef.current) {
+    if (activeTab === "canvas" && activeSession?.activeDiagram && diagramRef.current) {
       diagramRef.current.removeAttribute("data-processed");
-      diagramRef.current.innerHTML = activeDiagram;
+      diagramRef.current.innerHTML = activeSession.activeDiagram;
       mermaid.init(undefined, diagramRef.current).catch((err) => {
-        console.error("Mermaid error:", err);
+        console.error("Mermaid Render Error:", err);
       });
     }
-  }, [activeDiagram, activeTab]);
+  }, [activeSession?.activeDiagram, activeTab]);
 
-  // Click outside to close export dropdown
+  // Export menu outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target)) {
@@ -191,6 +215,40 @@ export default function App() {
     }
   };
 
+  const createNewSession = () => {
+    const newId = `session-${Date.now()}`;
+    const newSession = {
+      id: newId,
+      title: "New Project",
+      messages: [{
+        role: "assistant",
+        content: "Naya workspace ready hai. Kya develop karna chahte hain?",
+        intent: "CHAT"
+      }],
+      workspaceFiles: {},
+      selectedFileName: "",
+      activeDiagram: "",
+      commands: []
+    };
+    setSessions((prev) => [newSession, ...prev]);
+    setActiveSessionId(newId);
+    setPanPosition({ x: 0, y: 0 });
+    setZoomLevel(1);
+  };
+
+  const deleteSession = (sessionId, e) => {
+    e.stopPropagation();
+    if (sessions.length <= 1) {
+      createNewSession();
+      return;
+    }
+    const filtered = sessions.filter((s) => s.id !== sessionId);
+    setSessions(filtered);
+    if (activeSessionId === sessionId) {
+      setActiveSessionId(filtered[0].id);
+    }
+  };
+
   const handleSendPrompt = async (e) => {
     e.preventDefault();
     if ((!inputPrompt.trim() && !selectedFile) || loading) return;
@@ -202,10 +260,26 @@ export default function App() {
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
 
-    setMessages((prev) => [
-      ...prev,
+    // Append user message to active session
+    const updatedMessages = [
+      ...activeSession.messages,
       { role: "user", content: userText, attachedFile: fileToUpload ? fileToUpload.name : null }
-    ]);
+    ];
+
+    // Update Title if default
+    let sessionTitle = activeSession.title;
+    if (sessionTitle === "New Workspace Project" || sessionTitle === "New Project") {
+      sessionTitle = userText.slice(0, 30) + (userText.length > 30 ? "..." : "");
+    }
+
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === activeSessionId
+          ? { ...s, title: sessionTitle, messages: updatedMessages }
+          : s
+      )
+    );
+
     setLoading(true);
 
     try {
@@ -233,103 +307,160 @@ export default function App() {
       const responseData = data.data || {};
       const returnedFiles = responseData.files || {};
 
-      setCurrentFullMarkdown(responseData.markdown_response || "");
-      setCurrentCommands(responseData.commands || []);
+      const assistantMsg = {
+        role: "assistant",
+        content: responseData.markdown_response || "",
+        intent: data.intent,
+        mermaid: responseData.mermaid || "",
+        commands: responseData.commands || []
+      };
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: responseData.markdown_response || "",
-          intent: data.intent,
-          mermaid: responseData.mermaid || "",
-          commands: responseData.commands || []
-        }
-      ]);
+      let newWorkspaceFiles = activeSession.workspaceFiles;
+      let newSelectedFile = activeSession.selectedFileName;
+      let newActiveDiagram = activeSession.activeDiagram;
 
       if (data.intent === "DIAGRAM" && responseData.mermaid) {
-        setActiveDiagram(responseData.mermaid);
+        newActiveDiagram = responseData.mermaid;
         setActiveTab("canvas");
         setZoomLevel(1);
+        setPanPosition({ x: 0, y: 0 });
       } else if (Object.keys(returnedFiles).length > 0) {
-        setWorkspaceFiles(returnedFiles);
-        setSelectedFileName(Object.keys(returnedFiles)[0]);
+        newWorkspaceFiles = returnedFiles;
+        newSelectedFile = Object.keys(returnedFiles)[0];
         setActiveTab("code");
       } else if (responseData.code_snippet) {
-        setWorkspaceFiles({
+        newWorkspaceFiles = {
           "app.js": { language: responseData.language || "javascript", code: responseData.code_snippet }
-        });
-        setSelectedFileName("app.js");
+        };
+        newSelectedFile = "app.js";
         setActiveTab("code");
       }
+
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeSessionId
+            ? {
+                ...s,
+                messages: [...updatedMessages, assistantMsg],
+                workspaceFiles: newWorkspaceFiles,
+                selectedFileName: newSelectedFile,
+                activeDiagram: newActiveDiagram,
+                commands: responseData.commands || []
+              }
+            : s
+        )
+      );
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `❌ Error: ${err.message}`, intent: "CHAT" }
-      ]);
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeSessionId
+            ? {
+                ...s,
+                messages: [
+                  ...s.messages,
+                  { role: "assistant", content: `❌ Error: ${err.message}`, intent: "CHAT" }
+                ]
+              }
+            : s
+        )
+      );
     } finally {
       setLoading(false);
     }
   };
+
+  // Monaco Editor live changes handler
+  const handleEditorCodeChange = (newCode) => {
+    if (!activeSession?.selectedFileName) return;
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSessionId) return s;
+        return {
+          ...s,
+          workspaceFiles: {
+            ...s.workspaceFiles,
+            [s.selectedFileName]: {
+              ...s.workspaceFiles[s.selectedFileName],
+              code: newCode
+            }
+          }
+        };
+      })
+    );
+  };
+
+  // Canvas Pan & Drag Handlers
+  const handleMouseDown = (e) => {
+    if (activeTab !== "canvas") return;
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - panPosition.x, y: e.clientY - panPosition.y });
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    setPanPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     alert("Copied to clipboard!");
   };
 
-  // Universal Download Handlers
+  // Universal Export Handlers
   const downloadActiveFile = () => {
-    const current = workspaceFiles[selectedFileName];
+    const current = activeSession.workspaceFiles[activeSession.selectedFileName];
     if (!current) return;
     const blob = new Blob([current.code], { type: "text/plain;charset=utf-8" });
-    saveAs(blob, selectedFileName);
+    saveAs(blob, activeSession.selectedFileName);
     setShowExportMenu(false);
   };
 
   const downloadProjectZip = async () => {
-    if (Object.keys(workspaceFiles).length === 0) {
-      alert("No files available to download!");
+    if (Object.keys(activeSession.workspaceFiles).length === 0) {
+      alert("No files in workspace to download!");
       return;
     }
     const zip = new JSZip();
-    Object.entries(workspaceFiles).forEach(([name, fData]) => {
+    Object.entries(activeSession.workspaceFiles).forEach(([name, fData]) => {
       zip.file(name, fData.code);
     });
 
-    if (currentCommands && currentCommands.length > 0) {
-      zip.file("setup_commands.sh", currentCommands.join("\n"));
+    if (activeSession.commands && activeSession.commands.length > 0) {
+      zip.file("setup_commands.sh", activeSession.commands.join("\n"));
     }
 
     const content = await zip.generateAsync({ type: "blob" });
-    saveAs(content, "rishova-project.zip");
+    saveAs(content, `${activeSession.title.replace(/[^a-zA-Z0-9_-]/g, "_")}.zip`);
     setShowExportMenu(false);
   };
 
   const downloadMarkdownDoc = () => {
-    if (!currentFullMarkdown) {
-      alert("No documentation available to download!");
-      return;
-    }
-    const blob = new Blob([currentFullMarkdown], { type: "text/markdown;charset=utf-8" });
-    saveAs(blob, "project_documentation.md");
+    const lastAssistant = [...activeSession.messages].reverse().find((m) => m.role === "assistant");
+    if (!lastAssistant) return;
+    const blob = new Blob([lastAssistant.content], { type: "text/markdown;charset=utf-8" });
+    saveAs(blob, "documentation.md");
     setShowExportMenu(false);
   };
 
   const downloadPlainText = () => {
-    const current = workspaceFiles[selectedFileName];
-    const textToSave = current ? current.code : currentFullMarkdown;
-    if (!textToSave) return;
-    const blob = new Blob([textToSave], { type: "text/plain;charset=utf-8" });
-    saveAs(blob, `${selectedFileName || "project"}.txt`);
+    const current = activeSession.workspaceFiles[activeSession.selectedFileName];
+    if (!current) return;
+    const blob = new Blob([current.code], { type: "text/plain;charset=utf-8" });
+    saveAs(blob, `${activeSession.selectedFileName}.txt`);
     setShowExportMenu(false);
   };
 
   const downloadShellScript = () => {
-    if (!currentCommands || currentCommands.length === 0) {
-      alert("No terminal commands available to download!");
+    if (!activeSession.commands || activeSession.commands.length === 0) {
+      alert("No shell commands available!");
       return;
     }
-    const scriptContent = "#!/usr/bin/env bash\n\n" + currentCommands.join("\n") + "\n";
+    const scriptContent = "#!/usr/bin/env bash\n\n" + activeSession.commands.join("\n") + "\n";
     const blob = new Blob([scriptContent], { type: "application/x-sh;charset=utf-8" });
     saveAs(blob, "run_setup.sh");
     setShowExportMenu(false);
@@ -344,10 +475,24 @@ export default function App() {
     }
     const svgData = new XMLSerializer().serializeToString(svgElement);
     const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-    saveAs(blob, "rishova-architecture.svg");
+    saveAs(blob, "architecture_diagram.svg");
   };
 
-  const currentFile = workspaceFiles[selectedFileName] || null;
+  const currentFile = activeSession?.workspaceFiles?.[activeSession?.selectedFileName] || null;
+
+  const getMonacoLang = (ext) => {
+    if (!ext) return "javascript";
+    const clean = ext.toLowerCase();
+    if (clean.endsWith(".js") || clean.endsWith(".jsx")) return "javascript";
+    if (clean.endsWith(".ts") || clean.endsWith(".tsx")) return "typescript";
+    if (clean.endsWith(".py")) return "python";
+    if (clean.endsWith(".json")) return "json";
+    if (clean.endsWith(".html")) return "html";
+    if (clean.endsWith(".css")) return "css";
+    if (clean.endsWith(".sql")) return "sql";
+    if (clean.endsWith(".sh")) return "shell";
+    return "javascript";
+  };
 
   if (!token) {
     return (
@@ -391,10 +536,20 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {/* Top Main Navigation */}
       <header className="app-header">
-        <div className="logo-title">
-          <h1>RISHOVA AI</h1>
-          <span className="badge">Universal Studio</span>
+        <div className="header-left">
+          <button 
+            className="icon-toggle-btn"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            title="Toggle Sessions Sidebar"
+          >
+            ☰
+          </button>
+          <div className="logo-title">
+            <h1>RISHOVA AI</h1>
+            <span className="badge">Universal Studio</span>
+          </div>
         </div>
         <div className="user-section">
           <span className="user-name-text">👤 {userName}</span>
@@ -402,251 +557,302 @@ export default function App() {
         </div>
       </header>
 
-      <div className="main-content">
-        {/* Left Chat Panel */}
-        <div className="chat-panel">
-          <div className="chat-history">
-            {messages.map((m, idx) => (
-              <div key={idx} className={`chat-message ${m.role}`}>
-                <div className="message-header">
-                  <strong>{m.role === "user" ? "You" : "Rishova AI"}</strong>
-                  {m.intent && <span className="intent-tag">{m.intent}</span>}
-                </div>
-                {m.attachedFile && (
-                  <div className="file-badge">📎 {m.attachedFile}</div>
-                )}
-                
-                <div className="message-body markdown-content">
-                  {m.role === "user" ? (
-                    <p>{m.content}</p>
-                  ) : (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        pre: ({ children }) => <>{children}</>,
-                        code: StudioCodeBlock
-                      }}
-                    >
-                      {m.content}
-                    </ReactMarkdown>
-                  )}
-                </div>
-
-                {m.commands && m.commands.length > 0 && (
-                  <div className="cmd-box">
-                    <div className="cmd-header">
-                      <span>⚡ Quick Execution Terminal Commands</span>
-                      <button onClick={() => copyToClipboard(m.commands.join("\n"))}>📋 Copy All</button>
-                    </div>
-                    <div className="studio-code-card">
-                      <SyntaxHighlighter
-                        language="bash"
-                        style={vscDarkPlus}
-                        showLineNumbers={false}
-                        wrapLines={true}
-                        lineProps={{ style: { display: "block", width: "100%" } }}
-                        customStyle={{
-                          margin: 0,
-                          padding: "14px 16px",
-                          backgroundColor: "#131316",
-                          fontSize: "0.9rem",
-                          lineHeight: "1.6"
-                        }}
-                        codeTagProps={{
-                          style: { display: "block", whiteSpace: "pre" }
-                        }}
-                      >
-                        {m.commands.join("\n")}
-                      </SyntaxHighlighter>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-            {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating files...</div>}
-            <div ref={chatBottomRef} />
-          </div>
-
-          {selectedFile && (
-            <div className="selected-file-preview">
-              <span>📎 {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)</span>
-              <button onClick={() => setSelectedFile(null)}>✖</button>
-            </div>
-          )}
-
-          <form className="chat-input-area" onSubmit={handleSendPrompt}>
-            <input
-              type="file"
-              ref={fileInputRef}
-              style={{ display: "none" }}
-              accept=".pdf,.txt,.md,.js,.py,.json,.csv,.sql"
-              onChange={(e) => {
-                if (e.target.files && e.target.files[0]) {
-                  setSelectedFile(e.target.files[0]);
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="attach-btn"
-              onClick={() => fileInputRef.current?.click()}
-              title="Upload File"
-            >
-              📎
-            </button>
-            <input
-              type="text"
-              placeholder={selectedFile ? "Ask a question about this file..." : "Build an API, full software, diagrams, or ask anything..."}
-              value={inputPrompt}
-              onChange={(e) => setInputPrompt(e.target.value)}
-              disabled={loading}
-            />
-            <button type="submit" disabled={loading || (!inputPrompt.trim() && !selectedFile)}>Send</button>
-          </form>
-        </div>
-
-        {/* Right Workspace Panel */}
-        <div className="preview-panel">
-          <div className="panel-header">
-            <div className="tab-switchers">
-              <button
-                className={`tab-btn ${activeTab === "code" ? "active" : ""}`}
-                onClick={() => setActiveTab("code")}
-              >
-                💻 Code Workspace
-              </button>
-              <button
-                className={`tab-btn ${activeTab === "canvas" ? "active" : ""}`}
-                onClick={() => setActiveTab("canvas")}
-              >
-                🎨 Canvas & Architecture
+      <div className="studio-body-layout">
+        {/* Collapsible Left Sessions Sidebar */}
+        {sidebarOpen && (
+          <aside className="sessions-sidebar">
+            <div className="sidebar-header">
+              <button className="new-project-btn" onClick={createNewSession}>
+                <span>+</span> New Project
               </button>
             </div>
-
-            {activeTab === "code" && Object.keys(workspaceFiles).length > 0 && (
-              <div className="canvas-controls">
-                <button className="action-btn" onClick={() => copyToClipboard(currentFile ? currentFile.code : "")}>
-                  📋 Copy Active File
-                </button>
-
-                {/* All-in-One Export Dropdown Menu */}
-                <div className="export-dropdown-wrapper" ref={exportDropdownRef}>
-                  <button 
-                    className="action-btn download-btn export-trigger-btn"
-                    onClick={() => setShowExportMenu(!showExportMenu)}
+            <div className="sessions-list">
+              <div className="sessions-section-title">Projects & History</div>
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className={`session-item ${s.id === activeSessionId ? "active" : ""}`}
+                  onClick={() => setActiveSessionId(s.id)}
+                >
+                  <span className="session-icon">📁</span>
+                  <span className="session-title" title={s.title}>{s.title}</span>
+                  <button
+                    className="delete-session-btn"
+                    onClick={(e) => deleteSession(s.id, e)}
+                    title="Delete Project"
                   >
-                    ⤓ Export / Download ▾
+                    ×
                   </button>
-                  {showExportMenu && (
-                    <div className="export-dropdown-menu">
-                      <div className="dropdown-label">Download Options</div>
-                      <button onClick={downloadProjectZip}>
-                        <span>📦 Project ZIP Archive</span>
-                        <small>All files in .zip</small>
-                      </button>
-                      <button onClick={downloadActiveFile}>
-                        <span>📄 Current Active File</span>
-                        <small>{selectedFileName || "file"}</small>
-                      </button>
-                      <button onClick={downloadMarkdownDoc}>
-                        <span>📑 Markdown Document</span>
-                        <small>.md file</small>
-                      </button>
-                      <button onClick={downloadPlainText}>
-                        <span>📋 Plain Text File</span>
-                        <small>.txt file</small>
-                      </button>
-                      {currentCommands.length > 0 && (
-                        <button onClick={downloadShellScript}>
-                          <span>⚡ Terminal Shell Script</span>
-                          <small>run_setup.sh</small>
-                        </button>
-                      )}
+                </div>
+              ))}
+            </div>
+          </aside>
+        )}
+
+        {/* Center Split Screen: Chat on Left, Workspace on Right */}
+        <div className="main-content">
+          {/* Chat Panel */}
+          <div className="chat-panel">
+            <div className="chat-history">
+              {activeSession.messages.map((m, idx) => (
+                <div key={idx} className={`chat-message ${m.role}`}>
+                  <div className="message-header">
+                    <strong>{m.role === "user" ? "You" : "Rishova AI"}</strong>
+                    {m.intent && <span className="intent-tag">{m.intent}</span>}
+                  </div>
+                  {m.attachedFile && (
+                    <div className="file-badge">📎 {m.attachedFile}</div>
+                  )}
+                  
+                  <div className="message-body markdown-content">
+                    {m.role === "user" ? (
+                      <p>{m.content}</p>
+                    ) : (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          pre: ({ children }) => <>{children}</>,
+                          code: StudioCodeBlock
+                        }}
+                      >
+                        {m.content}
+                      </ReactMarkdown>
+                    )}
+                  </div>
+
+                  {m.commands && m.commands.length > 0 && (
+                    <div className="cmd-box">
+                      <div className="cmd-header">
+                        <span>⚡ Quick Execution Terminal Commands</span>
+                        <button onClick={() => copyToClipboard(m.commands.join("\n"))}>📋 Copy All</button>
+                      </div>
+                      <div className="studio-code-card">
+                        <SyntaxHighlighter
+                          language="bash"
+                          style={vscDarkPlus}
+                          showLineNumbers={false}
+                          wrapLines={true}
+                          lineProps={{ style: { display: "block", width: "100%" } }}
+                          customStyle={{
+                            margin: 0,
+                            padding: "14px 16px",
+                            backgroundColor: "#131316",
+                            fontSize: "0.9rem",
+                            lineHeight: "1.6"
+                          }}
+                          codeTagProps={{
+                            style: { display: "block", whiteSpace: "pre" }
+                          }}
+                        >
+                          {m.commands.join("\n")}
+                        </SyntaxHighlighter>
+                      </div>
                     </div>
                   )}
                 </div>
+              ))}
+              {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating architecture and code...</div>}
+              <div ref={chatBottomRef} />
+            </div>
+
+            {selectedFile && (
+              <div className="selected-file-preview">
+                <span>📎 {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+                <button onClick={() => setSelectedFile(null)}>✖</button>
               </div>
             )}
 
-            {activeTab === "canvas" && activeDiagram && (
-              <div className="canvas-controls">
-                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.max(0.4, z - 0.2))}>🔍 -</button>
-                <span className="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
-                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.2))}>🔍 +</button>
-                <button className="action-btn download-btn" onClick={downloadSVG}>⬇ SVG Diagram</button>
-                <button className="action-btn" onClick={() => copyToClipboard(activeDiagram)}>📋 Copy Syntax</button>
-              </div>
-            )}
+            <form className="chat-input-area" onSubmit={handleSendPrompt}>
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: "none" }}
+                accept=".pdf,.txt,.md,.js,.py,.json,.csv,.sql"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setSelectedFile(e.target.files[0]);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="attach-btn"
+                onClick={() => fileInputRef.current?.click()}
+                title="Upload Document / File"
+              >
+                📎
+              </button>
+              <input
+                type="text"
+                placeholder={selectedFile ? "Ask a question about this file..." : "Build an API, full software, diagrams, or ask anything..."}
+                value={inputPrompt}
+                onChange={(e) => setInputPrompt(e.target.value)}
+                disabled={loading}
+              />
+              <button type="submit" disabled={loading || (!inputPrompt.trim() && !selectedFile)}>Send</button>
+            </form>
           </div>
 
-          <div className="workspace-content">
-            {activeTab === "code" ? (
-              <div className="code-viewer-area">
-                {Object.keys(workspaceFiles).length > 0 ? (
-                  <div className="multi-file-workspace">
-                    <div className="file-tabs-bar">
-                      {Object.keys(workspaceFiles).map((fname) => (
-                        <button
-                          key={fname}
-                          className={`file-tab-item ${selectedFileName === fname ? "active" : ""}`}
-                          onClick={() => setSelectedFileName(fname)}
-                        >
-                          📄 {fname}
-                        </button>
-                      ))}
-                    </div>
+          {/* Right Workspace Panel */}
+          <div className={`preview-panel ${isFullScreenCanvas ? "fullscreen-canvas-mode" : ""}`}>
+            <div className="panel-header">
+              <div className="tab-switchers">
+                <button
+                  className={`tab-btn ${activeTab === "code" ? "active" : ""}`}
+                  onClick={() => { setActiveTab("code"); setIsFullScreenCanvas(false); }}
+                >
+                  💻 Monaco Code Workspace
+                </button>
+                <button
+                  className={`tab-btn ${activeTab === "canvas" ? "active" : ""}`}
+                  onClick={() => setActiveTab("canvas")}
+                >
+                  🎨 Architecture Canvas
+                </button>
+              </div>
 
-                    <div className="active-code-card">
-                      <SyntaxHighlighter
-                        language={currentFile ? currentFile.language : "javascript"}
-                        style={vscDarkPlus}
-                        showLineNumbers={true}
-                        wrapLines={true}
-                        lineProps={{ style: { display: "block", width: "100%" } }}
-                        customStyle={{
-                          margin: 0,
-                          padding: "16px 20px",
-                          backgroundColor: "#131316",
-                          height: "100%",
-                          fontSize: "0.93rem",
-                          lineHeight: "1.7",
-                          overflowX: "auto",
-                        }}
-                        codeTagProps={{
-                          style: {
-                            display: "block",
-                            fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
-                            whiteSpace: "pre",
-                          }
-                        }}
-                      >
-                        {currentFile ? currentFile.code : ""}
-                      </SyntaxHighlighter>
+              {activeTab === "code" && Object.keys(activeSession.workspaceFiles).length > 0 && (
+                <div className="canvas-controls">
+                  <span className="active-file-indicator">
+                    {getMonacoLang(activeSession.selectedFileName).toUpperCase()}
+                  </span>
+                  <button className="action-btn" onClick={() => copyToClipboard(currentFile ? currentFile.code : "")}>
+                    📋 Copy Code
+                  </button>
+
+                  {/* Universal Download Dropdown */}
+                  <div className="export-dropdown-wrapper" ref={exportDropdownRef}>
+                    <button 
+                      className="action-btn download-btn export-trigger-btn"
+                      onClick={() => setShowExportMenu(!showExportMenu)}
+                    >
+                      ⤓ Export ▾
+                    </button>
+                    {showExportMenu && (
+                      <div className="export-dropdown-menu">
+                        <div className="dropdown-label">Export Project</div>
+                        <button onClick={downloadProjectZip}>
+                          <span>📦 Complete ZIP Project</span>
+                          <small>All workspace files</small>
+                        </button>
+                        <button onClick={downloadActiveFile}>
+                          <span>📄 Active File ({activeSession.selectedFileName})</span>
+                          <small>Direct format</small>
+                        </button>
+                        <button onClick={downloadMarkdownDoc}>
+                          <span>📑 Documentation (.md)</span>
+                          <small>Markdown summary</small>
+                        </button>
+                        <button onClick={downloadPlainText}>
+                          <span>📋 Plain Text (.txt)</span>
+                          <small>Raw output</small>
+                        </button>
+                        {activeSession.commands && activeSession.commands.length > 0 && (
+                          <button onClick={downloadShellScript}>
+                            <span>⚡ Setup Script (.sh)</span>
+                            <small>run_setup.sh</small>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "canvas" && activeSession.activeDiagram && (
+                <div className="canvas-controls">
+                  <button className="action-btn" onClick={() => setZoomLevel((z) => Math.max(0.3, z - 0.2))} title="Zoom Out">🔍 -</button>
+                  <span className="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
+                  <button className="action-btn" onClick={() => setZoomLevel((z) => Math.min(3.0, z + 0.2))} title="Zoom In">🔍 +</button>
+                  <button className="action-btn" onClick={() => { setZoomLevel(1); setPanPosition({ x: 0, y: 0 }); }} title="Reset View">↺ Reset</button>
+                  <button className="action-btn" onClick={() => setIsFullScreenCanvas(!isFullScreenCanvas)} title="Toggle Fullscreen">
+                    {isFullScreenCanvas ? "🗗 Exit" : "⛶ Fullscreen"}
+                  </button>
+                  <button className="action-btn download-btn" onClick={downloadSVG}>⬇ SVG</button>
+                  <button className="action-btn" onClick={() => copyToClipboard(activeSession.activeDiagram)}>📋 Copy</button>
+                </div>
+              )}
+            </div>
+
+            <div className="workspace-content">
+              {activeTab === "code" ? (
+                <div className="code-viewer-area">
+                  {Object.keys(activeSession.workspaceFiles).length > 0 ? (
+                    <div className="multi-file-workspace">
+                      {/* Interactive File Tabs */}
+                      <div className="file-tabs-bar">
+                        {Object.keys(activeSession.workspaceFiles).map((fname) => (
+                          <button
+                            key={fname}
+                            className={`file-tab-item ${activeSession.selectedFileName === fname ? "active" : ""}`}
+                            onClick={() => {
+                              setSessions((prev) =>
+                                prev.map((s) => s.id === activeSessionId ? { ...s, selectedFileName: fname } : s)
+                              );
+                            }}
+                          >
+                            📄 {fname}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Official Monaco VS Code Editor */}
+                      <div className="active-code-card monaco-container">
+                        <Editor
+                          height="100%"
+                          language={getMonacoLang(activeSession.selectedFileName)}
+                          theme="vs-dark"
+                          value={currentFile ? currentFile.code : ""}
+                          onChange={handleEditorCodeChange}
+                          options={{
+                            fontSize: 14,
+                            fontFamily: "'Fira Code', 'Consolas', monospace",
+                            minimap: { enabled: true },
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            tabSize: 2,
+                            wordWrap: "on",
+                            formatOnPaste: true,
+                            formatOnType: true,
+                          }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="canvas-placeholder">
-                    <p>💻 Code Workspace Ready</p>
-                    <span>Ask Rishova AI to build an API or project to see multi-file tabs and export options here.</span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="canvas-area">
-                {activeDiagram ? (
-                  <div
-                    ref={diagramRef}
-                    className="mermaid-wrapper"
-                    style={{ transform: `scale(${zoomLevel})`, transformOrigin: "top center" }}
-                  />
-                ) : (
-                  <div className="canvas-placeholder">
-                    <p>🎨 Interactive Canvas Ready</p>
-                    <span>Ask Rishova to generate a diagram or architecture flow.</span>
-                  </div>
-                )}
-              </div>
-            )}
+                  ) : (
+                    <div className="canvas-placeholder">
+                      <p>💻 Monaco Code Workspace Ready</p>
+                      <span>Ask Rishova AI to build software or APIs to write, edit, and export code here.</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div 
+                  className={`canvas-area ${isDragging ? "grabbing" : "grabbable"}`}
+                  ref={canvasContainerRef}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                >
+                  {activeSession.activeDiagram ? (
+                    <div
+                      ref={diagramRef}
+                      className="mermaid-wrapper smooth-canvas"
+                      style={{
+                        transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomLevel})`,
+                        transformOrigin: "center center",
+                        cursor: isDragging ? "grabbing" : "grab"
+                      }}
+                    />
+                  ) : (
+                    <div className="canvas-placeholder">
+                      <p>🎨 Interactive Architecture Canvas Ready</p>
+                      <span>Ask Rishova to generate a system architecture, ERD database schema, or flowchart.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
