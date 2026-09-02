@@ -16,6 +16,7 @@ mermaid.initialize({
   startOnLoad: false,
   theme: "dark",
   securityLevel: "loose",
+  suppressErrorRendering: true, // डिफॉल्ट बॉम्ब/एरर बॉक्स को रोकेगा
 });
 
 const StudioCodeBlock = ({ inline, className, children, ...props }) => {
@@ -165,15 +166,44 @@ export default function App() {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, loading]);
 
-  // Mermaid Diagram Renderer
+ // Modern Safe Mermaid v11 Renderer
   useEffect(() => {
-    if (activeTab === "canvas" && activeSession?.activeDiagram && diagramRef.current) {
-      diagramRef.current.removeAttribute("data-processed");
-      diagramRef.current.innerHTML = activeSession.activeDiagram;
-      mermaid.init(undefined, diagramRef.current).catch((err) => {
-        console.error("Mermaid Render Error:", err);
-      });
-    }
+    let isMounted = true;
+
+    const renderMermaidDiagram = async () => {
+      if (activeTab === "canvas" && activeSession?.activeDiagram && diagramRef.current) {
+        try {
+          // Clean diagram text
+          let cleanSyntax = activeSession.activeDiagram.trim();
+          if (!cleanSyntax.startsWith("graph") && !cleanSyntax.startsWith("flowchart") && !cleanSyntax.startsWith("sequenceDiagram") && !cleanSyntax.startsWith("erDiagram") && !cleanSyntax.startsWith("classDiagram")) {
+            cleanSyntax = "graph TD\n" + cleanSyntax;
+          }
+
+          const uniqueId = `mermaid-svg-${Date.now()}`;
+          const { svg } = await mermaid.render(uniqueId, cleanSyntax);
+
+          if (isMounted && diagramRef.current) {
+            diagramRef.current.innerHTML = svg;
+          }
+        } catch (renderError) {
+          console.error("Mermaid Render Catch:", renderError);
+          if (isMounted && diagramRef.current) {
+            diagramRef.current.innerHTML = `
+              <div style="color: #f87171; padding: 20px; background: #1f1215; border: 1px solid #7f1d1d; border-radius: 8px; font-family: monospace; font-size: 0.85rem;">
+                <strong>⚠️ Diagram Render Notice:</strong><br/>
+                Syntax needs adjustment. You can view or copy raw syntax from above controls.
+              </div>
+            `;
+          }
+        }
+      }
+    };
+
+    renderMermaidDiagram();
+
+    return () => {
+      isMounted = false;
+    };
   }, [activeSession?.activeDiagram, activeTab]);
 
   // Export menu outside click
