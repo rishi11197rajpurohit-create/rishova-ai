@@ -6,8 +6,8 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import "./App.css";
 
-const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
-const AI_API = "https://rishova-ai-backend.onrender.com/api/ai";
+const AUTH_API = "[https://rishova-auth-backend.onrender.com/api/auth](https://rishova-auth-backend.onrender.com/api/auth)";
+const AI_API = "[https://rishova-ai-backend.onrender.com/api/ai](https://rishova-ai-backend.onrender.com/api/ai)";
 
 mermaid.initialize({
   startOnLoad: false,
@@ -15,7 +15,6 @@ mermaid.initialize({
   securityLevel: "loose",
 });
 
-// Production-Grade Multi-line Code Block
 const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
@@ -122,7 +121,7 @@ export default function App() {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "Namaste! Main **RISHOVA AI Studio** hoon. Aap mujhse kisi bhi software, API, ya system architecture ka complete code generate karwa sakte hain.",
+      content: "Namaste! Main **RISHOVA AI Studio** hoon. Aap mujhse kisi bhi software, API, ya architecture ka complete code generate karwa sakte hain.",
       intent: "CHAT"
     }
   ]);
@@ -130,8 +129,10 @@ export default function App() {
   
   const [activeTab, setActiveTab] = useState("code");
   const [activeDiagram, setActiveDiagram] = useState("");
-  const [activeCode, setActiveCode] = useState("");
-  const [activeLang, setActiveLang] = useState("javascript");
+  
+  // Multi-file workspace state
+  const [workspaceFiles, setWorkspaceFiles] = useState({});
+  const [selectedFileName, setSelectedFileName] = useState("");
   const [zoomLevel, setZoomLevel] = useState(1);
 
   const diagramRef = useRef(null);
@@ -147,7 +148,7 @@ export default function App() {
       diagramRef.current.removeAttribute("data-processed");
       diagramRef.current.innerHTML = activeDiagram;
       mermaid.init(undefined, diagramRef.current).catch((err) => {
-        console.error("Mermaid render error:", err);
+        console.error("Mermaid error:", err);
       });
     }
   }, [activeDiagram, activeTab]);
@@ -217,9 +218,10 @@ export default function App() {
       }
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || data.message || "AI Processing Error");
+      if (!res.ok) throw new Error(data.detail || data.message || "AI Error");
 
       const responseData = data.data || {};
+      const returnedFiles = responseData.files || {};
 
       setMessages((prev) => [
         ...prev,
@@ -228,8 +230,6 @@ export default function App() {
           content: responseData.markdown_response || "",
           intent: data.intent,
           mermaid: responseData.mermaid || "",
-          code_snippet: responseData.code_snippet || "",
-          language: responseData.language || "javascript",
           commands: responseData.commands || []
         }
       ]);
@@ -238,9 +238,15 @@ export default function App() {
         setActiveDiagram(responseData.mermaid);
         setActiveTab("canvas");
         setZoomLevel(1);
+      } else if (Object.keys(returnedFiles).length > 0) {
+        setWorkspaceFiles(returnedFiles);
+        setSelectedFileName(Object.keys(returnedFiles)[0]);
+        setActiveTab("code");
       } else if (responseData.code_snippet) {
-        setActiveCode(responseData.code_snippet);
-        setActiveLang(responseData.language || "javascript");
+        setWorkspaceFiles({
+          "snippet.js": { language: responseData.language || "javascript", code: responseData.code_snippet }
+        });
+        setSelectedFileName("snippet.js");
         setActiveTab("code");
       }
     } catch (err) {
@@ -258,23 +264,7 @@ export default function App() {
     alert("Copied to clipboard!");
   };
 
-  const downloadSVG = () => {
-    if (!diagramRef.current) return;
-    const svgElement = diagramRef.current.querySelector("svg");
-    if (!svgElement) {
-      alert("No rendered diagram found to download!");
-      return;
-    }
-    const svgData = new XMLSerializer().serializeToString(svgElement);
-    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "rishova-diagram.svg";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const currentFile = workspaceFiles[selectedFileName] || null;
 
   if (!token) {
     return (
@@ -390,7 +380,7 @@ export default function App() {
                 )}
               </div>
             ))}
-            {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating full code...</div>}
+            {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating files...</div>}
             <div ref={chatBottomRef} />
           </div>
 
@@ -417,7 +407,7 @@ export default function App() {
               type="button"
               className="attach-btn"
               onClick={() => fileInputRef.current?.click()}
-              title="Upload PDF or Document"
+              title="Upload File"
             >
               📎
             </button>
@@ -450,20 +440,12 @@ export default function App() {
               </button>
             </div>
 
-            {activeTab === "code" && activeCode && (
+            {activeTab === "code" && currentFile && (
               <div className="canvas-controls">
-                <span className="lang-badge">{activeLang.toUpperCase()}</span>
-                <button className="action-btn download-btn" onClick={() => copyToClipboard(activeCode)}>📋 Copy Full Code</button>
-              </div>
-            )}
-
-            {activeTab === "canvas" && activeDiagram && (
-              <div className="canvas-controls">
-                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.max(0.4, z - 0.2))}>🔍 -</button>
-                <span className="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
-                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.2))}>🔍 +</button>
-                <button className="action-btn download-btn" onClick={downloadSVG}>⬇ SVG</button>
-                <button className="action-btn" onClick={() => copyToClipboard(activeDiagram)}>📋 Copy</button>
+                <span className="lang-badge">{(currentFile.language || "CODE").toUpperCase()}</span>
+                <button className="action-btn download-btn" onClick={() => copyToClipboard(currentFile.code)}>
+                  📋 Copy This File
+                </button>
               </div>
             )}
           </div>
@@ -471,38 +453,54 @@ export default function App() {
           <div className="workspace-content">
             {activeTab === "code" ? (
               <div className="code-viewer-area">
-                {activeCode ? (
-                  <div className="studio-code-card full-height">
-                    <SyntaxHighlighter
-                      language={activeLang}
-                      style={vscDarkPlus}
-                      showLineNumbers={true}
-                      wrapLines={true}
-                      lineProps={{ style: { display: "block", width: "100%" } }}
-                      customStyle={{
-                        margin: 0,
-                        padding: "18px 20px",
-                        backgroundColor: "#131316",
-                        height: "100%",
-                        fontSize: "0.93rem",
-                        lineHeight: "1.7",
-                        overflowX: "auto",
-                      }}
-                      codeTagProps={{
-                        style: {
-                          display: "block",
-                          fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
-                          whiteSpace: "pre",
-                        }
-                      }}
-                    >
-                      {activeCode}
-                    </SyntaxHighlighter>
+                {Object.keys(workspaceFiles).length > 0 ? (
+                  <div className="multi-file-workspace">
+                    {/* Modern File Tabs */}
+                    <div className="file-tabs-bar">
+                      {Object.keys(workspaceFiles).map((fname) => (
+                        <button
+                          key={fname}
+                          className={`file-tab-item ${selectedFileName === fname ? "active" : ""}`}
+                          onClick={() => setSelectedFileName(fname)}
+                        >
+                          📄 {fname}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Active File Editor */}
+                    <div className="active-code-card">
+                      <SyntaxHighlighter
+                        language={currentFile ? currentFile.language : "javascript"}
+                        style={vscDarkPlus}
+                        showLineNumbers={true}
+                        wrapLines={true}
+                        lineProps={{ style: { display: "block", width: "100%" } }}
+                        customStyle={{
+                          margin: 0,
+                          padding: "16px 20px",
+                          backgroundColor: "#131316",
+                          height: "100%",
+                          fontSize: "0.93rem",
+                          lineHeight: "1.7",
+                          overflowX: "auto",
+                        }}
+                        codeTagProps={{
+                          style: {
+                            display: "block",
+                            fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
+                            whiteSpace: "pre",
+                          }
+                        }}
+                      >
+                        {currentFile ? currentFile.code : ""}
+                      </SyntaxHighlighter>
+                    </div>
                   </div>
                 ) : (
                   <div className="canvas-placeholder">
                     <p>💻 Code Workspace Ready</p>
-                    <span>Ask Rishova AI to build an API or app to view clean syntax-highlighted code here.</span>
+                    <span>Ask Rishova AI to build an API or project to see multi-file tabs and code here.</span>
                   </div>
                 )}
               </div>
