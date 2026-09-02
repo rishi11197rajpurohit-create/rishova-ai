@@ -40,7 +40,6 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
     document.body.removeChild(link);
   };
 
-  // True inline text like `variable`
   if (inline || (!match && !codeContent.includes("\n") && codeContent.length < 40)) {
     return <code className="inline-code-pill" {...props}>{children}</code>;
   }
@@ -477,14 +476,14 @@ export default function App() {
                     <SyntaxHighlighter
                       language={activeLang}
                       style={vscDarkPlus}
-                      showLineNumbers={false}
+                      showLineNumbers={true}
                       wrapLines={true}
                       lineProps={{ style: { display: "block", width: "100%" } }}
                       customStyle={{
                         margin: 0,
                         padding: "18px 20px",
                         backgroundColor: "#131316",
-                        minHeight: "100%",
+                        height: "100%",
                         fontSize: "0.93rem",
                         lineHeight: "1.7",
                         overflowX: "auto",

@@ -520,4 +520,13 @@ body, html {
 .studio-code-body .token-line,
 .code-viewer-area .token-line {
   display: block !important;
+}/* Ensure workspace pre and code always match dark editor background */
+.code-viewer-area pre,
+.code-viewer-area .studio-code-card {
+  background-color: #131316 !important;
+  color: #e6edf3 !important;
+}
+
+.code-viewer-area pre code {
+  background-color: transparent !important;
 }
