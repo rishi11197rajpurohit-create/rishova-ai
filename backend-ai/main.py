@@ -26,16 +26,16 @@ class UniversalRequest(BaseModel):
     prompt: str
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, a Principal Full-Stack Engineer and Studio Architect.
-When generating multi-file code or software:
-1. Put terminal execution commands inside a separate ```bash code block.
-2. For EVERY source code file, put it in its own markdown code block with the language name (e.g. ```javascript, ```python, ```json).
-3. AT THE VERY FIRST LINE inside each code block, specify the file path as a comment (e.g. `// config/database.js` or `# config/database.py`).
-4. NEVER dump conversational text, step numbers, or directory trees inside programming code blocks.
-5. Provide complete, fully-implemented production-ready code without truncation or duplicate snippets.
+You are RISHOVA AI, an elite Senior Full-Stack Software Architect and Universal AI Studio.
+When generating code, scripts, or building applications:
+1. Always put terminal commands inside a separate ```bash code block.
+2. Put each file inside its own markdown code block with the appropriate language name (e.g. ```javascript or ```python).
+3. Specify the exact file path at the top of each code block as a comment (e.g. // config/database.js or // server.js).
+4. Put folder trees in plain text, never inside programming language code blocks.
+5. Provide complete, working, production-grade code without truncating.
 
 When asked for diagrams:
-1. Put mermaid syntax strictly inside a ```mermaid block.
+1. Provide diagram syntax strictly inside a ```mermaid block.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str):
@@ -44,82 +44,73 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
     intent = "CHAT"
     mermaid_code = ""
     commands = []
-    files_map = {} # filename -> code content
+    files_map = {}
 
-    # 1. Extract Mermaid Diagram
+    # 1. Mermaid diagram
     mermaid_match = re.search(r"```mermaid\s*\n([\s\S]*?)```", normalized_text)
     if mermaid_match:
         mermaid_code = mermaid_match.group(1).strip()
         intent = "DIAGRAM"
 
-    # 2. Extract Clean Terminal Commands strictly
+    # 2. Terminal commands
     bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\s*\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
     for b in bash_blocks:
         for line in b.split("\n"):
             cleaned = line.strip()
-            # Exclude code lines, comments, and empty lines
             if cleaned and not cleaned.startswith("#"):
                 if not any(token in cleaned for token in ["const ", "let ", "var ", "import ", "require(", "function", "{", "}", "=>", "class "]):
                     commands.append(cleaned)
 
-    # 3. Extract Source Code Files without Text / Trees
+    # 3. Source code files
     code_pattern = re.compile(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```")
-    file_counter = 1
+    file_idx = 1
     
     for match in code_pattern.finditer(normalized_text):
         lang = (match.group(1) or "").lower()
         content = match.group(2).strip()
 
-        # Skip bash, mermaid, plain text
         if lang in ["bash", "sh", "shell", "cmd", "powershell", "mermaid", "text"]:
             continue
         
-        # Skip directory tree drawings
         if "|--" in content or "├──" in content or "└──" in content:
             continue
 
-        # Skip text blocks accidentally tagged
-        lines = [line.strip() for line in content.split("\n") if line.strip()]
-        if not lines:
+        if len(content) < 15:
             continue
-            
-        # Detect filename from the first line comment or fallback
-        first_line = lines[0]
-        filename = f"file_{file_counter}.{lang if lang in ['js', 'py', 'json', 'html', 'css', 'ts'] else 'txt'}"
-        
-        file_match = re.search(r"(?://|#|<!--|/\*)\s*([\w./\\-]+\.[a-zA-Z0-9]+)", first_line)
-        if file_match:
-            filename = os.path.basename(file_match.group(1))
-        else:
-            # Check if language tells us what file it is
-            if lang in ["javascript", "js"]:
-                filename = f"index_{file_counter}.js"
-            elif lang in ["python", "py"]:
-                filename = f"main_{file_counter}.py"
-            elif lang == "json":
-                filename = "package.json" if "name" in content else f"data_{file_counter}.json"
 
-        # Prevent duplicate identical files
+        first_line = content.split("\n")[0].strip()
+        filename = ""
+        
+        # Simple string check for filename in header comment
+        if any(first_line.startswith(prefix) for prefix in ["//", "#", "/*"]):
+            clean_first = first_line.replace("//", "").replace("#", "").replace("/*", "").replace("*/", "").strip()
+            parts = clean_first.split()
+            if parts and "." in parts[0] and len(parts[0]) < 60:
+                filename = os.path.basename(parts[0])
+
+        if not filename:
+            ext = lang if lang in ["js", "py", "json", "html", "css", "ts"] else ("js" if "javascript" in lang else "txt")
+            filename = f"file_{file_idx}.{ext}"
+
         if filename not in files_map:
             files_map[filename] = {
                 "language": lang or "javascript",
                 "code": content
             }
-            file_counter += 1
+            file_idx += 1
 
     prompt_lower = user_prompt.lower()
-    if any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "node", "react", "express", "setup"]):
+    if any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "node", "react", "express"]):
         intent = "BUILDER"
     elif any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd"]):
         intent = "DIAGRAM"
 
-    # Assemble all code files cleanly for workspace fallback
     primary_code = ""
     primary_lang = "javascript"
     if files_map:
-        first_file = next(iter(files_map.values()))
-        primary_code = first_file["code"]
-        primary_lang = first_file["language"]
+        first_key = list(files_map.keys())[0]
+        primary_code = files_map[first_key]["code"]
+        primary_lang = files_map[first_key]["language"]
 
     return {
         "intent": intent,
@@ -128,10 +119,10 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
             "mermaid": mermaid_code,
             "markdown_response": normalized_text,
             "code_snippet": primary_code,
-            "files": files_map, # Structured multi-file output
+            "files": files_map,
             "language": primary_lang,
-            "commands": list(dict.fromkeys(commands)), # Remove duplicate commands
-            "summary": "Executed successfully"
+            "commands": list(dict.fromkeys(commands)),
+            "summary": "Task executed"
         }
     }
 
@@ -163,7 +154,7 @@ def run_groq_inference(messages: list, temperature: float = 0.2):
             last_err = e
             continue
 
-    raise HTTPException(status_code=500, detail=f"Groq inference failed: {str(last_err)}")
+    raise HTTPException(status_code=500, detail=f"Groq failed: {str(last_err)}")
 
 @app.get("/")
 def read_root():
@@ -202,12 +193,7 @@ async def handle_document_upload(
 
         truncated_text = extracted_text[:18000]
 
-        doc_system_prompt = f"""
-You are RISHOVA AI Document Intelligence Expert.
-Analyze '{file.filename}'.
-CONTENT:
-{truncated_text}
-"""
+        doc_system_prompt = f"You are RISHOVA AI Document Intelligence Expert. Analyze '{file.filename}':\n{truncated_text}"
         messages = [
             {"role": "system", "content": doc_system_prompt},
             {"role": "user", "content": prompt}
