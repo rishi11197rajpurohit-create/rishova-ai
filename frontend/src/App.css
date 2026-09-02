@@ -1240,4 +1240,24 @@ body {
   color: #38bdf8 !important;
   font-weight: 600 !important;
   margin-right: 8px !important;
+}/* Ensure Console button fits cleanly on the right */
+.panel-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 6px 12px !important;
+  gap: 6px !important;
+  overflow-x: auto !important;
+}
+
+.canvas-controls {
+  margin-left: auto !important;
+  padding-right: 8px !important;
+  flex-shrink: 0 !important;
+}
+
+.canvas-controls .action-btn {
+  padding: 4px 8px !important;
+  font-size: 0.76rem !important;
+  white-space: nowrap !important;
 }
