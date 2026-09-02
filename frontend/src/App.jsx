@@ -144,6 +144,7 @@ export default function App() {
 
   // Voice Input State
   const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
 
   // Canvas Pan & Zoom
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -166,7 +167,7 @@ export default function App() {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, loading]);
 
-  // Mermaid Renderer
+  // Safe Mermaid Renderer
   useEffect(() => {
     let isMounted = true;
     const renderMermaidDiagram = async () => {
@@ -216,9 +217,7 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
- // Safe Voice Input Handler (No Word Repeating)
-  const recognitionRef = useRef(null);
-
+  // Voice Recognition (No Word Repeating)
   const handleToggleVoice = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -237,38 +236,28 @@ export default function App() {
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
     recognition.lang = "en-US";
-    recognition.interimResults = false; // केवल फाइनल कन्फर्म वाक्य लेगा, बीच के रिपीट नहीं
-    recognition.continuous = false;    // एक बार बोलने पर अपने-आप रुक जाएगा
+    recognition.interimResults = false;
+    recognition.continuous = false;
 
-    // आवाज़ शुरू होने से पहले इनपुट का मौजूदा टेक्स्ट याद रखें
     const initialText = inputPrompt ? inputPrompt.trim() + " " : "";
 
-    recognition.onstart = () => {
-      setIsListening(true);
-    };
-
+    recognition.onstart = () => setIsListening(true);
     recognition.onresult = (event) => {
-      // आखिरी फाइनल रिजल्ट से टेक्स्ट निकालें
       let finalTranscript = "";
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           finalTranscript += event.results[i][0].transcript;
         }
       }
-      
       if (finalTranscript) {
         setInputPrompt(initialText + finalTranscript.trim());
       }
     };
-
     recognition.onerror = (event) => {
       console.error("Speech Recognition Error:", event.error);
       setIsListening(false);
     };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
+    recognition.onend = () => setIsListening(false);
 
     recognition.start();
   };
@@ -461,7 +450,7 @@ export default function App() {
     await triggerPromptExecution(userText, fileToUpload);
   };
 
-  // Workspace AI Quick Actions
+  // Workspace AI Actions
   const handleAIAction = (actionType) => {
     const current = activeSession.workspaceFiles[activeSession.selectedFileName];
     if (!current || !current.code) {
@@ -500,7 +489,6 @@ export default function App() {
     );
   };
 
-  // Canvas Handlers
   const handleMouseDown = (e) => {
     if (activeTab !== "canvas") return;
     setIsDragging(true);
@@ -522,7 +510,6 @@ export default function App() {
     alert("Copied to clipboard!");
   };
 
-  // Export Handlers
   const downloadActiveFile = () => {
     const current = activeSession.workspaceFiles[activeSession.selectedFileName];
     if (!current) return;
@@ -589,7 +576,7 @@ export default function App() {
     saveAs(blob, "architecture_diagram.svg");
   };
 
-  // Construct Live Sandbox Preview Document
+  // Auto-injects CSS and JS into Live Preview Sandbox
   const getLivePreviewSource = () => {
     const files = activeSession.workspaceFiles || {};
     let htmlContent = "";
@@ -598,43 +585,48 @@ export default function App() {
 
     Object.entries(files).forEach(([name, file]) => {
       const lower = name.toLowerCase();
-      if (lower.endsWith(".html")) {
-        htmlContent += file.code;
-      } else if (lower.endsWith(".css")) {
-        cssContent += `\n<style>${file.code}</style>`;
-      } else if (lower.endsWith(".js") && !lower.includes("server") && !lower.includes("node")) {
-        jsContent += `\n<script>${file.code}<\/script>`;
+      const code = file.code || "";
+
+      if (lower.endsWith(".html") || code.includes("<!DOCTYPE") || code.includes("<html") || code.includes("<header")) {
+        htmlContent = code;
+      } else if (lower.endsWith(".css") || file.language === "css" || code.includes(":root") || (code.includes("{") && code.includes("margin") && code.includes("color"))) {
+        cssContent += `\n<style>\n${code}\n</style>\n`;
+      } else if ((lower.endsWith(".js") || file.language === "javascript") && !lower.includes("server") && !lower.includes("node") && !code.includes("express()")) {
+        jsContent += `\n<script>\ntry {\n${code}\n} catch(err) { console.error('Preview JS Error:', err); }\n<\/script>\n`;
       }
     });
 
     if (!htmlContent) {
       const current = files[activeSession.selectedFileName];
-      if (current && (current.language === "html" || current.code.includes("<html") || current.code.includes("<div"))) {
+      if (current && (current.language === "html" || current.code.includes("<div") || current.code.includes("<button"))) {
         htmlContent = current.code;
       } else {
         htmlContent = `
-          <div style="font-family: sans-serif; padding: 40px; text-align: center; color: #71717a;">
-            <h2>⚡ Live Preview Mode</h2>
-            <p>Create an <b>HTML/CSS/JS</b> interface or web component to view it running live here.</p>
+          <div style="font-family: sans-serif; padding: 50px 20px; text-align: center; color: #a1a1aa; background: #0b0b0e; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <h2 style="color: #f4f4f5; margin-bottom: 10px;">⚡ Live Preview Sandbox</h2>
+            <p style="font-size: 0.95rem;">Ask Rishova to generate an HTML/CSS landing page or web component to see it live here.</p>
           </div>
         `;
       }
     }
 
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          ${cssContent}
-        </head>
-        <body style="margin: 0; background: #ffffff; color: #09090b;">
-          ${htmlContent}
-          ${jsContent}
-        </body>
-      </html>
-    `;
+    if (cssContent && !htmlContent.includes(cssContent)) {
+      if (htmlContent.includes("</head>")) {
+        htmlContent = htmlContent.replace("</head>", `${cssContent}</head>`);
+      } else {
+        htmlContent = `${cssContent}\n${htmlContent}`;
+      }
+    }
+
+    if (jsContent && !htmlContent.includes(jsContent)) {
+      if (htmlContent.includes("</body>")) {
+        htmlContent = htmlContent.replace("</body>", `${jsContent}</body>`);
+      } else {
+        htmlContent = `${htmlContent}\n${jsContent}`;
+      }
+    }
+
+    return htmlContent;
   };
 
   const currentFile = activeSession?.workspaceFiles?.[activeSession?.selectedFileName] || null;
@@ -747,7 +739,7 @@ export default function App() {
         )}
 
         <div className="main-content">
-          {/* Left Chat Panel */}
+          {/* Chat Panel */}
           <div className="chat-panel">
             <div className="chat-history">
               {activeSession.messages.map((m, idx) => (
@@ -839,7 +831,6 @@ export default function App() {
                 📎
               </button>
 
-              {/* Voice / Speech-to-Text Button */}
               <button
                 type="button"
                 className={`voice-btn ${isListening ? "listening" : ""}`}
@@ -892,7 +883,6 @@ export default function App() {
 
               {activeTab === "code" && Object.keys(activeSession.workspaceFiles).length > 0 && (
                 <div className="canvas-controls">
-                  {/* AI Quick Actions */}
                   <div className="ai-actions-group">
                     <button className="ai-action-btn" onClick={() => handleAIAction("explain")} title="Explain active code">
                       ⚡ Explain
@@ -966,7 +956,6 @@ export default function App() {
             </div>
 
             <div className="workspace-content">
-              {/* Monaco Code Tab */}
               {activeTab === "code" && (
                 <div className="code-viewer-area">
                   {Object.keys(activeSession.workspaceFiles).length > 0 ? (
@@ -1017,7 +1006,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Live Web Preview Tab */}
               {activeTab === "preview" && (
                 <div className="live-preview-container">
                   <iframe
@@ -1029,7 +1017,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Architecture Canvas Tab */}
               {activeTab === "canvas" && (
                 <div 
                   className={`canvas-area ${isDragging ? "grabbing" : "grabbable"}`}

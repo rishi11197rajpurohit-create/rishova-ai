@@ -27,18 +27,20 @@ class UniversalRequest(BaseModel):
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an elite Senior Full-Stack Software Architect and Universal AI Studio.
-When generating code, scripts, or building applications:
-1. Always put terminal commands inside a separate ```bash code block.
-2. Put each file inside its own markdown code block with the appropriate language name (e.g. ```javascript or ```python).
-3. Specify the exact file path at the top of each code block as a comment (e.g. // config/database.js or // server.js).
-4. Put folder trees in plain text, never inside programming language code blocks.
-5. Provide complete, working, production-grade code without truncating.
 
-When asked for diagrams or flowcharts:
-1. Use standard, strict, error-free Mermaid flowchart syntax starting with `graph TD` or `flowchart TD` or `erDiagram`.
+STRICT LANGUAGE & OUTPUT DIRECTIVES:
+1. ALWAYS generate ALL code, comments, variable names, functions, documentation, and technical explanations in STRICT, PROFESSIONAL ENGLISH ONLY.
+2. NEVER write code comments, identifiers, filenames, or technical guides in Hindi or Hinglish, regardless of the language used in the user prompt.
+3. Always place terminal commands inside a separate ```bash code block.
+4. Put each file inside its own markdown code block with the appropriate language name (e.g., ```html, ```css, ```javascript, ```python).
+5. Specify the exact file name or relative path at the very top of each code block as a comment (e.g., // index.html, /* style.css */, // server.js).
+6. Provide complete, production-grade, bug-free implementations without placeholders or truncations.
+
+When requested for diagrams or flowcharts:
+1. Use standard Mermaid syntax starting with `graph TD` or `flowchart TD` or `erDiagram`.
 2. NEVER use complex inline styles, CSS classes, or custom classDef directives.
-3. Keep node labels clean inside simple quotes if they have spaces (e.g. A["Frontend Client"] --> B["API Gateway"]).
-4. Put the syntax strictly inside a ```mermaid code block.
+3. Keep all node labels in clean English inside simple quotes.
+4. Enclose the syntax strictly inside a ```mermaid code block.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str):
@@ -69,7 +71,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
                 if not any(token in cleaned for token in ["const ", "let ", "var ", "import ", "require(", "function", "{", "}", "=>", "class "]):
                     commands.append(cleaned)
 
-    # 3. Source code files
+    # 3. Source code files extraction
     code_pattern = re.compile(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```")
     file_idx = 1
     
@@ -84,23 +86,37 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         if any(tree_char in content for tree_char in ["|--", "├──", "└──", "📁", "├── ", "└── "]):
             continue
         if any(content.startswith(x) for x in ["ecommerce-api/", "auth-api/", "src/", "user-auth/"]):
-            if not any(token in content for token in ["const ", "import ", "def ", "class ", "function", "var ", "{"]):
+            if not any(token in content for token in ["const ", "import ", "def ", "class ", "function", "var ", "{", "<"]):
                 continue
 
         if len(content) < 20:
             continue
 
-        first_line = content.split("\n")[0].strip()
+        # =========================================================================
+        # [YEH WALA CODE YAHAN RAKHA HAI] - Extract File Name from comments/headers
+        # =========================================================================
+        first_lines = [l.strip() for l in content.split("\n")[:3] if l.strip()]
         filename = ""
         
-        if any(first_line.startswith(prefix) for prefix in ["//", "#", "/*"]):
-            clean_first = first_line.replace("//", "").replace("#", "").replace("/*", "").replace("*/", "").strip()
-            parts = clean_first.split()
-            if parts and "." in parts[0] and len(parts[0]) < 60:
-                filename = os.path.basename(parts[0])
+        for line in first_lines:
+            clean_l = re.sub(r"^(//|/\*|\*|#|<!--)\s*", "", line)
+            clean_l = re.sub(r"\s*(\*/|-->)$", "", clean_l).strip()
+            
+            match_name = re.search(r"([\w\-./]+\.(html|css|js|jsx|ts|tsx|json|py|sql|sh|md))", clean_l, re.IGNORECASE)
+            if match_name:
+                filename = os.path.basename(match_name.group(1))
+                break
 
+        # Fallback names based on code syntax
         if not filename:
-            if lang in ["json"] or (content.startswith("{") and "name" in content):
+            content_lower = content.lower()
+            if "<!doctype html" in content_lower or "<html" in content_lower:
+                filename = "index.html"
+            elif lang == "css" or ":root" in content or ("{" in content and ";" in content and ("margin" in content or "color" in content)):
+                filename = "style.css"
+            elif lang in ["js", "javascript"] and any(k in content for k in ["document.", "addEventListener", "window."]):
+                filename = "script.js"
+            elif lang in ["json"] or (content.startswith("{") and "name" in content):
                 filename = "package.json"
             else:
                 ext = lang if lang in ["js", "py", "json", "html", "css", "ts", "sql"] else ("js" if "javascript" in lang else "txt")
@@ -108,15 +124,16 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
 
         if filename not in files_map:
             files_map[filename] = {
-                "language": lang or "javascript",
+                "language": "css" if filename.endswith(".css") else ("html" if filename.endswith(".html") else (lang or "javascript")),
                 "code": content
             }
             file_idx += 1
+        # =========================================================================
 
     prompt_lower = user_prompt.lower()
     if any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
-    elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "node", "react", "express"]):
+    elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "node", "react", "express", "portfolio", "page", "html"]):
         intent = "BUILDER"
 
     primary_code = ""
