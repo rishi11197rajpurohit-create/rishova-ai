@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { ghcolors } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import "./App.css";
 
 const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
@@ -15,13 +15,12 @@ mermaid.initialize({
   securityLevel: "loose",
 });
 
-// Clean Light-Themed Code Block Component
+// Gemini / ChatGPT Style Dark Code Card (Matches Image 2 Exactly)
 const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
   const lang = match ? match[1] : "javascript";
-  const rawCode = Array.isArray(children) ? children.join("") : String(children || "");
-  const codeString = rawCode.replace(/\n$/, "");
+  const codeString = String(children).replace(/\n$/, "");
 
   const handleCopy = () => {
     navigator.clipboard.writeText(codeString);
@@ -41,8 +40,9 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
     document.body.removeChild(link);
   };
 
-  if (inline) {
-    return <code className="inline-code-badge" {...props}>{children}</code>;
+  // If inline code (like `npm install` inside a sentence)
+  if (inline || !match) {
+    return <code className="inline-code-pill" {...props}>{children}</code>;
   }
 
   return (
@@ -50,31 +50,44 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
       <div className="studio-code-header">
         <span className="studio-lang-title">{lang.toUpperCase()}</span>
         <div className="studio-code-actions">
-          <button className="icon-action-btn" title="Download File" onClick={handleDownload}>
-            ⬇ Download
+          <button className="circle-action-btn" title="Download Code" onClick={handleDownload}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
           </button>
-          <button className="icon-action-btn copy-btn" title="Copy Code" onClick={handleCopy}>
-            {copied ? "✔ Copied" : "📋 Copy"}
+          <button className="circle-action-btn" title="Copy Code" onClick={handleCopy}>
+            {copied ? (
+              <span className="copied-badge">✔</span>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            )}
           </button>
         </div>
       </div>
-      <SyntaxHighlighter
-        language={lang}
-        style={ghcolors}
-        wrapLongLines={false}
-        customStyle={{
-          margin: 0,
-          padding: "16px",
-          backgroundColor: "#f8fafc",
-          fontSize: "0.92rem",
-          lineHeight: "1.6",
-          fontFamily: "'Fira Code', 'Consolas', monospace",
-          whiteSpace: "pre",
-          overflowX: "auto",
-        }}
-      >
-        {codeString}
-      </SyntaxHighlighter>
+      <div className="studio-code-body">
+        <SyntaxHighlighter
+          language={lang}
+          style={vscDarkPlus}
+          wrapLongLines={false}
+          customStyle={{
+            margin: 0,
+            padding: "16px 20px",
+            backgroundColor: "#131316",
+            fontSize: "0.93rem",
+            lineHeight: "1.7",
+            fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
+            whiteSpace: "pre",
+            overflowX: "auto",
+          }}
+        >
+          {codeString}
+        </SyntaxHighlighter>
+      </div>
     </div>
   );
 };
@@ -102,7 +115,7 @@ export default function App() {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "Namaste! Main **RISHOVA AI Studio** hoon. Aap mujhse diagram banwa sakte hain, PDF analyze karwa sakte hain, ya complete software & APIs build karwa sakte hain.",
+      content: "Namaste! Main **RISHOVA AI Studio** hoon. Aap mujhse kisi bhi software, API, ya system architecture ka complete code generate karwa sakte hain.",
       intent: "CHAT"
     }
   ]);
@@ -310,7 +323,7 @@ export default function App() {
       </header>
 
       <div className="main-content">
-        {/* Left Panel */}
+        {/* Left Chat Panel */}
         <div className="chat-panel">
           <div className="chat-history">
             {messages.map((m, idx) => (
@@ -330,6 +343,8 @@ export default function App() {
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
+                        // Remove default pre wrapper to avoid squished lines
+                        pre: ({ children }) => <>{children}</>,
                         code: StudioCodeBlock
                       }}
                     >
@@ -346,13 +361,15 @@ export default function App() {
                     </div>
                     <SyntaxHighlighter
                       language="bash"
-                      style={ghcolors}
+                      style={vscDarkPlus}
+                      wrapLongLines={false}
                       customStyle={{
                         margin: 0,
-                        padding: "12px",
-                        backgroundColor: "#f1f5f9",
-                        borderRadius: "6px",
-                        whiteSpace: "pre-wrap"
+                        padding: "14px",
+                        backgroundColor: "#131316",
+                        borderRadius: "8px",
+                        whiteSpace: "pre",
+                        fontSize: "0.9rem"
                       }}
                     >
                       {m.commands.join("\n")}
@@ -361,7 +378,7 @@ export default function App() {
                 )}
               </div>
             ))}
-            {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating response...</div>}
+            {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating full code...</div>}
             <div ref={chatBottomRef} />
           </div>
 
@@ -403,7 +420,7 @@ export default function App() {
           </form>
         </div>
 
-        {/* Right Panel */}
+        {/* Right Workspace Panel */}
         <div className="preview-panel">
           <div className="panel-header">
             <div className="tab-switchers">
@@ -446,16 +463,16 @@ export default function App() {
                   <div className="studio-code-card full-height">
                     <SyntaxHighlighter
                       language={activeLang}
-                      style={ghcolors}
-                      showLineNumbers={true}
+                      style={vscDarkPlus}
+                      showLineNumbers={false}
                       wrapLongLines={false}
                       customStyle={{
                         margin: 0,
-                        padding: "16px",
-                        backgroundColor: "#ffffff",
+                        padding: "18px 20px",
+                        backgroundColor: "#131316",
                         minHeight: "100%",
-                        fontSize: "0.95rem",
-                        lineHeight: "1.6",
+                        fontSize: "0.93rem",
+                        lineHeight: "1.7",
                         whiteSpace: "pre",
                         overflowX: "auto",
                       }}

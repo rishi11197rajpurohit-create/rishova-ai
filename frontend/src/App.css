@@ -27,7 +27,7 @@ body, html {
   padding: 12px 24px;
   background-color: #ffffff;
   border-bottom: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .logo-title {
@@ -80,7 +80,7 @@ body, html {
   background: #dc2626;
 }
 
-/* Split-Screen 50-50 Layout */
+/* 50-50 Split Layout */
 .main-content {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -159,14 +159,14 @@ body, html {
   font-weight: 500;
 }
 
-/* Code Block Cards in Light Theme */
+/* EXACT Image 2 Look: Sleek Dark Code Card */
 .studio-code-card {
-  margin: 14px 0;
+  margin: 16px 0;
   border-radius: 10px;
   overflow: hidden;
-  border: 1px solid #e2e8f0;
-  background-color: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  background-color: #131316;
+  border: 1px solid #27272a;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 
 .studio-code-card.full-height {
@@ -177,50 +177,60 @@ body, html {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #f1f5f9;
+  background-color: #1b1b1f;
   padding: 8px 16px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #27272a;
 }
 
 .studio-lang-title {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  color: #475569;
+  color: #f4f4f5;
   letter-spacing: 0.8px;
 }
 
 .studio-code-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.icon-action-btn {
-  background: #ffffff;
-  color: #334155;
-  border: 1px solid #cbd5e1;
-  padding: 5px 12px;
-  border-radius: 6px;
+.circle-action-btn {
+  background: transparent;
+  color: #a1a1aa;
+  border: none;
   cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 4px;
-  transition: all 0.2s;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
 }
 
-.icon-action-btn:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
+.circle-action-btn:hover {
+  background: #27272a;
+  color: #ffffff;
 }
 
-.inline-code-badge {
+.copied-badge {
+  color: #10b981;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.studio-code-body {
+  overflow-x: auto;
+  white-space: pre !important;
+}
+
+.inline-code-pill {
   background: #f1f5f9;
   color: #0284c7;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.9rem;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 0.88rem;
   font-family: monospace;
   border: 1px solid #e2e8f0;
 }
@@ -260,7 +270,7 @@ body, html {
   background: #0369a1;
 }
 
-/* Input Area */
+/* Chat Input */
 .chat-input-area {
   display: flex;
   gap: 10px;
@@ -309,7 +319,7 @@ body, html {
   background: #0369a1;
 }
 
-/* Right Panel (Workspace) */
+/* Right Workspace */
 .preview-panel {
   display: flex;
   flex-direction: column;
@@ -423,7 +433,7 @@ body, html {
   margin-bottom: 6px;
 }
 
-/* Auth Pages (Clean White) */
+/* Auth Modal */
 .auth-wrapper {
   display: flex;
   justify-content: center;
