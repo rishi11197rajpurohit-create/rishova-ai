@@ -1124,4 +1124,107 @@ body {
 .cmd-header button {
   flex-shrink: 0 !important;
   white-space: nowrap !important;
+}/* ========================================================
+   FIX WORKSPACE OVERFLOW & HEADER BUTTON CLIPPING
+   ======================================================== */
+
+/* 1. Fix Layout Proportion & Prevent Container Shrink */
+.main-content {
+  display: flex !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.chat-panel {
+  flex: 0 0 45% !important;
+  min-width: 340px !important;
+  max-width: 50% !important;
+}
+
+.preview-panel {
+  flex: 1 1 55% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* 2. Top Header Bar: Horizontal Scroll & Safe Width */
+.panel-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  white-space: nowrap !important;
+  padding: 8px 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #0284c7 #18181b !important;
+}
+
+.panel-header::-webkit-scrollbar {
+  height: 6px !important;
+}
+
+.panel-header::-webkit-scrollbar-track {
+  background: #18181b !important;
+}
+
+.panel-header::-webkit-scrollbar-thumb {
+  background: #0284c7 !important;
+  border-radius: 4px !important;
+}
+
+.tab-switchers,
+.canvas-controls {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-shrink: 0 !important;
+}
+
+.canvas-controls {
+  margin-left: auto !important;
+}
+
+/* Compact Button Sizing */
+.tab-btn,
+.action-btn,
+.ai-action-btn {
+  padding: 5px 10px !important;
+  font-size: 0.78rem !important;
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+}
+
+/* 3. Fix Terminal Commands Header Text Wrapping */
+.cmd-box {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.cmd-header {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  white-space: nowrap !important;
+}
+
+.cmd-header span {
+  font-size: 0.82rem !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  flex: 1 1 auto !important;
+}
+
+.cmd-header button {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
 }
