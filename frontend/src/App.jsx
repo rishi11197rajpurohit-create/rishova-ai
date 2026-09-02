@@ -216,34 +216,59 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Voice Input Handler (SpeechRecognition)
+ // Safe Voice Input Handler (No Word Repeating)
+  const recognitionRef = useRef(null);
+
   const handleToggleVoice = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Voice recognition is not supported in this browser. Please use Chrome or Edge.");
+      alert("Voice recognition is not supported in this browser. Please use Google Chrome or Edge.");
       return;
     }
 
     if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
       setIsListening(false);
       return;
     }
 
     const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
     recognition.lang = "en-US";
-    recognition.interimResults = false;
-    recognition.continuous = false;
+    recognition.interimResults = false; // केवल फाइनल कन्फर्म वाक्य लेगा, बीच के रिपीट नहीं
+    recognition.continuous = false;    // एक बार बोलने पर अपने-आप रुक जाएगा
 
-    recognition.onstart = () => setIsListening(true);
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setInputPrompt((prev) => (prev ? prev + " " + transcript : transcript));
+    // आवाज़ शुरू होने से पहले इनपुट का मौजूदा टेक्स्ट याद रखें
+    const initialText = inputPrompt ? inputPrompt.trim() + " " : "";
+
+    recognition.onstart = () => {
+      setIsListening(true);
     };
+
+    recognition.onresult = (event) => {
+      // आखिरी फाइनल रिजल्ट से टेक्स्ट निकालें
+      let finalTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      
+      if (finalTranscript) {
+        setInputPrompt(initialText + finalTranscript.trim());
+      }
+    };
+
     recognition.onerror = (event) => {
       console.error("Speech Recognition Error:", event.error);
       setIsListening(false);
     };
-    recognition.onend = () => setIsListening(false);
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
 
     recognition.start();
   };
