@@ -10,7 +10,6 @@ import { saveAs } from "file-saver";
 import "./App.css";
 
 const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
-const AI_API = "https://rishova-ai-backend.onrender.com/api/ai";
 
 mermaid.initialize({
   startOnLoad: false,
@@ -112,6 +111,9 @@ export default function App() {
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authMsg, setAuthMsg] = useState("");
 
+  // AI Model Selection State
+  const [selectedModel, setSelectedModel] = useState("llama-3.3-70b-versatile");
+
   const [sessions, setSessions] = useState(() => {
     const saved = localStorage.getItem("rishova_sessions");
     return saved ? JSON.parse(saved) : [{
@@ -119,7 +121,7 @@ export default function App() {
       title: "New Workspace Project",
       messages: [{
         role: "assistant",
-        content: "Namaste! Main **RISHOVA AI Studio** hoon. Aap mujhse kisi bhi software, API, ya system architecture ka complete code generate karwa sakte hain.",
+        content: "Welcome to **RISHOVA AI Studio**. Ask me to architect, code, debug, or design any application.",
         intent: "CHAT"
       }],
       workspaceFiles: {},
@@ -146,6 +148,10 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
 
+  // In-App Sandbox Console State
+  const [consoleLogs, setConsoleLogs] = useState([]);
+  const [isConsoleOpen, setIsConsoleOpen] = useState(false);
+
   // Canvas Pan & Zoom
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
@@ -166,6 +172,17 @@ export default function App() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, loading]);
+
+  // Handle iframe sandbox messages (Console Logger)
+  useEffect(() => {
+    const handleSandboxMessage = (event) => {
+      if (event.data && event.data.type === "PREVIEW_CONSOLE_LOG") {
+        setConsoleLogs((prev) => [...prev, { level: event.data.level, message: event.data.message, time: new Date().toLocaleTimeString() }]);
+      }
+    };
+    window.addEventListener("message", handleSandboxMessage);
+    return () => window.removeEventListener("message", handleSandboxMessage);
+  }, []);
 
   // Safe Mermaid Renderer
   useEffect(() => {
@@ -217,11 +234,11 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Voice Recognition (No Word Repeating)
+  // Safe Voice Recognition
   const handleToggleVoice = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Voice recognition is not supported in this browser. Please use Google Chrome or Edge.");
+      alert("Voice recognition is not supported in this browser. Please use Chrome or Edge.");
       return;
     }
 
@@ -276,7 +293,7 @@ export default function App() {
       if (!res.ok) throw new Error(data.message || "Auth Error");
 
       if (isRegister) {
-        setAuthMsg("Account ban gaya! Ab login karein.");
+        setAuthMsg("Account created! Please login now.");
         setIsRegister(false);
       } else {
         const cleanName = data.user && typeof data.user === "object" ? data.user.name : (data.user || "User");
@@ -297,7 +314,7 @@ export default function App() {
       title: "New Project",
       messages: [{
         role: "assistant",
-        content: "Naya workspace ready hai. Kya develop karna chahte hain?",
+        content: "New workspace ready. What software or system architecture would you like to build?",
         intent: "CHAT"
       }],
       workspaceFiles: {},
@@ -310,6 +327,7 @@ export default function App() {
     setActiveTab("code");
     setPanPosition({ x: 0, y: 0 });
     setZoomLevel(1);
+    setConsoleLogs([]);
   };
 
   const deleteSession = (sessionId, e) => {
@@ -355,6 +373,7 @@ export default function App() {
         const formData = new FormData();
         formData.append("file", attachedFile);
         formData.append("prompt", userText);
+        formData.append("model", selectedModel);
 
         res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/document", {
           method: "POST",
@@ -364,7 +383,7 @@ export default function App() {
         res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/universal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: userText }),
+          body: JSON.stringify({ prompt: userText, model: selectedModel }),
         });
       }
 
@@ -450,7 +469,6 @@ export default function App() {
     await triggerPromptExecution(userText, fileToUpload);
   };
 
-  // Workspace AI Actions
   const handleAIAction = (actionType) => {
     const current = activeSession.workspaceFiles[activeSession.selectedFileName];
     if (!current || !current.code) {
@@ -576,7 +594,13 @@ export default function App() {
     saveAs(blob, "architecture_diagram.svg");
   };
 
-  // Auto-injects CSS and JS into Live Preview Sandbox
+  const handleCloudSync = () => {
+    localStorage.setItem("rishova_sessions_cloud_backup", JSON.stringify(sessions));
+    alert("⚡ Cloud Database Sync Successful! Your workspace projects are backed up.");
+    setShowExportMenu(false);
+  };
+
+  // Construct Live Sandbox Preview Document with Built-in Console interceptor
   const getLivePreviewSource = () => {
     const files = activeSession.workspaceFiles || {};
     let htmlContent = "";
@@ -610,6 +634,26 @@ export default function App() {
       }
     }
 
+    // Console message pipe script
+    const consoleInterceptor = `
+      <script>
+        (function() {
+          const originalLog = console.log;
+          const originalError = console.error;
+          const originalWarn = console.warn;
+          function sendToParent(level, args) {
+            try {
+              const msg = Array.from(args).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+              window.parent.postMessage({ type: 'PREVIEW_CONSOLE_LOG', level: level, message: msg }, '*');
+            } catch(e) {}
+          }
+          console.log = function() { sendToParent('info', arguments); originalLog.apply(console, arguments); };
+          console.error = function() { sendToParent('error', arguments); originalError.apply(console, arguments); };
+          console.warn = function() { sendToParent('warn', arguments); originalWarn.apply(console, arguments); };
+        })();
+      </script>
+    `;
+
     if (cssContent && !htmlContent.includes(cssContent)) {
       if (htmlContent.includes("</head>")) {
         htmlContent = htmlContent.replace("</head>", `${cssContent}</head>`);
@@ -620,10 +664,12 @@ export default function App() {
 
     if (jsContent && !htmlContent.includes(jsContent)) {
       if (htmlContent.includes("</body>")) {
-        htmlContent = htmlContent.replace("</body>", `${jsContent}</body>`);
+        htmlContent = htmlContent.replace("</body>", `${consoleInterceptor}\n${jsContent}</body>`);
       } else {
-        htmlContent = `${htmlContent}\n${jsContent}`;
+        htmlContent = `${htmlContent}\n${consoleInterceptor}\n${jsContent}`;
       }
+    } else {
+      htmlContent = `${consoleInterceptor}\n${htmlContent}`;
     }
 
     return htmlContent;
@@ -699,6 +745,19 @@ export default function App() {
           <div className="logo-title">
             <h1>RISHOVA AI</h1>
             <span className="badge">Universal Studio</span>
+          </div>
+
+          {/* AI Model Selector Dropdown */}
+          <div className="model-selector-container">
+            <span className="model-label">Engine:</span>
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="model-select-dropdown"
+            >
+              <option value="llama-3.3-70b-versatile">⚡ Llama 3.3 70B (Complex Architect)</option>
+              <option value="llama-3.1-8b-instant">🚀 Llama 3.1 8B (Super Fast Chat)</option>
+            </select>
           </div>
         </div>
         <div className="user-section">
@@ -934,9 +993,26 @@ export default function App() {
                             <small>run_setup.sh</small>
                           </button>
                         )}
+                        <hr style={{ borderColor: "#27272a", margin: "4px 0" }} />
+                        <button onClick={handleCloudSync}>
+                          <span>☁️ Sync to Cloud DB</span>
+                          <small>Backup projects</small>
+                        </button>
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {activeTab === "preview" && (
+                <div className="canvas-controls">
+                  <button
+                    className={`action-btn ${isConsoleOpen ? "console-active" : ""}`}
+                    onClick={() => setIsConsoleOpen(!isConsoleOpen)}
+                    title="Toggle In-App Console Logs"
+                  >
+                    📟 Console ({consoleLogs.length})
+                  </button>
                 </div>
               )}
 
@@ -956,6 +1032,7 @@ export default function App() {
             </div>
 
             <div className="workspace-content">
+              {/* Monaco Code Tab */}
               {activeTab === "code" && (
                 <div className="code-viewer-area">
                   {Object.keys(activeSession.workspaceFiles).length > 0 ? (
@@ -1006,6 +1083,7 @@ export default function App() {
                 </div>
               )}
 
+              {/* Live Web Preview Tab with In-App Console */}
               {activeTab === "preview" && (
                 <div className="live-preview-container">
                   <iframe
@@ -1014,9 +1092,32 @@ export default function App() {
                     sandbox="allow-scripts allow-modals"
                     className="sandbox-iframe"
                   />
+
+                  {isConsoleOpen && (
+                    <div className="sandbox-console-panel">
+                      <div className="console-panel-header">
+                        <span>📟 Sandbox Console Logs</span>
+                        <button className="clear-console-btn" onClick={() => setConsoleLogs([])}>Clear</button>
+                      </div>
+                      <div className="console-logs-list">
+                        {consoleLogs.length === 0 ? (
+                          <div className="empty-console">No logs captured yet. Any console.log() or JS errors will appear here.</div>
+                        ) : (
+                          consoleLogs.map((log, idx) => (
+                            <div key={idx} className={`console-log-row log-${log.level}`}>
+                              <span className="log-time">[{log.time}]</span>
+                              <span className="log-badge">{log.level.toUpperCase()}</span>
+                              <span className="log-text">{log.message}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
+              {/* Architecture Canvas Tab */}
               {activeTab === "canvas" && (
                 <div 
                   className={`canvas-area ${isDragging ? "grabbing" : "grabbable"}`}

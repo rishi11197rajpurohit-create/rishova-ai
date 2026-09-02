@@ -24,6 +24,7 @@ client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 class UniversalRequest(BaseModel):
     prompt: str
+    model: str = "llama-3.3-70b-versatile"
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an elite Senior Full-Stack Software Architect and Universal AI Studio.
@@ -51,7 +52,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
     commands = []
     files_map = {}
 
-    # 1. Mermaid diagram extraction
     mermaid_match = re.search(r"```mermaid\s*\n([\s\S]*?)```", normalized_text)
     if mermaid_match:
         mermaid_code = mermaid_match.group(1).strip()
@@ -62,7 +62,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
             mermaid_code = erd_match.group(1).strip()
             intent = "DIAGRAM"
 
-    # 2. Terminal commands
     bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\s*\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
     for b in bash_blocks:
         for line in b.split("\n"):
@@ -71,7 +70,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
                 if not any(token in cleaned for token in ["const ", "let ", "var ", "import ", "require(", "function", "{", "}", "=>", "class "]):
                     commands.append(cleaned)
 
-    # 3. Source code files extraction
     code_pattern = re.compile(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```")
     file_idx = 1
     
@@ -82,7 +80,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         if lang in ["bash", "sh", "shell", "cmd", "powershell", "mermaid"]:
             continue
         
-        # Directory tree drawings ko filter out karein
         if any(tree_char in content for tree_char in ["|--", "├──", "└──", "📁", "├── ", "└── "]):
             continue
         if any(content.startswith(x) for x in ["ecommerce-api/", "auth-api/", "src/", "user-auth/"]):
@@ -92,9 +89,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         if len(content) < 20:
             continue
 
-        # =========================================================================
-        # [YEH WALA CODE YAHAN RAKHA HAI] - Extract File Name from comments/headers
-        # =========================================================================
         first_lines = [l.strip() for l in content.split("\n")[:3] if l.strip()]
         filename = ""
         
@@ -107,7 +101,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
                 filename = os.path.basename(match_name.group(1))
                 break
 
-        # Fallback names based on code syntax
         if not filename:
             content_lower = content.lower()
             if "<!doctype html" in content_lower or "<html" in content_lower:
@@ -128,7 +121,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
                 "code": content
             }
             file_idx += 1
-        # =========================================================================
 
     prompt_lower = user_prompt.lower()
     if any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
@@ -157,35 +149,26 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         }
     }
 
-def run_groq_inference(messages: list, temperature: float = 0.2):
-    active_chat_models = []
+def run_groq_inference(messages: list, model_id: str = "llama-3.3-70b-versatile", temperature: float = 0.2):
     try:
-        model_list = client.models.list().data
-        for m in model_list:
-            mid = m.id.lower()
-            if not any(x in mid for x in ["whisper", "vision", "embed", "orpheus", "guard", "audio", "decommissioned"]):
-                if getattr(m, 'active', True):
-                    active_chat_models.append(m.id)
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            temperature=temperature
+        )
+        return completion.choices[0].message.content
     except Exception as e:
-        print("Model fetch error:", e)
-
-    if not active_chat_models:
-        active_chat_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
-
-    last_err = None
-    for model_id in active_chat_models:
+        # Fallback to secondary fast model
+        fallback_model = "llama-3.1-8b-instant"
         try:
             completion = client.chat.completions.create(
-                model=model_id,
+                model=fallback_model,
                 messages=messages,
                 temperature=temperature
             )
             return completion.choices[0].message.content
-        except Exception as e:
-            last_err = e
-            continue
-
-    raise HTTPException(status_code=500, detail=f"Groq failed: {str(last_err)}")
+        except Exception as e2:
+            raise HTTPException(status_code=500, detail=f"Groq failed: {str(e2)}")
 
 @app.get("/")
 def read_root():
@@ -198,7 +181,7 @@ async def handle_universal_prompt(req: UniversalRequest):
             {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
             {"role": "user", "content": req.prompt}
         ]
-        raw_markdown = run_groq_inference(messages, temperature=0.2)
+        raw_markdown = run_groq_inference(messages, model_id=req.model, temperature=0.2)
         return parse_llm_markdown_response(raw_markdown, req.prompt)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -206,7 +189,8 @@ async def handle_universal_prompt(req: UniversalRequest):
 @app.post("/api/ai/document")
 async def handle_document_upload(
     file: UploadFile = File(...),
-    prompt: str = Form("Analyze document")
+    prompt: str = Form("Analyze document"),
+    model: str = Form("llama-3.3-70b-versatile")
 ):
     try:
         extracted_text = ""
@@ -229,7 +213,7 @@ async def handle_document_upload(
             {"role": "system", "content": doc_system_prompt},
             {"role": "user", "content": prompt}
         ]
-        response_text = run_groq_inference(messages, temperature=0.2)
+        response_text = run_groq_inference(messages, model_id=model, temperature=0.2)
 
         return {
             "intent": "DOCUMENT",

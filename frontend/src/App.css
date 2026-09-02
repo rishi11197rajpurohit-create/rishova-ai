@@ -751,4 +751,135 @@ body {
   height: 100%;
   border: none;
   background-color: #ffffff;
+}/* AI Model Selector */
+.model-selector-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #18181b;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid #27272a;
+  margin-left: 12px;
+}
+
+.model-label {
+  font-size: 0.78rem;
+  color: #71717a;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.model-select-dropdown {
+  background: transparent;
+  color: #38bdf8;
+  border: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+.model-select-dropdown option {
+  background: #18181b;
+  color: #f4f4f5;
+}
+
+/* Console Active Button */
+.console-active {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+}
+
+/* In-App Sandbox Console Panel */
+.sandbox-console-panel {
+  height: 180px;
+  background: #0d0e12;
+  border-top: 1px solid #27272a;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 0.82rem;
+}
+
+.console-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: #13141a;
+  border-bottom: 1px solid #27272a;
+  color: #a1a1aa;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.clear-console-btn {
+  background: transparent;
+  border: 1px solid #3f3f46;
+  color: #a1a1aa;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.clear-console-btn:hover {
+  color: #f4f4f5;
+  border-color: #71717a;
+}
+
+.console-logs-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.empty-console {
+  color: #52525b;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.console-log-row {
+  display: flex;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.log-time {
+  color: #52525b;
+}
+
+.log-badge {
+  font-size: 0.7rem;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.log-info .log-badge {
+  background: #0369a1;
+  color: #e0f2fe;
+}
+
+.log-error .log-badge {
+  background: #991b1b;
+  color: #fee2e2;
+}
+
+.log-error .log-text {
+  color: #f87171;
+}
+
+.log-warn .log-badge {
+  background: #854d0e;
+  color: #fef08a;
+}
+
+.log-text {
+  color: #e4e4e7;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
