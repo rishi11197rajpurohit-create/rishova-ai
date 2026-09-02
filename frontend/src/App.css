@@ -498,4 +498,26 @@ body, html {
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 600;
+}/* CSS Rules to enforce strict multi-line rendering */
+.studio-code-body pre,
+.code-viewer-area pre {
+  white-space: pre !important;
+  word-break: normal !important;
+  word-wrap: normal !important;
+}
+
+.studio-code-body code,
+.code-viewer-area code {
+  display: block !important;
+  white-space: pre !important;
+}
+
+.studio-code-body span,
+.code-viewer-area span {
+  display: inline;
+}
+
+.studio-code-body .token-line,
+.code-viewer-area .token-line {
+  display: block !important;
 }

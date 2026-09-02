@@ -15,22 +15,22 @@ mermaid.initialize({
   securityLevel: "loose",
 });
 
-// Gemini / ChatGPT Style Studio Code Block
-const StudioCodeBlock = ({ node, inline, className, children, ...props }) => {
+// Production-Grade Multi-line Code Block
+const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
   const lang = match ? match[1] : "";
-  const codeString = String(children).replace(/\n$/, "");
+  const codeContent = String(children || "").replace(/\n$/, "");
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(codeString);
+    navigator.clipboard.writeText(codeContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = () => {
     const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html" };
-    const blob = new Blob([codeString], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([codeContent], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -40,19 +40,17 @@ const StudioCodeBlock = ({ node, inline, className, children, ...props }) => {
     document.body.removeChild(link);
   };
 
-  // Inline snippet inside a paragraph
-  if (inline || (!match && !codeString.includes("\n") && codeString.length < 50)) {
+  // True inline text like `variable`
+  if (inline || (!match && !codeContent.includes("\n") && codeContent.length < 40)) {
     return <code className="inline-code-pill" {...props}>{children}</code>;
   }
-
-  const displayLang = lang || "CODE";
 
   return (
     <div className="studio-code-card">
       <div className="studio-code-header">
-        <span className="studio-lang-title">{displayLang.toUpperCase()}</span>
+        <span className="studio-lang-title">{(lang || "CODE").toUpperCase()}</span>
         <div className="studio-code-actions">
-          <button className="circle-action-btn" title="Download File" onClick={handleDownload}>
+          <button className="circle-action-btn" title="Download Code" onClick={handleDownload}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
@@ -75,8 +73,9 @@ const StudioCodeBlock = ({ node, inline, className, children, ...props }) => {
         <SyntaxHighlighter
           language={lang || "javascript"}
           style={vscDarkPlus}
+          showLineNumbers={false}
           wrapLines={true}
-          wrapLongLines={false}
+          lineProps={{ style: { display: "block", width: "100%" } }}
           customStyle={{
             margin: 0,
             padding: "16px 20px",
@@ -84,11 +83,17 @@ const StudioCodeBlock = ({ node, inline, className, children, ...props }) => {
             fontSize: "0.93rem",
             lineHeight: "1.7",
             fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
-            whiteSpace: "pre",
             overflowX: "auto",
           }}
+          codeTagProps={{
+            style: {
+              display: "block",
+              fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
+              whiteSpace: "pre",
+            }
+          }}
         >
-          {codeString}
+          {codeContent}
         </SyntaxHighlighter>
       </div>
     </div>
@@ -346,7 +351,6 @@ export default function App() {
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        // Unwrap <pre> so code styling doesn't collapse
                         pre: ({ children }) => <>{children}</>,
                         code: StudioCodeBlock
                       }}
@@ -366,14 +370,18 @@ export default function App() {
                       <SyntaxHighlighter
                         language="bash"
                         style={vscDarkPlus}
-                        wrapLongLines={false}
+                        showLineNumbers={false}
+                        wrapLines={true}
+                        lineProps={{ style: { display: "block", width: "100%" } }}
                         customStyle={{
                           margin: 0,
                           padding: "14px 16px",
                           backgroundColor: "#131316",
-                          whiteSpace: "pre",
                           fontSize: "0.9rem",
                           lineHeight: "1.6"
+                        }}
+                        codeTagProps={{
+                          style: { display: "block", whiteSpace: "pre" }
                         }}
                       >
                         {m.commands.join("\n")}
@@ -469,8 +477,9 @@ export default function App() {
                     <SyntaxHighlighter
                       language={activeLang}
                       style={vscDarkPlus}
-                      showLineNumbers={true}
-                      wrapLongLines={false}
+                      showLineNumbers={false}
+                      wrapLines={true}
+                      lineProps={{ style: { display: "block", width: "100%" } }}
                       customStyle={{
                         margin: 0,
                         padding: "18px 20px",
@@ -478,8 +487,14 @@ export default function App() {
                         minHeight: "100%",
                         fontSize: "0.93rem",
                         lineHeight: "1.7",
-                        whiteSpace: "pre",
                         overflowX: "auto",
+                      }}
+                      codeTagProps={{
+                        style: {
+                          display: "block",
+                          fontFamily: "'Fira Code', 'Consolas', 'Courier New', monospace",
+                          whiteSpace: "pre",
+                        }
                       }}
                     >
                       {activeCode}
