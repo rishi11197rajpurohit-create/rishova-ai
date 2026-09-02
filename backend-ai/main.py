@@ -149,26 +149,41 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         }
     }
 
-def run_groq_inference(messages: list, model_id: str = "llama-3.3-70b-versatile", temperature: float = 0.2):
+def get_available_groq_models():
+    """Dynamically get verified working models from Groq account"""
     try:
-        completion = client.chat.completions.create(
-            model=model_id,
-            messages=messages,
-            temperature=temperature
-        )
-        return completion.choices[0].message.content
+        models = client.models.list().data
+        valid_chat_models = []
+        for m in models:
+            mid = m.id.lower()
+            if not any(bad in mid for bad in ["whisper", "vision", "embed", "orpheus", "guard", "audio"]):
+                valid_chat_models.append(m.id)
+        if valid_chat_models:
+            return valid_chat_models
     except Exception as e:
-        # Fallback to secondary fast model
-        fallback_model = "llama-3.1-8b-instant"
+        print("Model list error:", e)
+    return ["llama-3.3-70b-versatile"]
+
+def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-versatile", temperature: float = 0.2):
+    available_models = get_available_groq_models()
+    
+    # Priority order: Preferred -> Verified list -> Reliable fallbacks
+    models_to_try = [preferred_model] + [m for m in available_models if m != preferred_model]
+    
+    last_error = None
+    for model_id in models_to_try:
         try:
             completion = client.chat.completions.create(
-                model=fallback_model,
+                model=model_id,
                 messages=messages,
                 temperature=temperature
             )
             return completion.choices[0].message.content
-        except Exception as e2:
-            raise HTTPException(status_code=500, detail=f"Groq failed: {str(e2)}")
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise HTTPException(status_code=500, detail=f"All models failed. Last error: {str(last_error)}")
 
 @app.get("/")
 def read_root():
@@ -181,7 +196,7 @@ async def handle_universal_prompt(req: UniversalRequest):
             {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
             {"role": "user", "content": req.prompt}
         ]
-        raw_markdown = run_groq_inference(messages, model_id=req.model, temperature=0.2)
+        raw_markdown = run_groq_inference(messages, preferred_model=req.model, temperature=0.2)
         return parse_llm_markdown_response(raw_markdown, req.prompt)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -213,7 +228,7 @@ async def handle_document_upload(
             {"role": "system", "content": doc_system_prompt},
             {"role": "user", "content": prompt}
         ]
-        response_text = run_groq_inference(messages, model_id=model, temperature=0.2)
+        response_text = run_groq_inference(messages, preferred_model=model, temperature=0.2)
 
         return {
             "intent": "DOCUMENT",
