@@ -980,4 +980,48 @@ body {
 .ai-action-btn {
   flex-shrink: 0 !important;
   white-space: nowrap !important;
+}/* Ensure the studio layout allows child panels to shrink properly */
+.studio-body-layout,
+.main-content {
+  min-width: 0 !important;
+}
+
+.preview-panel {
+  flex: 1 1 50% !important;
+  min-width: 320px !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.panel-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  overflow-x: scroll !important;
+  overflow-y: hidden !important;
+  white-space: nowrap !important;
+  padding: 6px 10px !important;
+  scrollbar-width: thin !important;
+}
+
+.tab-switchers {
+  display: inline-flex !important;
+  gap: 6px !important;
+  flex-shrink: 0 !important;
+}
+
+.canvas-controls {
+  display: inline-flex !important;
+  gap: 6px !important;
+  flex-shrink: 0 !important;
+  margin-left: auto !important;
+}
+
+.tab-btn, 
+.action-btn {
+  padding: 5px 9px !important;
+  font-size: 0.78rem !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
 }
