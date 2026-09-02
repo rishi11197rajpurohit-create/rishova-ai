@@ -138,9 +138,14 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Tabs: "code" | "preview" | "canvas"
   const [activeTab, setActiveTab] = useState("code");
   const [showExportMenu, setShowExportMenu] = useState(false);
 
+  // Voice Input State
+  const [isListening, setIsListening] = useState(false);
+
+  // Canvas Pan & Zoom
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -164,7 +169,6 @@ export default function App() {
   // Mermaid Renderer
   useEffect(() => {
     let isMounted = true;
-
     const renderMermaidDiagram = async () => {
       if (activeTab === "canvas" && activeSession?.activeDiagram && diagramRef.current) {
         try {
@@ -190,7 +194,7 @@ export default function App() {
           if (isMounted && diagramRef.current) {
             diagramRef.current.innerHTML = `
               <div style="color: #f87171; padding: 16px; background: #1f1215; border: 1px solid #7f1d1d; border-radius: 8px; font-family: monospace; font-size: 0.85rem;">
-                ⚠️ Diagram Notice: Mermaid syntax parsing issue. Please check or copy raw syntax.
+                ⚠️ Diagram Notice: Mermaid syntax parsing issue.
               </div>
             `;
           }
@@ -211,6 +215,38 @@ export default function App() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Voice Input Handler (SpeechRecognition)
+  const handleToggleVoice = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice recognition is not supported in this browser. Please use Chrome or Edge.");
+      return;
+    }
+
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setInputPrompt((prev) => (prev ? prev + " " + transcript : transcript));
+    };
+    recognition.onerror = (event) => {
+      console.error("Speech Recognition Error:", event.error);
+      setIsListening(false);
+    };
+    recognition.onend = () => setIsListening(false);
+
+    recognition.start();
+  };
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -275,20 +311,13 @@ export default function App() {
     }
   };
 
-  const handleSendPrompt = async (e) => {
-    e.preventDefault();
-    if ((!inputPrompt.trim() && !selectedFile) || loading) return;
+  const triggerPromptExecution = async (textToSend, attachedFile = null) => {
+    if (!textToSend && !attachedFile) return;
 
-    const userText = inputPrompt || (selectedFile ? `Analyze file: ${selectedFile.name}` : "");
-    const fileToUpload = selectedFile;
-
-    setInputPrompt("");
-    setSelectedFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-
+    const userText = textToSend || (attachedFile ? `Analyze file: ${attachedFile.name}` : "");
     const updatedMessages = [
       ...activeSession.messages,
-      { role: "user", content: userText, attachedFile: fileToUpload ? fileToUpload.name : null }
+      { role: "user", content: userText, attachedFile: attachedFile ? attachedFile.name : null }
     ];
 
     let sessionTitle = activeSession.title;
@@ -308,9 +337,9 @@ export default function App() {
 
     try {
       let res;
-      if (fileToUpload) {
+      if (attachedFile) {
         const formData = new FormData();
-        formData.append("file", fileToUpload);
+        formData.append("file", attachedFile);
         formData.append("prompt", userText);
 
         res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/document", {
@@ -393,6 +422,40 @@ export default function App() {
     }
   };
 
+  const handleSendPrompt = async (e) => {
+    e.preventDefault();
+    if ((!inputPrompt.trim() && !selectedFile) || loading) return;
+
+    const userText = inputPrompt;
+    const fileToUpload = selectedFile;
+
+    setInputPrompt("");
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    await triggerPromptExecution(userText, fileToUpload);
+  };
+
+  // Workspace AI Quick Actions
+  const handleAIAction = (actionType) => {
+    const current = activeSession.workspaceFiles[activeSession.selectedFileName];
+    if (!current || !current.code) {
+      alert("No active code file to analyze!");
+      return;
+    }
+
+    let actionPrompt = "";
+    if (actionType === "explain") {
+      actionPrompt = `Explain this file '${activeSession.selectedFileName}' in detail:\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
+    } else if (actionType === "debug") {
+      actionPrompt = `Review and find potential bugs, security vulnerabilities, and logic flaws in '${activeSession.selectedFileName}':\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
+    } else if (actionType === "optimize") {
+      actionPrompt = `Refactor and optimize this file '${activeSession.selectedFileName}' for performance, modularity, and cleanliness:\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
+    }
+
+    triggerPromptExecution(actionPrompt, null);
+  };
+
   const handleEditorCodeChange = (newCode) => {
     if (!activeSession?.selectedFileName) return;
     setSessions((prev) =>
@@ -412,6 +475,7 @@ export default function App() {
     );
   };
 
+  // Canvas Handlers
   const handleMouseDown = (e) => {
     if (activeTab !== "canvas") return;
     setIsDragging(true);
@@ -433,6 +497,7 @@ export default function App() {
     alert("Copied to clipboard!");
   };
 
+  // Export Handlers
   const downloadActiveFile = () => {
     const current = activeSession.workspaceFiles[activeSession.selectedFileName];
     if (!current) return;
@@ -497,6 +562,54 @@ export default function App() {
     const svgData = new XMLSerializer().serializeToString(svgElement);
     const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
     saveAs(blob, "architecture_diagram.svg");
+  };
+
+  // Construct Live Sandbox Preview Document
+  const getLivePreviewSource = () => {
+    const files = activeSession.workspaceFiles || {};
+    let htmlContent = "";
+    let cssContent = "";
+    let jsContent = "";
+
+    Object.entries(files).forEach(([name, file]) => {
+      const lower = name.toLowerCase();
+      if (lower.endsWith(".html")) {
+        htmlContent += file.code;
+      } else if (lower.endsWith(".css")) {
+        cssContent += `\n<style>${file.code}</style>`;
+      } else if (lower.endsWith(".js") && !lower.includes("server") && !lower.includes("node")) {
+        jsContent += `\n<script>${file.code}<\/script>`;
+      }
+    });
+
+    if (!htmlContent) {
+      const current = files[activeSession.selectedFileName];
+      if (current && (current.language === "html" || current.code.includes("<html") || current.code.includes("<div"))) {
+        htmlContent = current.code;
+      } else {
+        htmlContent = `
+          <div style="font-family: sans-serif; padding: 40px; text-align: center; color: #71717a;">
+            <h2>⚡ Live Preview Mode</h2>
+            <p>Create an <b>HTML/CSS/JS</b> interface or web component to view it running live here.</p>
+          </div>
+        `;
+      }
+    }
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          ${cssContent}
+        </head>
+        <body style="margin: 0; background: #ffffff; color: #09090b;">
+          ${htmlContent}
+          ${jsContent}
+        </body>
+      </html>
+    `;
   };
 
   const currentFile = activeSession?.workspaceFiles?.[activeSession?.selectedFileName] || null;
@@ -609,6 +722,7 @@ export default function App() {
         )}
 
         <div className="main-content">
+          {/* Left Chat Panel */}
           <div className="chat-panel">
             <div className="chat-history">
               {activeSession.messages.map((m, idx) => (
@@ -699,9 +813,26 @@ export default function App() {
               >
                 📎
               </button>
+
+              {/* Voice / Speech-to-Text Button */}
+              <button
+                type="button"
+                className={`voice-btn ${isListening ? "listening" : ""}`}
+                onClick={handleToggleVoice}
+                title={isListening ? "Listening... Click to Stop" : "Voice Input (Speech-to-Text)"}
+              >
+                {isListening ? "🔴" : "🎤"}
+              </button>
+
               <input
                 type="text"
-                placeholder={selectedFile ? "Ask a question about this file..." : "Build an API, full software, diagrams, or ask anything..."}
+                placeholder={
+                  isListening
+                    ? "Listening to voice... Speak now..."
+                    : selectedFile
+                    ? "Ask a question about this file..."
+                    : "Build an API, full software, diagrams, or ask anything..."
+                }
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
                 disabled={loading}
@@ -710,6 +841,7 @@ export default function App() {
             </form>
           </div>
 
+          {/* Right Workspace Panel */}
           <div className={`preview-panel ${isFullScreenCanvas ? "fullscreen-canvas-mode" : ""}`}>
             <div className="panel-header">
               <div className="tab-switchers">
@@ -717,7 +849,13 @@ export default function App() {
                   className={`tab-btn ${activeTab === "code" ? "active" : ""}`}
                   onClick={() => { setActiveTab("code"); setIsFullScreenCanvas(false); }}
                 >
-                  💻 Monaco Code Workspace
+                  💻 Monaco Code
+                </button>
+                <button
+                  className={`tab-btn ${activeTab === "preview" ? "active" : ""}`}
+                  onClick={() => { setActiveTab("preview"); setIsFullScreenCanvas(false); }}
+                >
+                  👁️ Live Preview
                 </button>
                 <button
                   className={`tab-btn ${activeTab === "canvas" ? "active" : ""}`}
@@ -729,11 +867,24 @@ export default function App() {
 
               {activeTab === "code" && Object.keys(activeSession.workspaceFiles).length > 0 && (
                 <div className="canvas-controls">
+                  {/* AI Quick Actions */}
+                  <div className="ai-actions-group">
+                    <button className="ai-action-btn" onClick={() => handleAIAction("explain")} title="Explain active code">
+                      ⚡ Explain
+                    </button>
+                    <button className="ai-action-btn" onClick={() => handleAIAction("debug")} title="Scan for bugs & security flaws">
+                      🐛 Find Bugs
+                    </button>
+                    <button className="ai-action-btn" onClick={() => handleAIAction("optimize")} title="Refactor and optimize code">
+                      ✨ Optimize
+                    </button>
+                  </div>
+
                   <span className="active-file-indicator">
                     {getMonacoLang(activeSession.selectedFileName).toUpperCase()}
                   </span>
                   <button className="action-btn" onClick={() => copyToClipboard(currentFile ? currentFile.code : "")}>
-                    📋 Copy Code
+                    📋 Copy
                   </button>
 
                   <div className="export-dropdown-wrapper" ref={exportDropdownRef}>
@@ -790,7 +941,7 @@ export default function App() {
             </div>
 
             <div className="workspace-content">
-              {/* Isolate Code Tab: Keeps Canvas out of the DOM when code is viewed */}
+              {/* Monaco Code Tab */}
               {activeTab === "code" && (
                 <div className="code-viewer-area">
                   {Object.keys(activeSession.workspaceFiles).length > 0 ? (
@@ -841,7 +992,19 @@ export default function App() {
                 </div>
               )}
 
-              {/* Isolate Canvas Tab: Keeps Monaco out of the DOM when diagram is viewed */}
+              {/* Live Web Preview Tab */}
+              {activeTab === "preview" && (
+                <div className="live-preview-container">
+                  <iframe
+                    title="Live Web Sandbox"
+                    srcDoc={getLivePreviewSource()}
+                    sandbox="allow-scripts allow-modals"
+                    className="sandbox-iframe"
+                  />
+                </div>
+              )}
+
+              {/* Architecture Canvas Tab */}
               {activeTab === "canvas" && (
                 <div 
                   className={`canvas-area ${isDragging ? "grabbing" : "grabbable"}`}
