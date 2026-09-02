@@ -30,12 +30,12 @@ You are RISHOVA AI, an elite Senior Full-Stack Software Architect and Universal 
 When generating code, scripts, or building applications:
 1. Always put terminal commands inside a separate ```bash code block.
 2. Put each file inside its own markdown code block with the appropriate language name (e.g. ```javascript or ```python).
-3. Specify the exact file path at the top of each code block as a comment (e.g. // config/database.js).
+3. Specify the exact file path at the top of each code block as a comment (e.g. // config/database.js or // server.js).
 4. Put folder trees in plain text, never inside programming language code blocks.
 5. Provide complete, working, production-grade code without truncating.
 
 When asked for diagrams or flowcharts:
-1. Use standard, strict, error-free Mermaid flowchart syntax starting with `graph TD` or `flowchart TD`.
+1. Use standard, strict, error-free Mermaid flowchart syntax starting with `graph TD` or `flowchart TD` or `erDiagram`.
 2. NEVER use complex inline styles, CSS classes, or custom classDef directives.
 3. Keep node labels clean inside simple quotes if they have spaces (e.g. A["Frontend Client"] --> B["API Gateway"]).
 4. Put the syntax strictly inside a ```mermaid code block.
@@ -49,11 +49,16 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
     commands = []
     files_map = {}
 
-    # 1. Mermaid diagram
+    # 1. Mermaid diagram extraction
     mermaid_match = re.search(r"```mermaid\s*\n([\s\S]*?)```", normalized_text)
     if mermaid_match:
         mermaid_code = mermaid_match.group(1).strip()
         intent = "DIAGRAM"
+    elif "erDiagram" in normalized_text or "classDiagram" in normalized_text:
+        erd_match = re.search(r"```(?:text)?\s*\n((?:erDiagram|classDiagram)[\s\S]*?)```", normalized_text)
+        if erd_match:
+            mermaid_code = erd_match.group(1).strip()
+            intent = "DIAGRAM"
 
     # 2. Terminal commands
     bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\s*\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
@@ -72,19 +77,22 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         lang = (match.group(1) or "").lower()
         content = match.group(2).strip()
 
-        if lang in ["bash", "sh", "shell", "cmd", "powershell", "mermaid", "text"]:
+        if lang in ["bash", "sh", "shell", "cmd", "powershell", "mermaid"]:
             continue
         
-        if "|--" in content or "├──" in content or "└──" in content:
+        # Directory tree drawings ko filter out karein
+        if any(tree_char in content for tree_char in ["|--", "├──", "└──", "📁", "├── ", "└── "]):
             continue
+        if any(content.startswith(x) for x in ["ecommerce-api/", "auth-api/", "src/", "user-auth/"]):
+            if not any(token in content for token in ["const ", "import ", "def ", "class ", "function", "var ", "{"]):
+                continue
 
-        if len(content) < 15:
+        if len(content) < 20:
             continue
 
         first_line = content.split("\n")[0].strip()
         filename = ""
         
-        # Simple string check for filename in header comment
         if any(first_line.startswith(prefix) for prefix in ["//", "#", "/*"]):
             clean_first = first_line.replace("//", "").replace("#", "").replace("/*", "").replace("*/", "").strip()
             parts = clean_first.split()
@@ -92,8 +100,11 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
                 filename = os.path.basename(parts[0])
 
         if not filename:
-            ext = lang if lang in ["js", "py", "json", "html", "css", "ts"] else ("js" if "javascript" in lang else "txt")
-            filename = f"file_{file_idx}.{ext}"
+            if lang in ["json"] or (content.startswith("{") and "name" in content):
+                filename = "package.json"
+            else:
+                ext = lang if lang in ["js", "py", "json", "html", "css", "ts", "sql"] else ("js" if "javascript" in lang else "txt")
+                filename = f"file_{file_idx}.{ext}"
 
         if filename not in files_map:
             files_map[filename] = {
@@ -103,10 +114,10 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
             file_idx += 1
 
     prompt_lower = user_prompt.lower()
-    if any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "node", "react", "express"]):
-        intent = "BUILDER"
-    elif any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd"]):
+    if any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
+    elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "node", "react", "express"]):
+        intent = "BUILDER"
 
     primary_code = ""
     primary_lang = "javascript"
