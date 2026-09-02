@@ -26,21 +26,21 @@ class UniversalRequest(BaseModel):
     prompt: str
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, an elite Senior Software Architect and Universal AI Studio.
-When the user asks to build an application, script, API, or software:
-1. Provide a step-by-step setup guide with terminal commands in a ```bash code block.
-2. Provide complete production-grade source code with proper imports, clean architecture, and comments in code blocks like ```javascript or ```python.
-3. Keep clean multi-line formatting with proper line breaks.
+You are RISHOVA AI, an elite Senior Full-Stack Software Architect and Universal AI Studio.
+When generating code, scripts, or building applications:
+1. NEVER compress code into a single line. Always use clean multi-line indentation with newline characters.
+2. Put terminal setup commands inside a separate ```bash code block.
+3. Put each code file inside its own markdown code block with the appropriate language tag (e.g. ```javascript or ```python). Provide the filename as a comment at the very top of each code block (e.g. // server.js).
+4. If providing a folder structure, put it in plain text, NOT inside a programming language code block.
+5. Provide complete, working, production-grade code without truncating.
 
-When the user asks for diagrams/architecture:
-1. Provide the valid diagram syntax strictly in a ```mermaid block.
-
-Be thorough, complete, and write standard clean Markdown.
+When asked for diagrams:
+1. Provide diagram syntax strictly inside a ```mermaid block.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str):
-    # Normalize newline characters
-    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    # Normalize line breaks strictly
+    normalized_text = text.replace('\r\n', '\n').replace('\r', '\n')
     
     intent = "CHAT"
     mermaid_code = ""
@@ -48,51 +48,62 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
     language = "javascript"
     commands = []
 
-    # 1. Mermaid Extraction
-    mermaid_match = re.search(r"```mermaid\n([\s\S]*?)```", text)
-    if not mermaid_match:
-        mermaid_match = re.search(r"```\n(graph [\s\S]*?|flowchart [\s\S]*?|sequenceDiagram[\s\S]*?|classDiagram[\s\S]*?)```", text)
+    # 1. Extract Mermaid Diagrams
+    mermaid_match = re.search(r"```mermaid\n([\s\S]*?)```", normalized_text)
     if mermaid_match:
         mermaid_code = mermaid_match.group(1).strip()
         intent = "DIAGRAM"
 
-    # 2. Terminal Commands Extraction
-    bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\n([\s\S]*?)```", text, re.IGNORECASE)
+    # 2. Extract Terminal Commands (bash/sh/shell/powershell)
+    bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
     for b in bash_blocks:
-        for line in b.strip().split("\n"):
-            line = line.strip()
-            if line and not line.startswith("#"):
-                commands.append(line)
+        for line in b.split("\n"):
+            cleaned = line.strip()
+            if cleaned and not cleaned.startswith("#"):
+                commands.append(cleaned)
 
-    # 3. Code Blocks Extraction
-    code_matches = re.finditer(r"```([a-zA-Z0-9_+-]+)?\n([\s\S]*?)```", text)
+    # 3. Extract Real Source Code (Ignore folder structures and bash/mermaid)
+    code_matches = re.finditer(r"```([a-zA-Z0-9_+-]+)?\n([\s\S]*?)```", normalized_text)
     for m in code_matches:
         lang = (m.group(1) or "").lower()
-        block = m.group(2).strip()
-        if lang not in ["mermaid", "bash", "sh", "shell", "cmd", "powershell"] and len(block) > 15:
-            code_snippets.append(block)
-            if lang and lang != "json":
+        block = m.group(2)
+        
+        # Skip non-source-code blocks
+        if lang in ["mermaid", "bash", "sh", "shell", "cmd", "powershell", "text"]:
+            continue
+        
+        # Skip if it looks like a directory tree (contains |-- or ├──)
+        if "|--" in block or "├──" in block or "└──" in block:
+            continue
+            
+        if len(block.strip()) > 20:
+            code_snippets.append(block.strip())
+            if lang and lang not in ["json", "txt"]:
                 language = lang
             intent = "BUILDER"
 
-    full_code_workspace = "\n\n// --------------------------------------------------\n\n".join(code_snippets)
+    # Join multiple code files cleanly with dividers for the workspace
+    if code_snippets:
+        full_code_workspace = "\n\n// " + "="*60 + "\n\n".join(code_snippets)
+    else:
+        full_code_workspace = ""
 
     prompt_lower = user_prompt.lower()
-    if any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "develop", "function"]):
+    if any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "develop", "function", "node", "react"]):
         intent = "BUILDER"
     elif any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd"]):
         intent = "DIAGRAM"
 
     if intent == "BUILDER" and not commands:
-        commands = ["npm init -y", "npm install express jsonwebtoken bcryptjs dotenv", "node index.js"]
+        commands = ["npm init -y", "npm install express jsonwebtoken bcryptjs dotenv cors mongoose", "node server.js"]
 
     return {
         "intent": intent,
         "title": "Rishova Universal Studio Task",
         "data": {
             "mermaid": mermaid_code,
-            "markdown_response": text,
-            "code_snippet": full_code_workspace or text,
+            "markdown_response": normalized_text,
+            "code_snippet": full_code_workspace,
             "language": language,
             "commands": commands,
             "summary": "Task processed successfully"
@@ -112,7 +123,7 @@ def run_groq_inference(messages: list, temperature: float = 0.2):
         print("Model fetch error:", e)
 
     if not active_chat_models:
-        active_chat_models = ["llama-3.1-8b-instant"]
+        active_chat_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
 
     last_err = None
     for model_id in active_chat_models:

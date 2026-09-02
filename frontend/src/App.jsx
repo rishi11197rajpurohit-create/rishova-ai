@@ -15,11 +15,11 @@ mermaid.initialize({
   securityLevel: "loose",
 });
 
-// Gemini / ChatGPT Style Dark Code Card (Matches Image 2 Exactly)
-const StudioCodeBlock = ({ inline, className, children, ...props }) => {
+// Gemini / ChatGPT Style Studio Code Block
+const StudioCodeBlock = ({ node, inline, className, children, ...props }) => {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
-  const lang = match ? match[1] : "javascript";
+  const lang = match ? match[1] : "";
   const codeString = String(children).replace(/\n$/, "");
 
   const handleCopy = () => {
@@ -34,23 +34,25 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `code-snippet.${extMap[lang] || "txt"}`;
+    link.download = `code.${extMap[lang] || "txt"}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // If inline code (like `npm install` inside a sentence)
-  if (inline || !match) {
+  // Inline snippet inside a paragraph
+  if (inline || (!match && !codeString.includes("\n") && codeString.length < 50)) {
     return <code className="inline-code-pill" {...props}>{children}</code>;
   }
+
+  const displayLang = lang || "CODE";
 
   return (
     <div className="studio-code-card">
       <div className="studio-code-header">
-        <span className="studio-lang-title">{lang.toUpperCase()}</span>
+        <span className="studio-lang-title">{displayLang.toUpperCase()}</span>
         <div className="studio-code-actions">
-          <button className="circle-action-btn" title="Download Code" onClick={handleDownload}>
+          <button className="circle-action-btn" title="Download File" onClick={handleDownload}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
@@ -71,8 +73,9 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
       </div>
       <div className="studio-code-body">
         <SyntaxHighlighter
-          language={lang}
+          language={lang || "javascript"}
           style={vscDarkPlus}
+          wrapLines={true}
           wrapLongLines={false}
           customStyle={{
             margin: 0,
@@ -343,7 +346,7 @@ export default function App() {
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        // Remove default pre wrapper to avoid squished lines
+                        // Unwrap <pre> so code styling doesn't collapse
                         pre: ({ children }) => <>{children}</>,
                         code: StudioCodeBlock
                       }}
@@ -359,21 +362,23 @@ export default function App() {
                       <span>⚡ Quick Execution Terminal Commands</span>
                       <button onClick={() => copyToClipboard(m.commands.join("\n"))}>📋 Copy All</button>
                     </div>
-                    <SyntaxHighlighter
-                      language="bash"
-                      style={vscDarkPlus}
-                      wrapLongLines={false}
-                      customStyle={{
-                        margin: 0,
-                        padding: "14px",
-                        backgroundColor: "#131316",
-                        borderRadius: "8px",
-                        whiteSpace: "pre",
-                        fontSize: "0.9rem"
-                      }}
-                    >
-                      {m.commands.join("\n")}
-                    </SyntaxHighlighter>
+                    <div className="studio-code-card">
+                      <SyntaxHighlighter
+                        language="bash"
+                        style={vscDarkPlus}
+                        wrapLongLines={false}
+                        customStyle={{
+                          margin: 0,
+                          padding: "14px 16px",
+                          backgroundColor: "#131316",
+                          whiteSpace: "pre",
+                          fontSize: "0.9rem",
+                          lineHeight: "1.6"
+                        }}
+                      >
+                        {m.commands.join("\n")}
+                      </SyntaxHighlighter>
+                    </div>
                   </div>
                 )}
               </div>
@@ -464,7 +469,7 @@ export default function App() {
                     <SyntaxHighlighter
                       language={activeLang}
                       style={vscDarkPlus}
-                      showLineNumbers={false}
+                      showLineNumbers={true}
                       wrapLongLines={false}
                       customStyle={{
                         margin: 0,
