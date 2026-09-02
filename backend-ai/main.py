@@ -54,12 +54,13 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         mermaid_code = mermaid_match.group(1).strip()
         intent = "DIAGRAM"
 
-    # 2. Extract Terminal Commands (bash/sh/shell/powershell)
-    bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
+    # 2. Extract Terminal Commands strictly (only bash/sh/shell/cmd/powershell)
+    bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\s*\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
     for b in bash_blocks:
         for line in b.split("\n"):
             cleaned = line.strip()
-            if cleaned and not cleaned.startswith("#"):
+            # Ignore comments, empty lines, and non-cli code accidentally placed in bash
+            if cleaned and not cleaned.startswith("#") and not any(k in cleaned for k in ["const ", "let ", "var ", "import ", "require(", "function", "{", "}"]):
                 commands.append(cleaned)
 
     # 3. Extract Real Source Code (Ignore folder structures and bash/mermaid)
