@@ -1227,4 +1227,17 @@ body {
 .cmd-header button {
   flex-shrink: 0 !important;
   white-space: nowrap !important;
+}/* Fix header right edge alignment */
+.panel-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  padding: 8px 16px !important;
+}
+
+.canvas-controls .action-btn {
+  background: #18181b !important;
+  border: 1px solid #38bdf8 !important;
+  color: #38bdf8 !important;
+  font-weight: 600 !important;
+  margin-right: 8px !important;
 }

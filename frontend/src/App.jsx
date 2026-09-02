@@ -111,7 +111,6 @@ export default function App() {
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authMsg, setAuthMsg] = useState("");
 
-  // AI Model Selection State
   const [selectedModel, setSelectedModel] = useState("llama-3.3-70b-versatile");
 
   const [sessions, setSessions] = useState(() => {
@@ -140,19 +139,15 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Tabs: "code" | "preview" | "canvas"
   const [activeTab, setActiveTab] = useState("code");
   const [showExportMenu, setShowExportMenu] = useState(false);
 
-  // Voice Input State
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
 
-  // In-App Sandbox Console State
   const [consoleLogs, setConsoleLogs] = useState([]);
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
 
-  // Canvas Pan & Zoom
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -173,7 +168,6 @@ export default function App() {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, loading]);
 
-  // Handle iframe sandbox messages (Console Logger)
   useEffect(() => {
     const handleSandboxMessage = (event) => {
       if (event.data && event.data.type === "PREVIEW_CONSOLE_LOG") {
@@ -184,7 +178,6 @@ export default function App() {
     return () => window.removeEventListener("message", handleSandboxMessage);
   }, []);
 
-  // Safe Mermaid Renderer
   useEffect(() => {
     let isMounted = true;
     const renderMermaidDiagram = async () => {
@@ -234,7 +227,6 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Safe Voice Recognition
   const handleToggleVoice = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -600,7 +592,6 @@ export default function App() {
     setShowExportMenu(false);
   };
 
-  // Construct Live Sandbox Preview Document with Built-in Console interceptor
   const getLivePreviewSource = () => {
     const files = activeSession.workspaceFiles || {};
     let htmlContent = "";
@@ -634,7 +625,6 @@ export default function App() {
       }
     }
 
-    // Console message pipe script
     const consoleInterceptor = `
       <script>
         (function() {
@@ -747,7 +737,6 @@ export default function App() {
             <span className="badge">Universal Studio</span>
           </div>
 
-          {/* AI Model Selector Dropdown */}
           <div className="model-selector-container">
             <span className="model-label">Engine:</span>
             <select
@@ -798,7 +787,6 @@ export default function App() {
         )}
 
         <div className="main-content">
-          {/* Chat Panel */}
           <div className="chat-panel">
             <div className="chat-history">
               {activeSession.messages.map((m, idx) => (
@@ -916,7 +904,6 @@ export default function App() {
             </form>
           </div>
 
-          {/* Right Workspace Panel */}
           <div className={`preview-panel ${isFullScreenCanvas ? "fullscreen-canvas-mode" : ""}`}>
             <div className="panel-header">
               <div className="tab-switchers">
@@ -924,19 +911,19 @@ export default function App() {
                   className={`tab-btn ${activeTab === "code" ? "active" : ""}`}
                   onClick={() => { setActiveTab("code"); setIsFullScreenCanvas(false); }}
                 >
-                  💻 Monaco Code
+                  💻 Code
                 </button>
                 <button
                   className={`tab-btn ${activeTab === "preview" ? "active" : ""}`}
                   onClick={() => { setActiveTab("preview"); setIsFullScreenCanvas(false); }}
                 >
-                  👁️ Live Preview
+                  👁️ Preview
                 </button>
                 <button
                   className={`tab-btn ${activeTab === "canvas" ? "active" : ""}`}
                   onClick={() => setActiveTab("canvas")}
                 >
-                  🎨 Architecture Canvas
+                  🎨 Canvas
                 </button>
               </div>
 
@@ -1011,7 +998,7 @@ export default function App() {
                     onClick={() => setIsConsoleOpen(!isConsoleOpen)}
                     title="Toggle In-App Console Logs"
                   >
-                    📟 Logs ({consoleLogs.length})
+                    📟 Console ({consoleLogs.length})
                   </button>
                 </div>
               )}
@@ -1032,7 +1019,6 @@ export default function App() {
             </div>
 
             <div className="workspace-content">
-              {/* Monaco Code Tab */}
               {activeTab === "code" && (
                 <div className="code-viewer-area">
                   {Object.keys(activeSession.workspaceFiles).length > 0 ? (
@@ -1083,7 +1069,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Live Web Preview Tab with In-App Console */}
               {activeTab === "preview" && (
                 <div className="live-preview-container">
                   <iframe
@@ -1117,7 +1102,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Architecture Canvas Tab */}
               {activeTab === "canvas" && (
                 <div 
                   className={`canvas-area ${isDragging ? "grabbing" : "grabbable"}`}
