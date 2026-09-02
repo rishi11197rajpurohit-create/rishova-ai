@@ -6,8 +6,8 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import "./App.css";
 
-const AUTH_API = "[https://rishova-auth-backend.onrender.com/api/auth](https://rishova-auth-backend.onrender.com/api/auth)";
-const AI_API = "[https://rishova-ai-backend.onrender.com/api/ai](https://rishova-ai-backend.onrender.com/api/ai)";
+const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
+const AI_API = "https://rishova-ai-backend.onrender.com/api/ai";
 
 mermaid.initialize({
   startOnLoad: false,
@@ -130,7 +130,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("code");
   const [activeDiagram, setActiveDiagram] = useState("");
   
-  // Multi-file workspace state
   const [workspaceFiles, setWorkspaceFiles] = useState({});
   const [selectedFileName, setSelectedFileName] = useState("");
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -205,12 +204,12 @@ export default function App() {
         formData.append("file", fileToUpload);
         formData.append("prompt", userText);
 
-        res = await fetch(`${AI_API}/document`, {
+        res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/document", {
           method: "POST",
           body: formData,
         });
       } else {
-        res = await fetch(`${AI_API}/universal`, {
+        res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/universal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt: userText }),
@@ -455,7 +454,6 @@ export default function App() {
               <div className="code-viewer-area">
                 {Object.keys(workspaceFiles).length > 0 ? (
                   <div className="multi-file-workspace">
-                    {/* Modern File Tabs */}
                     <div className="file-tabs-bar">
                       {Object.keys(workspaceFiles).map((fname) => (
                         <button
@@ -468,7 +466,6 @@ export default function App() {
                       ))}
                     </div>
 
-                    {/* Active File Editor */}
                     <div className="active-code-card">
                       <SyntaxHighlighter
                         language={currentFile ? currentFile.language : "javascript"}
