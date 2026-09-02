@@ -882,4 +882,47 @@ body {
   color: #e4e4e7;
   white-space: pre-wrap;
   word-break: break-all;
+}/* Top Workspace Action Buttons Bar - Scrollable & Responsive */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+  padding: 8px 12px;
+}
+
+.panel-header::-webkit-scrollbar {
+  height: 4px;
+}
+
+.panel-header::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
+}
+
+.tab-switchers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.canvas-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Ensure buttons don't shrink or get clipped */
+.tab-btn,
+.action-btn,
+.ai-action-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
