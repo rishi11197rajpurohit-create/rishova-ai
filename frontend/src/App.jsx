@@ -4,6 +4,8 @@ import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 import "./App.css";
 
 const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
@@ -28,15 +30,9 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   };
 
   const handleDownload = () => {
-    const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html" };
+    const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html", sql: "sql" };
     const blob = new Blob([codeContent], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `code.${extMap[lang] || "txt"}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    saveAs(blob, `code.${extMap[lang] || "txt"}`);
   };
 
   if (inline || (!match && !codeContent.includes("\n") && codeContent.length < 40)) {
@@ -132,11 +128,15 @@ export default function App() {
   
   const [workspaceFiles, setWorkspaceFiles] = useState({});
   const [selectedFileName, setSelectedFileName] = useState("");
+  const [currentCommands, setCurrentCommands] = useState([]);
+  const [currentFullMarkdown, setCurrentFullMarkdown] = useState("");
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
 
   const diagramRef = useRef(null);
   const chatBottomRef = useRef(null);
   const fileInputRef = useRef(null);
+  const exportDropdownRef = useRef(null);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -151,6 +151,17 @@ export default function App() {
       });
     }
   }, [activeDiagram, activeTab]);
+
+  // Click outside to close export dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -222,6 +233,9 @@ export default function App() {
       const responseData = data.data || {};
       const returnedFiles = responseData.files || {};
 
+      setCurrentFullMarkdown(responseData.markdown_response || "");
+      setCurrentCommands(responseData.commands || []);
+
       setMessages((prev) => [
         ...prev,
         {
@@ -243,9 +257,9 @@ export default function App() {
         setActiveTab("code");
       } else if (responseData.code_snippet) {
         setWorkspaceFiles({
-          "snippet.js": { language: responseData.language || "javascript", code: responseData.code_snippet }
+          "app.js": { language: responseData.language || "javascript", code: responseData.code_snippet }
         });
-        setSelectedFileName("snippet.js");
+        setSelectedFileName("app.js");
         setActiveTab("code");
       }
     } catch (err) {
@@ -261,6 +275,76 @@ export default function App() {
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     alert("Copied to clipboard!");
+  };
+
+  // Universal Download Handlers
+  const downloadActiveFile = () => {
+    const current = workspaceFiles[selectedFileName];
+    if (!current) return;
+    const blob = new Blob([current.code], { type: "text/plain;charset=utf-8" });
+    saveAs(blob, selectedFileName);
+    setShowExportMenu(false);
+  };
+
+  const downloadProjectZip = async () => {
+    if (Object.keys(workspaceFiles).length === 0) {
+      alert("No files available to download!");
+      return;
+    }
+    const zip = new JSZip();
+    Object.entries(workspaceFiles).forEach(([name, fData]) => {
+      zip.file(name, fData.code);
+    });
+
+    if (currentCommands && currentCommands.length > 0) {
+      zip.file("setup_commands.sh", currentCommands.join("\n"));
+    }
+
+    const content = await zip.generateAsync({ type: "blob" });
+    saveAs(content, "rishova-project.zip");
+    setShowExportMenu(false);
+  };
+
+  const downloadMarkdownDoc = () => {
+    if (!currentFullMarkdown) {
+      alert("No documentation available to download!");
+      return;
+    }
+    const blob = new Blob([currentFullMarkdown], { type: "text/markdown;charset=utf-8" });
+    saveAs(blob, "project_documentation.md");
+    setShowExportMenu(false);
+  };
+
+  const downloadPlainText = () => {
+    const current = workspaceFiles[selectedFileName];
+    const textToSave = current ? current.code : currentFullMarkdown;
+    if (!textToSave) return;
+    const blob = new Blob([textToSave], { type: "text/plain;charset=utf-8" });
+    saveAs(blob, `${selectedFileName || "project"}.txt`);
+    setShowExportMenu(false);
+  };
+
+  const downloadShellScript = () => {
+    if (!currentCommands || currentCommands.length === 0) {
+      alert("No terminal commands available to download!");
+      return;
+    }
+    const scriptContent = "#!/usr/bin/env bash\n\n" + currentCommands.join("\n") + "\n";
+    const blob = new Blob([scriptContent], { type: "application/x-sh;charset=utf-8" });
+    saveAs(blob, "run_setup.sh");
+    setShowExportMenu(false);
+  };
+
+  const downloadSVG = () => {
+    if (!diagramRef.current) return;
+    const svgElement = diagramRef.current.querySelector("svg");
+    if (!svgElement) {
+      alert("No rendered diagram found!");
+      return;
+    }
+    const svgData = new XMLSerializer().serializeToString(svgElement);
+    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    saveAs(blob, "rishova-architecture.svg");
   };
 
   const currentFile = workspaceFiles[selectedFileName] || null;
@@ -395,7 +479,7 @@ export default function App() {
               type="file"
               ref={fileInputRef}
               style={{ display: "none" }}
-              accept=".pdf,.txt,.md,.js,.py,.json,.csv"
+              accept=".pdf,.txt,.md,.js,.py,.json,.csv,.sql"
               onChange={(e) => {
                 if (e.target.files && e.target.files[0]) {
                   setSelectedFile(e.target.files[0]);
@@ -439,12 +523,58 @@ export default function App() {
               </button>
             </div>
 
-            {activeTab === "code" && currentFile && (
+            {activeTab === "code" && Object.keys(workspaceFiles).length > 0 && (
               <div className="canvas-controls">
-                <span className="lang-badge">{(currentFile.language || "CODE").toUpperCase()}</span>
-                <button className="action-btn download-btn" onClick={() => copyToClipboard(currentFile.code)}>
-                  📋 Copy This File
+                <button className="action-btn" onClick={() => copyToClipboard(currentFile ? currentFile.code : "")}>
+                  📋 Copy Active File
                 </button>
+
+                {/* All-in-One Export Dropdown Menu */}
+                <div className="export-dropdown-wrapper" ref={exportDropdownRef}>
+                  <button 
+                    className="action-btn download-btn export-trigger-btn"
+                    onClick={() => setShowExportMenu(!showExportMenu)}
+                  >
+                    ⤓ Export / Download ▾
+                  </button>
+                  {showExportMenu && (
+                    <div className="export-dropdown-menu">
+                      <div className="dropdown-label">Download Options</div>
+                      <button onClick={downloadProjectZip}>
+                        <span>📦 Project ZIP Archive</span>
+                        <small>All files in .zip</small>
+                      </button>
+                      <button onClick={downloadActiveFile}>
+                        <span>📄 Current Active File</span>
+                        <small>{selectedFileName || "file"}</small>
+                      </button>
+                      <button onClick={downloadMarkdownDoc}>
+                        <span>📑 Markdown Document</span>
+                        <small>.md file</small>
+                      </button>
+                      <button onClick={downloadPlainText}>
+                        <span>📋 Plain Text File</span>
+                        <small>.txt file</small>
+                      </button>
+                      {currentCommands.length > 0 && (
+                        <button onClick={downloadShellScript}>
+                          <span>⚡ Terminal Shell Script</span>
+                          <small>run_setup.sh</small>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "canvas" && activeDiagram && (
+              <div className="canvas-controls">
+                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.max(0.4, z - 0.2))}>🔍 -</button>
+                <span className="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
+                <button className="action-btn" onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.2))}>🔍 +</button>
+                <button className="action-btn download-btn" onClick={downloadSVG}>⬇ SVG Diagram</button>
+                <button className="action-btn" onClick={() => copyToClipboard(activeDiagram)}>📋 Copy Syntax</button>
               </div>
             )}
           </div>
@@ -497,7 +627,7 @@ export default function App() {
                 ) : (
                   <div className="canvas-placeholder">
                     <p>💻 Code Workspace Ready</p>
-                    <span>Ask Rishova AI to build an API or project to see multi-file tabs and code here.</span>
+                    <span>Ask Rishova AI to build an API or project to see multi-file tabs and export options here.</span>
                   </div>
                 )}
               </div>

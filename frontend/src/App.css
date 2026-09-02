@@ -577,4 +577,78 @@ body, html {
   flex: 1;
   overflow: auto;
   background-color: #131316;
+}/* Universal Export Dropdown */
+.export-dropdown-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.export-trigger-btn {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.export-trigger-btn:hover {
+  background: #0369a1 !important;
+}
+
+.export-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background-color: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  min-width: 230px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+}
+
+.dropdown-label {
+  padding: 6px 14px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+  border-bottom: 1px solid #27272a;
+}
+
+.export-dropdown-menu button {
+  background: transparent;
+  border: none;
+  padding: 10px 14px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  transition: background 0.15s ease;
+}
+
+.export-dropdown-menu button span {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #f4f4f5;
+}
+
+.export-dropdown-menu button small {
+  font-size: 0.72rem;
+  color: #a1a1aa;
+}
+
+.export-dropdown-menu button:hover {
+  background-color: #27272a;
 }
