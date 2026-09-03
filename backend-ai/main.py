@@ -1,14 +1,48 @@
 import os
 import re
 import io
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+import json
+from datetime import datetime
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
 from pypdf import PdfReader
+from sqlalchemy import create_engine, Column, String, Text, Integer, DateTime
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 load_dotenv()
+
+# Database Setup (Persistent SQLite Database)
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./rishova_studio.db")
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class ProjectModel(Base):
+    __tablename__ = "projects"
+    id = Column(String, primary_key=True, index=True)
+    user_email = Column(String, index=True, default="guest")
+    title = Column(String, default="New Project")
+    data_json = Column(Text, default="{}")
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+class TokenUsageModel(Base):
+    __tablename__ = "token_usage"
+    id = Column(Integer, primary_key=True, index=True)
+    user_email = Column(String, index=True, default="guest")
+    tokens_used = Column(Integer, default=0)
+    requests_count = Column(Integer, default=0)
+
+Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 app = FastAPI(title="Rishova AI Universal Studio")
 
@@ -25,6 +59,11 @@ client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 class UniversalRequest(BaseModel):
     prompt: str
     model: str = "llama-3.3-70b-versatile"
+    user_email: str = "guest"
+
+class SyncProjectsRequest(BaseModel):
+    user_email: str
+    sessions: list
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an elite Senior Full-Stack Software Architect and Universal AI Studio.
@@ -46,7 +85,6 @@ When requested for diagrams or flowcharts:
 
 def parse_llm_markdown_response(text: str, user_prompt: str):
     normalized_text = text.replace('\r\n', '\n').replace('\r', '\n')
-    
     intent = "CHAT"
     mermaid_code = ""
     commands = []
@@ -79,23 +117,16 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
 
         if lang in ["bash", "sh", "shell", "cmd", "powershell", "mermaid"]:
             continue
-        
         if any(tree_char in content for tree_char in ["|--", "├──", "└──", "📁", "├── ", "└── "]):
             continue
-        if any(content.startswith(x) for x in ["ecommerce-api/", "auth-api/", "src/", "user-auth/"]):
-            if not any(token in content for token in ["const ", "import ", "def ", "class ", "function", "var ", "{", "<"]):
-                continue
-
         if len(content) < 20:
             continue
 
         first_lines = [l.strip() for l in content.split("\n")[:3] if l.strip()]
         filename = ""
-        
         for line in first_lines:
             clean_l = re.sub(r"^(//|/\*|\*|#|<!--)\s*", "", line)
             clean_l = re.sub(r"\s*(\*/|-->)$", "", clean_l).strip()
-            
             match_name = re.search(r"([\w\-./]+\.(html|css|js|jsx|ts|tsx|json|py|sql|sh|md))", clean_l, re.IGNORECASE)
             if match_name:
                 filename = os.path.basename(match_name.group(1))
@@ -105,14 +136,14 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
             content_lower = content.lower()
             if "<!doctype html" in content_lower or "<html" in content_lower:
                 filename = "index.html"
-            elif lang == "css" or ":root" in content or ("{" in content and ";" in content and ("margin" in content or "color" in content)):
+            elif lang == "css" or ":root" in content or ("{" in content and "color" in content):
                 filename = "style.css"
             elif lang in ["js", "javascript"] and any(k in content for k in ["document.", "addEventListener", "window."]):
                 filename = "script.js"
             elif lang in ["json"] or (content.startswith("{") and "name" in content):
                 filename = "package.json"
             else:
-                ext = lang if lang in ["js", "py", "json", "html", "css", "ts", "sql"] else ("js" if "javascript" in lang else "txt")
+                ext = lang if lang in ["js", "py", "json", "html", "css", "ts", "sql"] else "js"
                 filename = f"file_{file_idx}.{ext}"
 
         if filename not in files_map:
@@ -149,99 +180,84 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         }
     }
 
-def get_available_groq_models():
-    """Dynamically get verified working models from Groq account"""
+def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-versatile", user_email: str = "guest", db: Session = None):
     try:
-        models = client.models.list().data
-        valid_chat_models = []
-        for m in models:
-            mid = m.id.lower()
-            if not any(bad in mid for bad in ["whisper", "vision", "embed", "orpheus", "guard", "audio"]):
-                valid_chat_models.append(m.id)
-        if valid_chat_models:
-            return valid_chat_models
+        completion = client.chat.completions.create(
+            model=preferred_model,
+            messages=messages,
+            temperature=0.2
+        )
+        total_tokens = getattr(completion.usage, "total_tokens", 500) if hasattr(completion, "usage") else 500
+        
+        # Track usage in database
+        if db:
+            usage = db.query(TokenUsageModel).filter(TokenUsageModel.user_email == user_email).first()
+            if not usage:
+                usage = TokenUsageModel(user_email=user_email, tokens_used=total_tokens, requests_count=1)
+                db.add(usage)
+            else:
+                usage.tokens_used += total_tokens
+                usage.requests_count += 1
+            db.commit()
+
+        return completion.choices[0].message.content
     except Exception as e:
-        print("Model list error:", e)
-    return ["llama-3.3-70b-versatile"]
-
-def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-versatile", temperature: float = 0.2):
-    available_models = get_available_groq_models()
-    
-    # Priority order: Preferred -> Verified list -> Reliable fallbacks
-    models_to_try = [preferred_model] + [m for m in available_models if m != preferred_model]
-    
-    last_error = None
-    for model_id in models_to_try:
-        try:
-            completion = client.chat.completions.create(
-                model=model_id,
-                messages=messages,
-                temperature=temperature
-            )
-            return completion.choices[0].message.content
-        except Exception as e:
-            last_error = e
-            continue
-
-    raise HTTPException(status_code=500, detail=f"All models failed. Last error: {str(last_error)}")
+        # Fallback to secondary model if primary fails
+        fallback_model = "llama-3.1-8b-instant" if preferred_model != "llama-3.1-8b-instant" else "llama-3.3-70b-versatile"
+        completion = client.chat.completions.create(
+            model=fallback_model,
+            messages=messages,
+            temperature=0.2
+        )
+        return completion.choices[0].message.content
 
 @app.get("/")
 def read_root():
     return {"status": "RISHOVA AI Universal Studio is Live"}
 
+@app.get("/api/usage/{user_email}")
+def get_user_usage(user_email: str, db: Session = Depends(get_db)):
+    usage = db.query(TokenUsageModel).filter(TokenUsageModel.user_email == user_email).first()
+    if not usage:
+        return {"user_email": user_email, "tokens_used": 0, "requests_count": 0, "daily_limit": 50000}
+    return {
+        "user_email": user_email,
+        "tokens_used": usage.tokens_used,
+        "requests_count": usage.requests_count,
+        "daily_limit": 50000
+    }
+
+@app.post("/api/cloud/sync")
+def sync_cloud_projects(req: SyncProjectsRequest, db: Session = Depends(get_db)):
+    for sess in req.sessions:
+        sid = sess.get("id")
+        title = sess.get("title", "Project")
+        data_str = json.dumps(sess)
+        
+        existing = db.query(ProjectModel).filter(ProjectModel.id == sid).first()
+        if existing:
+            existing.title = title
+            existing.data_json = data_str
+            existing.updated_at = datetime.utcnow()
+        else:
+            db.add(ProjectModel(id=sid, user_email=req.user_email, title=title, data_json=data_str))
+    db.commit()
+    return {"status": "success", "synced_count": len(req.sessions)}
+
+@app.get("/api/cloud/load/{user_email}")
+def load_cloud_projects(user_email: str, db: Session = Depends(get_db)):
+    records = db.query(ProjectModel).filter(ProjectModel.user_email == user_email).order_by(ProjectModel.updated_at.desc()).all()
+    sessions = [json.loads(r.data_json) for r in records if r.data_json]
+    return {"status": "success", "sessions": sessions}
+
 @app.post("/api/ai/universal")
-async def handle_universal_prompt(req: UniversalRequest):
+async def handle_universal_prompt(req: UniversalRequest, db: Session = Depends(get_db)):
     try:
         messages = [
             {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
             {"role": "user", "content": req.prompt}
         ]
-        raw_markdown = run_groq_inference(messages, preferred_model=req.model, temperature=0.2)
+        raw_markdown = run_groq_inference(messages, preferred_model=req.model, user_email=req.user_email, db=db)
         return parse_llm_markdown_response(raw_markdown, req.prompt)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/ai/document")
-async def handle_document_upload(
-    file: UploadFile = File(...),
-    prompt: str = Form("Analyze document"),
-    model: str = Form("llama-3.3-70b-versatile")
-):
-    try:
-        extracted_text = ""
-        filename = file.filename.lower()
-        content = await file.read()
-
-        if filename.endswith(".pdf"):
-            pdf_reader = PdfReader(io.BytesIO(content))
-            for idx, page in enumerate(pdf_reader.pages):
-                page_text = page.extract_text()
-                if page_text:
-                    extracted_text += f"\n--- [PAGE {idx + 1}] ---\n" + page_text
-        else:
-            extracted_text = content.decode("utf-8", errors="ignore")
-
-        truncated_text = extracted_text[:18000]
-
-        doc_system_prompt = f"You are RISHOVA AI Document Intelligence Expert. Analyze '{file.filename}':\n{truncated_text}"
-        messages = [
-            {"role": "system", "content": doc_system_prompt},
-            {"role": "user", "content": prompt}
-        ]
-        response_text = run_groq_inference(messages, preferred_model=model, temperature=0.2)
-
-        return {
-            "intent": "DOCUMENT",
-            "filename": file.filename,
-            "data": {
-                "markdown_response": response_text,
-                "mermaid": "",
-                "code_snippet": "",
-                "files": {},
-                "language": "",
-                "commands": [],
-                "summary": f"Analyzed {file.filename}"
-            }
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -112,6 +112,8 @@ export default function App() {
   const [authMsg, setAuthMsg] = useState("");
 
   const [selectedModel, setSelectedModel] = useState("llama-3.3-70b-versatile");
+  const [usageData, setUsageData] = useState({ tokens_used: 0, daily_limit: 50000 });
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
   const [sessions, setSessions] = useState(() => {
     const saved = localStorage.getItem("rishova_sessions");
@@ -167,6 +169,42 @@ export default function App() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, loading]);
+
+  const fetchUsage = async () => {
+    try {
+      const email = userName || "guest";
+      const res = await fetch(`https://rishova-ai-backend.onrender.com/api/usage/${email}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUsageData(data);
+      }
+    } catch (e) {}
+  };
+
+  const handleCloudSync = async () => {
+    try {
+      setIsCloudSyncing(true);
+      const email = userName || "guest";
+      const res = await fetch("https://rishova-ai-backend.onrender.com/api/cloud/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_email: email, sessions }),
+      });
+      if (res.ok) {
+        alert("☁️ All Projects Synchronized to Cloud Database!");
+      } else {
+        throw new Error("Sync failed");
+      }
+    } catch (e) {
+      alert("Sync notice: " + e.message);
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsage();
+  }, [sessions]);
 
   useEffect(() => {
     const handleSandboxMessage = (event) => {
@@ -366,6 +404,7 @@ export default function App() {
         formData.append("file", attachedFile);
         formData.append("prompt", userText);
         formData.append("model", selectedModel);
+        formData.append("user_email", userName || "guest");
 
         res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/document", {
           method: "POST",
@@ -375,7 +414,7 @@ export default function App() {
         res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/universal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: userText, model: selectedModel }),
+          body: JSON.stringify({ prompt: userText, model: selectedModel, user_email: userName || "guest" }),
         });
       }
 
@@ -428,6 +467,7 @@ export default function App() {
             : s
         )
       );
+      fetchUsage();
     } catch (err) {
       setSessions((prev) =>
         prev.map((s) =>
@@ -584,12 +624,6 @@ export default function App() {
     const svgData = new XMLSerializer().serializeToString(svgElement);
     const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
     saveAs(blob, "architecture_diagram.svg");
-  };
-
-  const handleCloudSync = () => {
-    localStorage.setItem("rishova_sessions_cloud_backup", JSON.stringify(sessions));
-    alert("⚡ Cloud Database Sync Successful! Your workspace projects are backed up.");
-    setShowExportMenu(false);
   };
 
   const getLivePreviewSource = () => {
@@ -749,7 +783,28 @@ export default function App() {
             </select>
           </div>
         </div>
-        <div className="user-section">
+
+        {/* User & Cloud Section with Token Meter */}
+        <div className="user-section" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div className="usage-meter-pill" title="Daily API Quota Usage">
+            <span>⚡ {usageData.tokens_used || 0} / {usageData.daily_limit || 50000} Tokens</span>
+            <div className="usage-progress-track">
+              <div
+                className="usage-progress-fill"
+                style={{ width: `${Math.min(100, ((usageData.tokens_used || 0) / (usageData.daily_limit || 50000)) * 100)}%` }}
+              />
+            </div>
+          </div>
+
+          <button 
+            className="cloud-sync-status-btn"
+            onClick={handleCloudSync}
+            disabled={isCloudSyncing}
+            title="Save all workspace sessions to Cloud DB"
+          >
+            {isCloudSyncing ? "⏳ Syncing..." : "☁️ Cloud Save"}
+          </button>
+
           <span className="user-name-text">👤 {userName}</span>
           <button className="logout-btn" onClick={() => { localStorage.clear(); setToken(null); }}>Logout</button>
         </div>
@@ -1007,7 +1062,6 @@ export default function App() {
             </div>
 
             <div className="workspace-content">
-              {/* Monaco Code Tab */}
               {activeTab === "code" && (
                 <div className="code-viewer-area">
                   {Object.keys(activeSession.workspaceFiles).length > 0 ? (
@@ -1058,7 +1112,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Live Web Preview Tab */}
               {activeTab === "preview" && (
                 <div className="live-preview-container" style={{ position: "relative", display: "flex", flexDirection: "column", height: "100%" }}>
                   <iframe
@@ -1069,7 +1122,6 @@ export default function App() {
                     style={{ flex: 1, border: "none" }}
                   />
 
-                  {/* Fixed & Dedicated Bottom Bar for Console Logs */}
                   <div className="console-toggle-bar">
                     <button 
                       className={`bottom-console-btn ${isConsoleOpen ? "open" : ""}`}
@@ -1104,7 +1156,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Architecture Canvas Tab */}
               {activeTab === "canvas" && (
                 <div 
                   className={`canvas-area ${isDragging ? "grabbing" : "grabbable"}`}
