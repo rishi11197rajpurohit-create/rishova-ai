@@ -74,6 +74,9 @@ def fetch_live_web_snippets(query: str) -> str:
             ddg_data = json.loads(res.read().decode('utf-8'))
             if ddg_data.get("AbstractText"):
                 snippets.append(f"• {ddg_data['AbstractText']} [Source: {ddg_data.get('AbstractURL', 'Web Retrieval')}]")
+            for topic in ddg_data.get("RelatedTopics", [])[:2]:
+                if isinstance(topic, dict) and topic.get("Text"):
+                    snippets.append(f"• {topic['Text']} [Source: {topic.get('FirstURL', 'Web Retrieval')}]")
     except Exception as e:
         pass
 
@@ -89,13 +92,17 @@ STRICT LANGUAGE & OUTPUT DIRECTIVES:
 2. Put terminal commands in ```bash code blocks.
 3. Put source code in dedicated blocks (```html, ```css, ```javascript, ```python) with file names as the very first line comment (e.g., // index.html, /* style.css */, # script.py).
 
+IMAGE STUDIO DIRECTIVE (Section 10 & 19):
+If the user asks to generate, draw, or create an image, photo, wallpaper, or digital art:
+1. Create a detailed descriptive visual prompt for the image.
+2. Render the image directly using markdown format: `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_DETAILED_PROMPT>?width=1024&height=1024&nologo=true)`
+3. Provide artistic details, color palette breakdown, and styling notes below the rendered image.
+
 DATA INTELLIGENCE & CHART DIRECTIVE (Section 16 & 19):
-If the user asks for charts, data analysis, visualization, or graphs:
-1. Provide mathematical/statistical summary and insights in chat.
-2. Generate an interactive HTML/CSS/JS dashboard using Chart.js CDN (`[https://cdn.jsdelivr.net/npm/chart.js](https://cdn.jsdelivr.net/npm/chart.js)`) so the user can see beautiful, responsive graphs (bar, line, or pie) directly in the Live Preview tab!
+Generate interactive HTML/CSS/JS with Chart.js CDN for charts and analytics.
 
 RESEARCH & KNOWLEDGE DIRECTIVE (Section 18):
-Synthesize verified industry breakthroughs, cite sources, and never produce cutoff disclaimers.
+Synthesize verified industry breakthroughs, cite sources, and avoid knowledge cutoff disclaimers.
 
 DIAGRAM DIRECTIVE (Section 20):
 Write clean Mermaid code strictly inside a ```mermaid code block starting with `graph TD`.
@@ -114,6 +121,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     commands = []
     files_map = {}
 
+    # Mermaid Extraction
     mermaid_match = re.search(r"```(?:mermaid)?\s*\n?((?:graph|flowchart|sequenceDiagram|erDiagram|classDiagram|stateDiagram)[\s\S]*?)```", normalized_text, re.IGNORECASE)
     if mermaid_match:
         mermaid_code = mermaid_match.group(1).strip()
@@ -124,6 +132,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
             mermaid_code = raw_diagram.group(1).strip()
             intent = "DIAGRAM"
 
+    # Bash commands extraction
     bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\s*\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
     for b in bash_blocks:
         for line in b.split("\n"):
@@ -132,6 +141,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
                 if not any(token in cleaned for token in ["const ", "let ", "var ", "import ", "require(", "function", "{", "}", "=>", "class "]):
                     commands.append(cleaned)
 
+    # Code files extraction
     code_pattern = re.compile(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```")
     file_idx = 1
     
@@ -178,8 +188,12 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
             file_idx += 1
 
     prompt_lower = user_prompt.lower()
+    
+    # Intent Detection
     if mermaid_code or any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
+    elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "generate wallpaper", "photo of", "paint"]):
+        intent = "IMAGE"
     elif any(k in prompt_lower for k in ["chart", "data analysis", "visualize", "plot", "graph", "analytics"]):
         intent = "DATA"
     elif any(k in prompt_lower for k in ["resume", "cv", "portfolio", "cover letter"]):
@@ -190,6 +204,12 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "RESEARCH"
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
+
+    # Auto fallback for image generation URL if LLM didn't build it
+    if intent == "IMAGE" and "![" not in normalized_text:
+        clean_img_prompt = urllib.parse.quote(re.sub(r'(generate|create|draw|paint|an|image|of|photo)\s+', '', user_prompt, flags=re.IGNORECASE).strip())
+        img_markdown = f"\n\n![Generated Image](https://image.pollinations.ai/prompt/{clean_img_prompt}?width=1024&height=1024&nologo=true)\n\n"
+        normalized_text = img_markdown + normalized_text
 
     primary_code = ""
     primary_lang = "javascript"
