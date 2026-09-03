@@ -1,6 +1,8 @@
 import os
 import re
 import json
+import urllib.parse
+import urllib.request
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,48 +52,66 @@ class SyncProjectsRequest(BaseModel):
     user_email: str
     sessions: list
 
+def fetch_live_web_snippets(query: str) -> str:
+    """Fetch live external web context without external paid API keys"""
+    try:
+        encoded = urllib.parse.quote(query)
+        url = f"https://html.duckduckgo.com/html/?q={encoded}"
+        req = urllib.request.Request(
+            url, 
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            html = response.read().decode('utf-8', errors='ignore')
+            
+        snippets = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', html, re.DOTALL)
+        clean_snippets = [re.sub(r'<[^>]+>', '', s).strip() for s in snippets[:4]]
+        if clean_snippets:
+            return "\n\n--- LIVE WEB RETRIEVAL CONTEXT ---\n" + "\n".join(f"- {s}" for s in clean_snippets) + "\n---------------------------------"
+    except Exception as e:
+        print(f"Live web search notice: {e}")
+    return ""
+
 SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, an elite Senior Full-Stack Software Architect, Computer Science Professor, and Universal AI Studio.
+You are RISHOVA AI, an elite Senior Full-Stack Software Architect, Researcher, and Universal AI Studio.
 
 STRICT LANGUAGE & OUTPUT DIRECTIVES:
 1. ALWAYS generate ALL code, comments, explanations, tests, and guides in STRICT, PROFESSIONAL ENGLISH ONLY.
 2. Put terminal commands in ```bash code blocks.
 3. Put source code in dedicated blocks (```html, ```css, ```javascript, ```python) with file names as the very first line comment (e.g., // index.html, /* style.css */, # script.py).
 
-DIAGRAM DIRECTIVE:
-If the user asks for a diagram, flowchart, architecture, ERD, or schema:
-1. Write clean Mermaid code strictly inside a ```mermaid code block.
-2. The very first line inside the code block MUST be `graph TD` or `flowchart TD` or `erDiagram` or `sequenceDiagram`.
-3. Use simple alphanumeric labels inside square brackets or quotes (e.g., A["API Gateway"] --> B["Auth Service"]).
-4. Provide a clear architectural explanation below the diagram.
+LIVE SEARCH & CITATION DIRECTIVE (Section 18):
+When answering questions based on live web retrieval, always cite the evidence clearly and state relevant factual details.
 
-LEARNING & TEACHING ENGINE DIRECTIVE:
+DIAGRAM DIRECTIVE (Section 20):
+If the user asks for a diagram, flowchart, or architecture, write clean Mermaid code strictly inside a ```mermaid code block starting with `graph TD`.
+
+LEARNING ENGINE DIRECTIVE (Section 21):
 If the user asks to teach, learn, or create a quiz, provide a concept roadmap and interactive single-page HTML/CSS/JS Quiz App.
 
-CAREER & RESUME STUDIO DIRECTIVE:
-If the user asks for a resume or CV, generate a clean ATS-friendly HTML and CSS.
+CAREER STUDIO DIRECTIVE (Section 23):
+If the user asks for a resume or CV, generate clean ATS-friendly HTML and CSS.
 """
 
-def parse_llm_markdown_response(text: str, user_prompt: str):
+def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool = False):
     normalized_text = text.replace('\r\n', '\n').replace('\r', '\n')
     intent = "CHAT"
     mermaid_code = ""
     commands = []
     files_map = {}
 
-    # 1. Ultra-Robust Mermaid Extraction
+    # Mermaid Extraction
     mermaid_match = re.search(r"```(?:mermaid)?\s*\n?((?:graph|flowchart|sequenceDiagram|erDiagram|classDiagram|stateDiagram)[\s\S]*?)```", normalized_text, re.IGNORECASE)
     if mermaid_match:
         mermaid_code = mermaid_match.group(1).strip()
         intent = "DIAGRAM"
     else:
-        # Fallback: search anywhere for standard mermaid syntax
         raw_diagram = re.search(r"((?:graph|flowchart)\s+(?:TD|TB|LR|RL)[\s\S]*?)(?:\n\n\n|\Z|```)", normalized_text, re.IGNORECASE)
         if raw_diagram:
             mermaid_code = raw_diagram.group(1).strip()
             intent = "DIAGRAM"
 
-    # 2. Bash commands extraction
+    # Bash commands extraction
     bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\s*\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
     for b in bash_blocks:
         for line in b.split("\n"):
@@ -100,7 +120,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
                 if not any(token in cleaned for token in ["const ", "let ", "var ", "import ", "require(", "function", "{", "}", "=>", "class "]):
                     commands.append(cleaned)
 
-    # 3. Code files extraction
+    # Code files extraction
     code_pattern = re.compile(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```")
     file_idx = 1
     
@@ -153,6 +173,8 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         intent = "CAREER"
     elif any(k in prompt_lower for k in ["teach", "quiz", "mcq", "learn", "roadmap", "exam prep"]):
         intent = "LEARNING"
+    elif is_web_search or any(k in prompt_lower for k in ["search", "latest", "today", "news", "current", "who is", "weather", "price"]):
+        intent = "RESEARCH"
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
 
@@ -261,11 +283,20 @@ def load_cloud_projects(user_email: str):
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
     try:
+        user_prompt = req.prompt.strip()
+        is_web_query = any(k in user_prompt.lower() for k in ["search", "latest", "today", "news", "current", "weather", "who won", "price"])
+        
+        web_context = ""
+        if is_web_query:
+            web_context = fetch_live_web_snippets(user_prompt)
+
+        final_prompt = user_prompt + web_context if web_context else user_prompt
+
         messages = [
             {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
-            {"role": "user", "content": req.prompt}
+            {"role": "user", "content": final_prompt}
         ]
         raw_markdown = run_groq_inference(messages, preferred_model=req.model, user_email=req.user_email)
-        return parse_llm_markdown_response(raw_markdown, req.prompt)
+        return parse_llm_markdown_response(raw_markdown, req.prompt, is_web_search=bool(web_context))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
