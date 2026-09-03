@@ -998,7 +998,7 @@ export default function App() {
                     onClick={() => setIsConsoleOpen(!isConsoleOpen)}
                     title="Toggle In-App Console Logs"
                   >
-                    📟 Console ({consoleLogs.length})
+                    📟 Logs ({consoleLogs.length})
                   </button>
                 </div>
               )}

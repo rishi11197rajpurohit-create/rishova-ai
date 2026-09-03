@@ -1260,4 +1260,31 @@ body {
   padding: 4px 8px !important;
   font-size: 0.76rem !important;
   white-space: nowrap !important;
+}/* Fix header right edge alignment & spacing */
+.panel-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 6px 8px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.tab-switchers {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.canvas-controls {
+  display: flex !important;
+  align-items: center !important;
+  margin-left: auto !important;
+  margin-right: 4px !important;
+}
+
+.canvas-controls .action-btn {
+  padding: 4px 8px !important;
+  font-size: 0.75rem !important;
+  white-space: nowrap !important;
 }
