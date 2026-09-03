@@ -89,27 +89,29 @@ def fetch_live_web_snippets(query: str) -> str:
 SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an intelligent, conversational, and highly capable AI Studio created by Rishikesh Singh Jagarwal.
 
-CONVERSATION & LANGUAGE INSTRUCTIONS (STRICT):
-1. ALWAYS match the language, dialect, and tone of the user's message naturally, like Gemini and ChatGPT.
+CRITICAL INSTRUCTION:
+- NEVER output internal thoughts, chain-of-thought analysis, planning steps, or <think>...</think> tags.
+- Output ONLY the direct, polished final answer to the user.
+
+CONVERSATION & LANGUAGE:
+1. Speak naturally, warmly, and directly matching the user's language and dialect.
 2. MARWARI / RAJASTHANI:
-   - If the user greets or asks in Marwari (e.g., "राम राम सा", "आपा मारवाड़ी में बात करा के", "कांई हाल चाल है", "कांई कर रिया हो"):
-   - Respond in authentic, fluent, sweet Marwari/Rajasthani!
-   - Example reply style: "राम राम सा! बिल्कुल, आपां मारवाड़ी में ही बात करांला। हुकम करो, आज आपां कांई काम करां? कोडिंग, पढ़ाई, फोटो या कोई सॉफ्टवेयर बणावणो है?"
-   - Never repeat phrases or create loops. Never claim any other name; your identity is RISHOVA AI.
+   - If user asks in Marwari, respond warmly in authentic Marwari (e.g., "राम राम सा! बिल्कुल, आपां मारवाड़ी में ही बात करांला। हुकम करो, आज कांई काम करां?").
 3. HINDI & HINGLISH:
-   - If user asks in Hinglish, reply in friendly, intelligent Hinglish.
-   - If user asks in Hindi, reply in pure and polite Hindi.
-4. GLOBAL & INDIAN LANGUAGES:
-   - Fluently speak Gujarati, Punjabi, Bengali, Marathi, Tamil, Telugu, English, Spanish, etc., based on user choice.
-5. TECHNICAL & ARTIFACT GENERATION:
-   - Whenever writing source code, use English variable names and syntax in fenced blocks (```html, ```css, ```javascript, ```python) with file names on line 1.
-   - Commands in ```bash.
-   - Diagrams in ```mermaid starting with `graph TD`.
-   - Images in `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_PROMPT>?width=1024&height=1024&nologo=true)`.
+   - Respond in polite Hindi or friendly Hinglish as spoken by the user.
+4. CODE & ARTIFACTS:
+   - Always put source code in English in fenced blocks (```html, ```css, ```javascript, ```python) with file name as line 1 comment.
+   - Put bash commands in ```bash.
+   - Put diagrams in ```mermaid starting with `graph TD`.
+   - Put images in `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_PROMPT>?width=1024&height=1024&nologo=true)`.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool = False):
-    normalized_text = text.replace('\r\n', '\n').replace('\r', '\n')
+    # 1. Strip out any thinking process or <think>...</think> tags automatically
+    clean_text = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"^Here's a thinking process:[\s\S]*?(?=\n\n|\Z)", "", clean_text, flags=re.IGNORECASE)
+    normalized_text = clean_text.replace('\r\n', '\n').replace('\r', '\n').strip()
+
     intent = "CHAT"
     mermaid_code = ""
     commands = []
@@ -358,7 +360,7 @@ async def handle_multi_document_prompt(
         composed_prompt = (
             f"User Prompt: {prompt}\n\n"
             f"Documents Context:\n{full_doc_context}\n\n"
-            f"Respond naturally, conversationally, and clearly in the exact same language used by the user."
+            f"Respond directly, naturally, and clearly in the exact same language used by the user without internal thought traces."
         )
 
         messages = [
