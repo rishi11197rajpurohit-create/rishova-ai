@@ -58,16 +58,18 @@ STRICT LANGUAGE & OUTPUT DIRECTIVES:
 2. Put terminal commands in ```bash code blocks.
 3. Put source code in dedicated blocks (```html, ```css, ```javascript, ```python) with file names as the very first line comment (e.g., // index.html, /* style.css */, # script.py).
 
+DIAGRAM DIRECTIVE:
+If the user asks for a diagram, flowchart, architecture, ERD, or schema:
+1. Write clean Mermaid code strictly inside a ```mermaid code block.
+2. The very first line inside the code block MUST be `graph TD` or `flowchart TD` or `erDiagram` or `sequenceDiagram`.
+3. Use simple alphanumeric labels inside square brackets or quotes (e.g., A["API Gateway"] --> B["Auth Service"]).
+4. Provide a clear architectural explanation below the diagram.
+
 LEARNING & TEACHING ENGINE DIRECTIVE:
-If the user asks to "teach", "learn", "explain from scratch/zero level", or "create a quiz/test":
-1. Break down the topic systematically: Concept Roadmap -> Zero-Level Intuition -> Deep Dive Example -> Quick Summary Notes.
-2. If interactive practice or quiz is requested, generate an interactive single-page HTML/CSS/JS Quiz App (index.html, style.css, script.js) with clickable options, instant score calculation, and answer explanations so the user can test their knowledge directly in the Preview Sandbox!
+If the user asks to teach, learn, or create a quiz, provide a concept roadmap and interactive single-page HTML/CSS/JS Quiz App.
 
 CAREER & RESUME STUDIO DIRECTIVE:
-If the user asks for a resume, CV, or portfolio, generate a clean ATS-friendly HTML (index.html) and CSS (style.css).
-
-DIAGRAM DIRECTIVE:
-If the user asks for a diagram/architecture, enclose standard Mermaid code starting with `graph TD` inside ```mermaid.
+If the user asks for a resume or CV, generate a clean ATS-friendly HTML and CSS.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str):
@@ -77,16 +79,19 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
     commands = []
     files_map = {}
 
-    mermaid_match = re.search(r"```mermaid\s*\n([\s\S]*?)```", normalized_text)
+    # 1. Ultra-Robust Mermaid Extraction
+    mermaid_match = re.search(r"```(?:mermaid)?\s*\n?((?:graph|flowchart|sequenceDiagram|erDiagram|classDiagram|stateDiagram)[\s\S]*?)```", normalized_text, re.IGNORECASE)
     if mermaid_match:
         mermaid_code = mermaid_match.group(1).strip()
         intent = "DIAGRAM"
-    elif "erDiagram" in normalized_text or "classDiagram" in normalized_text:
-        erd_match = re.search(r"```(?:text)?\s*\n((?:erDiagram|classDiagram)[\s\S]*?)```", normalized_text)
-        if erd_match:
-            mermaid_code = erd_match.group(1).strip()
+    else:
+        # Fallback: search anywhere for standard mermaid syntax
+        raw_diagram = re.search(r"((?:graph|flowchart)\s+(?:TD|TB|LR|RL)[\s\S]*?)(?:\n\n\n|\Z|```)", normalized_text, re.IGNORECASE)
+        if raw_diagram:
+            mermaid_code = raw_diagram.group(1).strip()
             intent = "DIAGRAM"
 
+    # 2. Bash commands extraction
     bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\s*\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
     for b in bash_blocks:
         for line in b.split("\n"):
@@ -95,6 +100,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
                 if not any(token in cleaned for token in ["const ", "let ", "var ", "import ", "require(", "function", "{", "}", "=>", "class "]):
                     commands.append(cleaned)
 
+    # 3. Code files extraction
     code_pattern = re.compile(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```")
     file_idx = 1
     
@@ -141,7 +147,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
             file_idx += 1
 
     prompt_lower = user_prompt.lower()
-    if any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
+    if mermaid_code or any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
     elif any(k in prompt_lower for k in ["resume", "cv", "portfolio", "cover letter"]):
         intent = "CAREER"
