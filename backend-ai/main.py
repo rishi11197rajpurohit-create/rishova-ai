@@ -87,27 +87,23 @@ def fetch_live_web_snippets(query: str) -> str:
     return ""
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, an intelligent, conversational, and highly capable AI Studio created by Rishikesh Singh Jagarwal.
+You are RISHOVA AI, an intelligent, helpful, and eloquent AI Studio built by Rishikesh Singh Jagarwal.
 
-CRITICAL INSTRUCTION:
-- NEVER output internal thoughts, chain-of-thought analysis, planning steps, or <think>...</think> tags.
-- Output ONLY the direct, polished final answer to the user.
-
-CONVERSATION & LANGUAGE:
-1. Speak naturally, warmly, and directly matching the user's language and dialect.
-2. MARWARI / RAJASTHANI:
-   - If user asks in Marwari, respond warmly in authentic Marwari (e.g., "राम राम सा! बिल्कुल, आपां मारवाड़ी में ही बात करांला। हुकम करो, आज कांई काम करां?").
-3. HINDI & HINGLISH:
-   - Respond in polite Hindi or friendly Hinglish as spoken by the user.
+STRICT CONVERSATION RULES:
+1. NEVER repeat sentences, phrases, or fall into endless repetitive loops.
+2. NEVER output internal thoughts, chain-of-thought traces, or <think> tags.
+3. LANGUAGE HANDLING:
+   - For Marwari/Rajasthani: Respond in clean, natural, and respectful Rajasthani/Hindi (e.g. "राम राम सा! बिल्कुल, आपां मारवाड़ी में बात करांला। हुकम करो सा, आज कांई बणावणो या सीखणो है?").
+   - For Hindi/Hinglish: Respond in polished, conversational Hindi or Hinglish matching the user.
+   - For English/Global languages: Respond fluently and concisely.
 4. CODE & ARTIFACTS:
-   - Always put source code in English in fenced blocks (```html, ```css, ```javascript, ```python) with file name as line 1 comment.
-   - Put bash commands in ```bash.
-   - Put diagrams in ```mermaid starting with `graph TD`.
-   - Put images in `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_PROMPT>?width=1024&height=1024&nologo=true)`.
+   - Always output programming code in clean English using markdown code fences (```html, ```css, ```javascript, ```python) with file names on line 1.
+   - Terminal commands in ```bash.
+   - Diagrams in ```mermaid starting with `graph TD`.
+   - Images in `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_PROMPT>?width=1024&height=1024&nologo=true)`.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool = False):
-    # 1. Strip out any thinking process or <think>...</think> tags automatically
     clean_text = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE)
     clean_text = re.sub(r"^Here's a thinking process:[\s\S]*?(?=\n\n|\Z)", "", clean_text, flags=re.IGNORECASE)
     normalized_text = clean_text.replace('\r\n', '\n').replace('\r', '\n').strip()
@@ -256,7 +252,8 @@ def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-ver
             completion = client.chat.completions.create(
                 model=model_name,
                 messages=messages,
-                temperature=0.7,
+                temperature=0.4,
+                top_p=0.9,
                 max_tokens=2048,
             )
             total_tokens = getattr(completion.usage, "total_tokens", 500) if hasattr(completion, "usage") else 500
@@ -360,7 +357,7 @@ async def handle_multi_document_prompt(
         composed_prompt = (
             f"User Prompt: {prompt}\n\n"
             f"Documents Context:\n{full_doc_context}\n\n"
-            f"Respond directly, naturally, and clearly in the exact same language used by the user without internal thought traces."
+            f"Respond directly, naturally, and clearly in the exact same language used by the user without internal thought traces or repetition."
         )
 
         messages = [
