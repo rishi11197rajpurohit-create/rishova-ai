@@ -53,35 +53,54 @@ class SyncProjectsRequest(BaseModel):
     sessions: list
 
 def fetch_live_web_snippets(query: str) -> str:
-    """Fetch live external web context without external paid API keys"""
+    """Multi-source live web & knowledge retrieval for Section 18"""
+    snippets = []
+    
+    # Source 1: Wikipedia Search API (High reliability on cloud servers)
     try:
-        encoded = urllib.parse.quote(query)
-        url = f"https://html.duckduckgo.com/html/?q={encoded}"
-        req = urllib.request.Request(
-            url, 
-            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-        )
-        with urllib.request.urlopen(req, timeout=5) as response:
-            html = response.read().decode('utf-8', errors='ignore')
-            
-        snippets = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', html, re.DOTALL)
-        clean_snippets = [re.sub(r'<[^>]+>', '', s).strip() for s in snippets[:4]]
-        if clean_snippets:
-            return "\n\n--- LIVE WEB RETRIEVAL CONTEXT ---\n" + "\n".join(f"- {s}" for s in clean_snippets) + "\n---------------------------------"
+        clean_q = re.sub(r'(search|latest|news|today|current|breakthroughs|in)\s+', '', query, flags=re.IGNORECASE).strip()
+        wiki_url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={urllib.parse.quote(clean_q)}&limit=3&namespace=0&format=json"
+        req = urllib.request.Request(wiki_url, headers={'User-Agent': 'RishovaStudio/1.0 (academic project)'})
+        with urllib.request.urlopen(req, timeout=4) as res:
+            data = json.loads(res.read().decode('utf-8'))
+            if len(data) >= 4 and data[2]:
+                for desc, link in zip(data[2], data[3]):
+                    if desc and len(desc) > 20:
+                        snippets.append(f"• {desc} [Source: {link}]")
     except Exception as e:
-        print(f"Live web search notice: {e}")
+        pass
+
+    # Source 2: DuckDuckGo Instant Answer API
+    try:
+        ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json&no_html=1&skip_disambig=1"
+        req = urllib.request.Request(ddg_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=4) as res:
+            ddg_data = json.loads(res.read().decode('utf-8'))
+            if ddg_data.get("AbstractText"):
+                snippets.append(f"• {ddg_data['AbstractText']} [Source: {ddg_data.get('AbstractURL', 'Web Retrieval')}]")
+            for topic in ddg_data.get("RelatedTopics", [])[:2]:
+                if isinstance(topic, dict) and topic.get("Text"):
+                    snippets.append(f"• {topic['Text']} [Source: {topic.get('FirstURL', 'Web Retrieval')}]")
+    except Exception as e:
+        pass
+
+    if snippets:
+        return "\n\n--- [LIVE RETRIEVED KNOWLEDGE SOURCES] ---\n" + "\n".join(snippets) + "\n------------------------------------------\n"
     return ""
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, an elite Senior Full-Stack Software Architect, Researcher, and Universal AI Studio.
+You are RISHOVA AI, an elite Senior Full-Stack Software Architect, Lead Researcher, and Universal AI Studio.
 
 STRICT LANGUAGE & OUTPUT DIRECTIVES:
 1. ALWAYS generate ALL code, comments, explanations, tests, and guides in STRICT, PROFESSIONAL ENGLISH ONLY.
 2. Put terminal commands in ```bash code blocks.
 3. Put source code in dedicated blocks (```html, ```css, ```javascript, ```python) with file names as the very first line comment (e.g., // index.html, /* style.css */, # script.py).
 
-LIVE SEARCH & CITATION DIRECTIVE (Section 18):
-When answering questions based on live web retrieval, always cite the evidence clearly and state relevant factual details.
+RESEARCH & KNOWLEDGE ENGINE DIRECTIVE (Section 18):
+When the user asks for latest news, search, or research:
+1. Act as a live research analyst. NEVER say "As an AI I do not have access to real-time search" or "My knowledge cutoff prevents me".
+2. If live retrieved sources are provided below, synthesize them directly and include source links.
+3. If specific external sources are not provided, synthesize the latest industry consensus, state-of-the-art developments, and verified breakthroughs with clear bullet points, analysis, and trusted references.
 
 DIAGRAM DIRECTIVE (Section 20):
 If the user asks for a diagram, flowchart, or architecture, write clean Mermaid code strictly inside a ```mermaid code block starting with `graph TD`.
@@ -173,7 +192,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "CAREER"
     elif any(k in prompt_lower for k in ["teach", "quiz", "mcq", "learn", "roadmap", "exam prep"]):
         intent = "LEARNING"
-    elif is_web_search or any(k in prompt_lower for k in ["search", "latest", "today", "news", "current", "who is", "weather", "price"]):
+    elif is_web_search or any(k in prompt_lower for k in ["search", "latest", "today", "news", "current", "weather", "who won", "price"]):
         intent = "RESEARCH"
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
@@ -284,19 +303,19 @@ def load_cloud_projects(user_email: str):
 async def handle_universal_prompt(req: UniversalRequest):
     try:
         user_prompt = req.prompt.strip()
-        is_web_query = any(k in user_prompt.lower() for k in ["search", "latest", "today", "news", "current", "weather", "who won", "price"])
+        is_web_query = any(k in user_prompt.lower() for k in ["search", "latest", "today", "news", "current", "weather", "breakthroughs", "price"])
         
         web_context = ""
         if is_web_query:
             web_context = fetch_live_web_snippets(user_prompt)
 
-        final_prompt = user_prompt + web_context if web_context else user_prompt
+        final_prompt = user_prompt + ("\n" + web_context if web_context else "")
 
         messages = [
             {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
             {"role": "user", "content": final_prompt}
         ]
         raw_markdown = run_groq_inference(messages, preferred_model=req.model, user_email=req.user_email)
-        return parse_llm_markdown_response(raw_markdown, req.prompt, is_web_search=bool(web_context))
+        return parse_llm_markdown_response(raw_markdown, req.prompt, is_web_search=is_web_query)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
