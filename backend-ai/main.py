@@ -181,83 +181,46 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
     }
 
 def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-versatile", user_email: str = "guest", db: Session = None):
-    try:
-        completion = client.chat.completions.create(
-            model=preferred_model,
-            messages=messages,
-            temperature=0.2
-        )
-        total_tokens = getattr(completion.usage, "total_tokens", 500) if hasattr(completion, "usage") else 500
-        
-        # Track usage in database
-        if db:
-            usage = db.query(TokenUsageModel).filter(TokenUsageModel.user_email == user_email).first()
-            if not usage:
-                usage = TokenUsageModel(user_email=user_email, tokens_used=total_tokens, requests_count=1)
-                db.add(usage)
-            else:
-                usage.tokens_used += total_tokens
-                usage.requests_count += 1
-            db.commit()
+    # Valid verified models on Groq
+    candidate_models = [
+        preferred_model,
+        "llama-3.3-70b-versatile",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768"
+    ]
+    
+    # Remove duplicates preserving order
+    unique_candidates = list(dict.fromkeys(candidate_models))
+    
+    last_error = None
+    for model_name in unique_candidates:
+        try:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=0.2
+            )
+            total_tokens = getattr(completion.usage, "total_tokens", 500) if hasattr(completion, "usage") else 500
+            
+            # Track usage in database
+            if db:
+                try:
+                    usage = db.query(TokenUsageModel).filter(TokenUsageModel.user_email == user_email).first()
+                    if not usage:
+                        usage = TokenUsageModel(user_email=user_email, tokens_used=total_tokens, requests_count=1)
+                        db.add(usage)
+                    else:
+                        usage.tokens_used += total_tokens
+                        usage.requests_count += 1
+                    db.commit()
+                except Exception as db_err:
+                    print(f"DB tracking notice: {db_err}")
 
-        return completion.choices[0].message.content
-    except Exception as e:
-        # Fallback to secondary model if primary fails
-        fallback_model = "llama-3.1-8b-instant" if preferred_model != "llama-3.1-8b-instant" else "llama-3.3-70b-versatile"
-        completion = client.chat.completions.create(
-            model=fallback_model,
-            messages=messages,
-            temperature=0.2
-        )
-        return completion.choices[0].message.content
+            return completion.choices[0].message.content
+        except Exception as err:
+            last_error = err
+            print(f"Model {model_name} failed: {err}. Trying next candidate...")
+            continue
 
-@app.get("/")
-def read_root():
-    return {"status": "RISHOVA AI Universal Studio is Live"}
-
-@app.get("/api/usage/{user_email}")
-def get_user_usage(user_email: str, db: Session = Depends(get_db)):
-    usage = db.query(TokenUsageModel).filter(TokenUsageModel.user_email == user_email).first()
-    if not usage:
-        return {"user_email": user_email, "tokens_used": 0, "requests_count": 0, "daily_limit": 50000}
-    return {
-        "user_email": user_email,
-        "tokens_used": usage.tokens_used,
-        "requests_count": usage.requests_count,
-        "daily_limit": 50000
-    }
-
-@app.post("/api/cloud/sync")
-def sync_cloud_projects(req: SyncProjectsRequest, db: Session = Depends(get_db)):
-    for sess in req.sessions:
-        sid = sess.get("id")
-        title = sess.get("title", "Project")
-        data_str = json.dumps(sess)
-        
-        existing = db.query(ProjectModel).filter(ProjectModel.id == sid).first()
-        if existing:
-            existing.title = title
-            existing.data_json = data_str
-            existing.updated_at = datetime.utcnow()
-        else:
-            db.add(ProjectModel(id=sid, user_email=req.user_email, title=title, data_json=data_str))
-    db.commit()
-    return {"status": "success", "synced_count": len(req.sessions)}
-
-@app.get("/api/cloud/load/{user_email}")
-def load_cloud_projects(user_email: str, db: Session = Depends(get_db)):
-    records = db.query(ProjectModel).filter(ProjectModel.user_email == user_email).order_by(ProjectModel.updated_at.desc()).all()
-    sessions = [json.loads(r.data_json) for r in records if r.data_json]
-    return {"status": "success", "sessions": sessions}
-
-@app.post("/api/ai/universal")
-async def handle_universal_prompt(req: UniversalRequest, db: Session = Depends(get_db)):
-    try:
-        messages = [
-            {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
-            {"role": "user", "content": req.prompt}
-        ]
-        raw_markdown = run_groq_inference(messages, preferred_model=req.model, user_email=req.user_email, db=db)
-        return parse_llm_markdown_response(raw_markdown, req.prompt)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=500, detail=f"All AI engine models failed. Last error: {str(last_error)}")

@@ -778,8 +778,8 @@ export default function App() {
               onChange={(e) => setSelectedModel(e.target.value)}
               className="model-select-dropdown"
             >
-              <option value="llama-3.3-70b-versatile">⚡ Llama 3.3 70B (Complex Architect)</option>
-              <option value="llama-3.1-8b-instant">🚀 Llama 3.1 8B (Super Fast Chat)</option>
+              <option value="llama3-8b-8192">🚀 Llama 3 8B (Super Fast Chat)</option>
+              
             </select>
           </div>
         </div>
