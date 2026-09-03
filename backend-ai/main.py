@@ -53,10 +53,7 @@ class SyncProjectsRequest(BaseModel):
     sessions: list
 
 def fetch_live_web_snippets(query: str) -> str:
-    """Multi-source live web & knowledge retrieval for Section 18"""
     snippets = []
-    
-    # Source 1: Wikipedia Search API (High reliability on cloud servers)
     try:
         clean_q = re.sub(r'(search|latest|news|today|current|breakthroughs|in)\s+', '', query, flags=re.IGNORECASE).strip()
         wiki_url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={urllib.parse.quote(clean_q)}&limit=3&namespace=0&format=json"
@@ -70,7 +67,6 @@ def fetch_live_web_snippets(query: str) -> str:
     except Exception as e:
         pass
 
-    # Source 2: DuckDuckGo Instant Answer API
     try:
         ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json&no_html=1&skip_disambig=1"
         req = urllib.request.Request(ddg_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -78,9 +74,6 @@ def fetch_live_web_snippets(query: str) -> str:
             ddg_data = json.loads(res.read().decode('utf-8'))
             if ddg_data.get("AbstractText"):
                 snippets.append(f"• {ddg_data['AbstractText']} [Source: {ddg_data.get('AbstractURL', 'Web Retrieval')}]")
-            for topic in ddg_data.get("RelatedTopics", [])[:2]:
-                if isinstance(topic, dict) and topic.get("Text"):
-                    snippets.append(f"• {topic['Text']} [Source: {topic.get('FirstURL', 'Web Retrieval')}]")
     except Exception as e:
         pass
 
@@ -89,27 +82,29 @@ def fetch_live_web_snippets(query: str) -> str:
     return ""
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, an elite Senior Full-Stack Software Architect, Lead Researcher, and Universal AI Studio.
+You are RISHOVA AI, an elite Senior Full-Stack Software Architect, Lead Data Scientist, and Universal AI Studio.
 
 STRICT LANGUAGE & OUTPUT DIRECTIVES:
 1. ALWAYS generate ALL code, comments, explanations, tests, and guides in STRICT, PROFESSIONAL ENGLISH ONLY.
 2. Put terminal commands in ```bash code blocks.
 3. Put source code in dedicated blocks (```html, ```css, ```javascript, ```python) with file names as the very first line comment (e.g., // index.html, /* style.css */, # script.py).
 
-RESEARCH & KNOWLEDGE ENGINE DIRECTIVE (Section 18):
-When the user asks for latest news, search, or research:
-1. Act as a live research analyst. NEVER say "As an AI I do not have access to real-time search" or "My knowledge cutoff prevents me".
-2. If live retrieved sources are provided below, synthesize them directly and include source links.
-3. If specific external sources are not provided, synthesize the latest industry consensus, state-of-the-art developments, and verified breakthroughs with clear bullet points, analysis, and trusted references.
+DATA INTELLIGENCE & CHART DIRECTIVE (Section 16 & 19):
+If the user asks for charts, data analysis, visualization, or graphs:
+1. Provide mathematical/statistical summary and insights in chat.
+2. Generate an interactive HTML/CSS/JS dashboard using Chart.js CDN (`[https://cdn.jsdelivr.net/npm/chart.js](https://cdn.jsdelivr.net/npm/chart.js)`) so the user can see beautiful, responsive graphs (bar, line, or pie) directly in the Live Preview tab!
+
+RESEARCH & KNOWLEDGE DIRECTIVE (Section 18):
+Synthesize verified industry breakthroughs, cite sources, and never produce cutoff disclaimers.
 
 DIAGRAM DIRECTIVE (Section 20):
-If the user asks for a diagram, flowchart, or architecture, write clean Mermaid code strictly inside a ```mermaid code block starting with `graph TD`.
+Write clean Mermaid code strictly inside a ```mermaid code block starting with `graph TD`.
 
 LEARNING ENGINE DIRECTIVE (Section 21):
-If the user asks to teach, learn, or create a quiz, provide a concept roadmap and interactive single-page HTML/CSS/JS Quiz App.
+Provide a concept roadmap and interactive single-page HTML/CSS/JS Quiz App.
 
 CAREER STUDIO DIRECTIVE (Section 23):
-If the user asks for a resume or CV, generate clean ATS-friendly HTML and CSS.
+Generate clean ATS-friendly HTML and CSS.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool = False):
@@ -119,7 +114,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     commands = []
     files_map = {}
 
-    # Mermaid Extraction
     mermaid_match = re.search(r"```(?:mermaid)?\s*\n?((?:graph|flowchart|sequenceDiagram|erDiagram|classDiagram|stateDiagram)[\s\S]*?)```", normalized_text, re.IGNORECASE)
     if mermaid_match:
         mermaid_code = mermaid_match.group(1).strip()
@@ -130,7 +124,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
             mermaid_code = raw_diagram.group(1).strip()
             intent = "DIAGRAM"
 
-    # Bash commands extraction
     bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\s*\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
     for b in bash_blocks:
         for line in b.split("\n"):
@@ -139,7 +132,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
                 if not any(token in cleaned for token in ["const ", "let ", "var ", "import ", "require(", "function", "{", "}", "=>", "class "]):
                     commands.append(cleaned)
 
-    # Code files extraction
     code_pattern = re.compile(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```")
     file_idx = 1
     
@@ -188,11 +180,13 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     prompt_lower = user_prompt.lower()
     if mermaid_code or any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
+    elif any(k in prompt_lower for k in ["chart", "data analysis", "visualize", "plot", "graph", "analytics"]):
+        intent = "DATA"
     elif any(k in prompt_lower for k in ["resume", "cv", "portfolio", "cover letter"]):
         intent = "CAREER"
     elif any(k in prompt_lower for k in ["teach", "quiz", "mcq", "learn", "roadmap", "exam prep"]):
         intent = "LEARNING"
-    elif is_web_search or any(k in prompt_lower for k in ["search", "latest", "today", "news", "current", "weather", "who won", "price"]):
+    elif is_web_search or any(k in prompt_lower for k in ["search", "latest", "today", "news", "current", "weather", "breakthroughs", "price"]):
         intent = "RESEARCH"
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
