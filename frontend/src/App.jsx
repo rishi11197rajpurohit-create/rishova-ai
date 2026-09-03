@@ -115,6 +115,17 @@ export default function App() {
   const [usageData, setUsageData] = useState({ tokens_used: 0, daily_limit: 50000 });
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
+  // Settings Modal State (Section 26)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [userSettings, setUserSettings] = useState(() => {
+    const saved = localStorage.getItem("rishova_settings");
+    return saved ? JSON.parse(saved) : {
+      responseStyle: "detailed",
+      language: "en",
+      fontSize: "14",
+    };
+  });
+
   const [sessions, setSessions] = useState(() => {
     const saved = localStorage.getItem("rishova_sessions");
     return saved ? JSON.parse(saved) : [{
@@ -122,7 +133,7 @@ export default function App() {
       title: "New Workspace Project",
       messages: [{
         role: "assistant",
-        content: "Welcome to **RISHOVA AI Studio**. Ask me to architect, code, debug, or design any application.",
+        content: "Welcome to **RISHOVA AI Studio**. Ask me to architect, code, debug, learn, or analyze data.",
         intent: "CHAT"
       }],
       workspaceFiles: {},
@@ -165,6 +176,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("rishova_sessions", JSON.stringify(sessions));
   }, [sessions]);
+
+  useEffect(() => {
+    localStorage.setItem("rishova_settings", JSON.stringify(userSettings));
+  }, [userSettings]);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -239,11 +254,10 @@ export default function App() {
             diagramRef.current.innerHTML = svg;
           }
         } catch (renderError) {
-          console.error("Mermaid Render Catch:", renderError);
           if (isMounted && diagramRef.current) {
             diagramRef.current.innerHTML = `
               <div style="color: #f87171; padding: 16px; background: #1f1215; border: 1px solid #7f1d1d; border-radius: 8px; font-family: monospace; font-size: 0.85rem;">
-                ⚠️ Diagram Notice: Mermaid syntax parsing issue.
+                ⚠️ Diagram Notice: Rendering issue with Mermaid syntax.
               </div>
             `;
           }
@@ -273,16 +287,14 @@ export default function App() {
     }
 
     if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+      if (recognitionRef.current) recognitionRef.current.stop();
       setIsListening(false);
       return;
     }
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
-    recognition.lang = "en-US";
+    recognition.lang = userSettings.language === "hi" ? "hi-IN" : "en-US";
     recognition.interimResults = false;
     recognition.continuous = false;
 
@@ -300,12 +312,8 @@ export default function App() {
         setInputPrompt(initialText + finalTranscript.trim());
       }
     };
-    recognition.onerror = (event) => {
-      console.error("Speech Recognition Error:", event.error);
-      setIsListening(false);
-    };
+    recognition.onerror = () => setIsListening(false);
     recognition.onend = () => setIsListening(false);
-
     recognition.start();
   };
 
@@ -344,7 +352,7 @@ export default function App() {
       title: "New Project",
       messages: [{
         role: "assistant",
-        content: "New workspace ready. What software or system architecture would you like to build?",
+        content: "New workspace ready. What software, diagram, or analytics would you like to build?",
         intent: "CHAT"
       }],
       workspaceFiles: {},
@@ -414,7 +422,11 @@ export default function App() {
         res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/universal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: userText, model: selectedModel, user_email: userName || "guest" }),
+          body: JSON.stringify({ 
+            prompt: userText, 
+            model: selectedModel, 
+            user_email: userName || "guest"
+          }),
         });
       }
 
@@ -444,7 +456,11 @@ export default function App() {
       } else if (Object.keys(returnedFiles).length > 0) {
         newWorkspaceFiles = returnedFiles;
         newSelectedFile = Object.keys(returnedFiles)[0];
-        setActiveTab("code");
+        if (data.intent === "CAREER" || data.intent === "LEARNING" || data.intent === "DATA") {
+          setActiveTab("preview");
+        } else {
+          setActiveTab("code");
+        }
       } else if (responseData.code_snippet) {
         newWorkspaceFiles = {
           "app.js": { language: responseData.language || "javascript", code: responseData.code_snippet }
@@ -653,7 +669,7 @@ export default function App() {
         htmlContent = `
           <div style="font-family: sans-serif; padding: 50px 20px; text-align: center; color: #a1a1aa; background: #0b0b0e; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;">
             <h2 style="color: #f4f4f5; margin-bottom: 10px;">⚡ Live Preview Sandbox</h2>
-            <p style="font-size: 0.95rem;">Ask Rishova to generate an HTML/CSS landing page or web component to see it live here.</p>
+            <p style="font-size: 0.95rem;">Ask Rishova to generate an HTML/CSS landing page, resume, quiz, or data dashboard to view live here.</p>
           </div>
         `;
       }
@@ -804,10 +820,84 @@ export default function App() {
             {isCloudSyncing ? "⏳ Syncing..." : "☁️ Cloud Save"}
           </button>
 
+          <button
+            className="cloud-sync-status-btn"
+            onClick={() => setIsSettingsOpen(true)}
+            title="Studio Settings & Preferences (Section 26)"
+            style={{ background: "#27272a" }}
+          >
+            ⚙️ Settings
+          </button>
+
           <span className="user-name-text">👤 {userName}</span>
           <button className="logout-btn" onClick={() => { localStorage.clear(); setToken(null); }}>Logout</button>
         </div>
       </header>
+
+      {/* Settings Modal - Section 26 */}
+      {isSettingsOpen && (
+        <div className="settings-modal-overlay" onClick={() => setIsSettingsOpen(false)}>
+          <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-modal-header">
+              <h3>⚙️ Studio Settings & Preferences</h3>
+              <button className="settings-close-btn" onClick={() => setIsSettingsOpen(false)}>✕</button>
+            </div>
+
+            <div className="settings-group">
+              <label>AI Response Style (Section 26):</label>
+              <select 
+                className="settings-input-control"
+                value={userSettings.responseStyle}
+                onChange={(e) => setUserSettings({ ...userSettings, responseStyle: e.target.value })}
+              >
+                <option value="detailed">Detailed & Step-by-Step (Academic)</option>
+                <option value="concise">Concise & Direct (Fast)</option>
+                <option value="code_only">Code-Centric (Developer Mode)</option>
+              </select>
+            </div>
+
+            <div className="settings-group">
+              <label>Voice Recognition Language:</label>
+              <select 
+                className="settings-input-control"
+                value={userSettings.language}
+                onChange={(e) => setUserSettings({ ...userSettings, language: e.target.value })}
+              >
+                <option value="en">English (US/UK)</option>
+                <option value="hi">Hindi (India)</option>
+              </select>
+            </div>
+
+            <div className="settings-group">
+              <label>Editor Font Size:</label>
+              <select 
+                className="settings-input-control"
+                value={userSettings.fontSize}
+                onChange={(e) => setUserSettings({ ...userSettings, fontSize: e.target.value })}
+              >
+                <option value="12">12px (Compact)</option>
+                <option value="14">14px (Standard)</option>
+                <option value="16">16px (Large)</option>
+              </select>
+            </div>
+
+            <div className="settings-danger-zone">
+              <label style={{ color: "#ef4444", fontWeight: 600, display: "block", marginBottom: "8px" }}>Storage & Cache Management (Section 26):</label>
+              <button 
+                className="clear-storage-btn"
+                onClick={() => {
+                  if (window.confirm("Are you sure you want to clear all local workspace sessions?")) {
+                    localStorage.removeItem("rishova_sessions");
+                    window.location.reload();
+                  }
+                }}
+              >
+                🗑️ Clear Local Sessions & Cache
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="studio-body-layout">
         {sidebarOpen && (
@@ -948,7 +1038,7 @@ export default function App() {
                     ? "Listening to voice... Speak now..."
                     : selectedFile
                     ? "Ask a question about this file..."
-                    : "Build an API, full software, diagrams, or ask anything..."
+                    : "Build an API, full software, diagrams, charts, or search anything..."
                 }
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
@@ -1089,7 +1179,7 @@ export default function App() {
                           value={currentFile ? currentFile.code : ""}
                           onChange={handleEditorCodeChange}
                           options={{
-                            fontSize: 14,
+                            fontSize: parseInt(userSettings.fontSize || "14"),
                             fontFamily: "'Fira Code', 'Consolas', monospace",
                             minimap: { enabled: true },
                             scrollBeyondLastLine: false,

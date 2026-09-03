@@ -1352,4 +1352,104 @@ body {
 
 .cloud-sync-status-btn:hover {
   background: rgba(16, 185, 129, 0.1);
+}/* Settings Modal Styles - Section 26 */
+.settings-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.settings-modal-box {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 520px;
+  padding: 24px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  color: #f4f4f5;
+}
+
+.settings-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #27272a;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+
+.settings-modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.settings-close-btn {
+  background: none;
+  border: none;
+  color: #a1a1aa;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.settings-close-btn:hover {
+  color: #fff;
+}
+
+.settings-group {
+  margin-bottom: 18px;
+}
+
+.settings-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #a1a1aa;
+  margin-bottom: 6px;
+}
+
+.settings-input-control {
+  width: 100%;
+  background: #09090b;
+  border: 1px solid #27272a;
+  color: #f4f4f5;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.settings-input-control:focus {
+  border-color: #3b82f6;
+}
+
+.settings-danger-zone {
+  border-top: 1px solid #27272a;
+  padding-top: 16px;
+  margin-top: 20px;
+}
+
+.clear-storage-btn {
+  background: #7f1d1d;
+  color: #fecaca;
+  border: 1px solid #991b1b;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.clear-storage-btn:hover {
+  background: #991b1b;
+  color: #fff;
 }
