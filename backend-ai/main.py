@@ -23,7 +23,6 @@ app.add_middleware(
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# In-Memory / File-based persistence for usage & projects
 DB_FILE = "rishova_store.json"
 
 def load_store():
@@ -166,17 +165,14 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
     }
 
 def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-versatile", user_email: str = "guest"):
+    # Sirf Groq ke active production models
     candidate_models = [
-        preferred_model,
         "llama-3.3-70b-versatile",
-        "llama3-70b-8192",
-        "llama3-8b-8192",
-        "mixtral-8x7b-32768"
+        "gemma2-9b-it"
     ]
-    unique_candidates = list(dict.fromkeys(candidate_models))
     
     last_error = None
-    for model_name in unique_candidates:
+    for model_name in candidate_models:
         try:
             completion = client.chat.completions.create(
                 model=model_name,
@@ -185,7 +181,6 @@ def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-ver
             )
             total_tokens = getattr(completion.usage, "total_tokens", 500) if hasattr(completion, "usage") else 500
             
-            # Record Token Usage
             store = load_store()
             user_usage = store.get("usage", {}).get(user_email, {"tokens_used": 0, "requests_count": 0})
             user_usage["tokens_used"] += total_tokens

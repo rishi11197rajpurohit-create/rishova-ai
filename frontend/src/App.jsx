@@ -778,13 +778,12 @@ export default function App() {
               onChange={(e) => setSelectedModel(e.target.value)}
               className="model-select-dropdown"
             >
-              <option value="llama3-8b-8192">🚀 Llama 3 8B (Super Fast Chat)</option>
-              
+              <option value="llama-3.3-70b-versatile">⚡ Llama 3.3 70B (Complex Architect)</option>
+              <option value="gemma2-9b-it">🚀 Gemma 2 9B (Super Fast Chat)</option>
             </select>
           </div>
         </div>
 
-        {/* User & Cloud Section with Token Meter */}
         <div className="user-section" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div className="usage-meter-pill" title="Daily API Quota Usage">
             <span>⚡ {usageData.tokens_used || 0} / {usageData.daily_limit || 50000} Tokens</span>
