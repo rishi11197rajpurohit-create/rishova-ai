@@ -164,12 +164,34 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
         }
     }
 
+def get_active_groq_models():
+    """Dynamically fetch currently active models directly from Groq API"""
+    try:
+        model_list = client.models.list()
+        active_ids = [m.id for m in model_list.data if getattr(m, 'active', True)]
+        # Priority sort: llama-3.3 first, then any llama-3
+        sorted_models = []
+        for mid in active_ids:
+            if "llama-3.3-70b" in mid:
+                sorted_models.insert(0, mid)
+            elif "llama" in mid.lower():
+                sorted_models.append(mid)
+        for mid in active_ids:
+            if mid not in sorted_models:
+                sorted_models.append(mid)
+        return sorted_models
+    except Exception as e:
+        print(f"Failed to fetch dynamic models: {e}")
+        return ["llama-3.3-70b-versatile"]
+
 def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-versatile", user_email: str = "guest"):
-    # Sirf Groq ke active production models
-    candidate_models = [
-        "llama-3.3-70b-versatile",
-        "gemma2-9b-it"
-    ]
+    available_models = get_active_groq_models()
+    
+    # Put preferred model at the top if active
+    if preferred_model in available_models:
+        candidate_models = [preferred_model] + [m for m in available_models if m != preferred_model]
+    else:
+        candidate_models = available_models
     
     last_error = None
     for model_name in candidate_models:
@@ -193,6 +215,7 @@ def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-ver
             return completion.choices[0].message.content
         except Exception as err:
             last_error = err
+            print(f"Model {model_name} failed: {err}. Trying next active model...")
             continue
 
     raise HTTPException(status_code=500, detail=f"Inference failed: {str(last_error)}")
