@@ -115,7 +115,6 @@ export default function App() {
   const [usageData, setUsageData] = useState({ tokens_used: 0, daily_limit: 50000 });
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
-  // Settings Modal State (Section 26)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [userSettings, setUserSettings] = useState(() => {
     const saved = localStorage.getItem("rishova_settings");
@@ -133,7 +132,7 @@ export default function App() {
       title: "New Workspace Project",
       messages: [{
         role: "assistant",
-        content: "Welcome to **RISHOVA AI Studio**. Ask me to architect, code, debug, learn, or analyze data.",
+        content: "Welcome to **RISHOVA AI Studio**. Ask me to architect, code, debug, learn, generate images, or analyze data.",
         intent: "CHAT"
       }],
       workspaceFiles: {},
@@ -149,7 +148,7 @@ export default function App() {
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
 
   const [inputPrompt, setInputPrompt] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState("code");
@@ -381,13 +380,14 @@ export default function App() {
     }
   };
 
-  const triggerPromptExecution = async (textToSend, attachedFile = null) => {
-    if (!textToSend && !attachedFile) return;
+  const triggerPromptExecution = async (textToSend, attachedFilesList = []) => {
+    if (!textToSend && (!attachedFilesList || attachedFilesList.length === 0)) return;
 
-    const userText = textToSend || (attachedFile ? `Analyze file: ${attachedFile.name}` : "");
+    const fileNames = attachedFilesList.map((f) => f.name).join(", ");
+    const userText = textToSend || (attachedFilesList.length > 0 ? `Analyze uploaded files: ${fileNames}` : "");
     const updatedMessages = [
       ...activeSession.messages,
-      { role: "user", content: userText, attachedFile: attachedFile ? attachedFile.name : null }
+      { role: "user", content: userText, attachedFile: fileNames || null }
     ];
 
     let sessionTitle = activeSession.title;
@@ -407,14 +407,16 @@ export default function App() {
 
     try {
       let res;
-      if (attachedFile) {
+      if (attachedFilesList && attachedFilesList.length > 0) {
         const formData = new FormData();
-        formData.append("file", attachedFile);
+        attachedFilesList.forEach((file) => {
+          formData.append("files", file);
+        });
         formData.append("prompt", userText);
         formData.append("model", selectedModel);
         formData.append("user_email", userName || "guest");
 
-        res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/document", {
+        res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/documents-multi", {
           method: "POST",
           body: formData,
         });
@@ -505,16 +507,16 @@ export default function App() {
 
   const handleSendPrompt = async (e) => {
     e.preventDefault();
-    if ((!inputPrompt.trim() && !selectedFile) || loading) return;
+    if ((!inputPrompt.trim() && selectedFiles.length === 0) || loading) return;
 
     const userText = inputPrompt;
-    const fileToUpload = selectedFile;
+    const filesToUpload = [...selectedFiles];
 
     setInputPrompt("");
-    setSelectedFile(null);
+    setSelectedFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
 
-    await triggerPromptExecution(userText, fileToUpload);
+    await triggerPromptExecution(userText, filesToUpload);
   };
 
   const handleAIAction = (actionType) => {
@@ -533,7 +535,7 @@ export default function App() {
       actionPrompt = `Refactor and optimize this file '${activeSession.selectedFileName}' for performance, modularity, and cleanliness:\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
     }
 
-    triggerPromptExecution(actionPrompt, null);
+    triggerPromptExecution(actionPrompt, []);
   };
 
   const handleEditorCodeChange = (newCode) => {
@@ -990,14 +992,14 @@ export default function App() {
                   )}
                 </div>
               ))}
-              {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating architecture and code...</div>}
+              {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is processing...</div>}
               <div ref={chatBottomRef} />
             </div>
 
-            {selectedFile && (
+            {selectedFiles.length > 0 && (
               <div className="selected-file-preview">
-                <span>📎 {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)</span>
-                <button onClick={() => setSelectedFile(null)}>✖</button>
+                <span>📎 {selectedFiles.length} file(s) attached: {selectedFiles.map((f) => f.name).join(", ")}</span>
+                <button onClick={() => setSelectedFiles([])}>✖</button>
               </div>
             )}
 
@@ -1005,11 +1007,12 @@ export default function App() {
               <input
                 type="file"
                 ref={fileInputRef}
+                multiple
                 style={{ display: "none" }}
                 accept=".pdf,.txt,.md,.js,.py,.json,.csv,.sql"
                 onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setSelectedFile(e.target.files[0]);
+                  if (e.target.files) {
+                    setSelectedFiles(Array.from(e.target.files));
                   }
                 }}
               />
@@ -1017,7 +1020,7 @@ export default function App() {
                 type="button"
                 className="attach-btn"
                 onClick={() => fileInputRef.current?.click()}
-                title="Upload Document / File"
+                title="Upload One or Multiple Documents"
               >
                 📎
               </button>
@@ -1036,15 +1039,15 @@ export default function App() {
                 placeholder={
                   isListening
                     ? "Listening to voice... Speak now..."
-                    : selectedFile
-                    ? "Ask a question about this file..."
-                    : "Build an API, full software, diagrams, charts, or search anything..."
+                    : selectedFiles.length > 0
+                    ? `Ask anything about these ${selectedFiles.length} files (e.g. compare, summarize)...`
+                    : "Build an API, full software, diagrams, charts, images, or search anything..."
                 }
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
                 disabled={loading}
               />
-              <button type="submit" disabled={loading || (!inputPrompt.trim() && !selectedFile)}>Send</button>
+              <button type="submit" disabled={loading || (!inputPrompt.trim() && selectedFiles.length === 0)}>Send</button>
             </form>
           </div>
 

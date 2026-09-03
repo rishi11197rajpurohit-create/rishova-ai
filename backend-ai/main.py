@@ -1,8 +1,10 @@
 import os
 import re
 import json
+import io
 import urllib.parse
 import urllib.request
+from typing import List
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -85,18 +87,18 @@ def fetch_live_web_snippets(query: str) -> str:
     return ""
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, an elite Senior Full-Stack Software Architect, Lead Data Scientist, and Universal AI Studio.
+You are RISHOVA AI, an elite Senior Full-Stack Software Architect, Lead Researcher, and Universal AI Studio.
 
 STRICT LANGUAGE & OUTPUT DIRECTIVES:
 1. ALWAYS generate ALL code, comments, explanations, tests, and guides in STRICT, PROFESSIONAL ENGLISH ONLY.
 2. Put terminal commands in ```bash code blocks.
 3. Put source code in dedicated blocks (```html, ```css, ```javascript, ```python) with file names as the very first line comment (e.g., // index.html, /* style.css */, # script.py).
 
+MULTI-DOCUMENT DIRECTIVE (Section 10 & 19):
+When multiple documents are analyzed, provide clear cross-document comparisons, synthesized takeaways, extracted common topics, and structured notes.
+
 IMAGE STUDIO DIRECTIVE (Section 10 & 19):
-If the user asks to generate, draw, or create an image, photo, wallpaper, or digital art:
-1. Create a detailed descriptive visual prompt for the image.
-2. Render the image directly using markdown format: `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_DETAILED_PROMPT>?width=1024&height=1024&nologo=true)`
-3. Provide artistic details, color palette breakdown, and styling notes below the rendered image.
+Render images directly: `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_DETAILED_PROMPT>?width=1024&height=1024&nologo=true)`
 
 DATA INTELLIGENCE & CHART DIRECTIVE (Section 16 & 19):
 Generate interactive HTML/CSS/JS with Chart.js CDN for charts and analytics.
@@ -121,7 +123,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     commands = []
     files_map = {}
 
-    # Mermaid Extraction
     mermaid_match = re.search(r"```(?:mermaid)?\s*\n?((?:graph|flowchart|sequenceDiagram|erDiagram|classDiagram|stateDiagram)[\s\S]*?)```", normalized_text, re.IGNORECASE)
     if mermaid_match:
         mermaid_code = mermaid_match.group(1).strip()
@@ -132,7 +133,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
             mermaid_code = raw_diagram.group(1).strip()
             intent = "DIAGRAM"
 
-    # Bash commands extraction
     bash_blocks = re.findall(r"```(?:bash|sh|shell|cmd|powershell)\s*\n([\s\S]*?)```", normalized_text, re.IGNORECASE)
     for b in bash_blocks:
         for line in b.split("\n"):
@@ -141,7 +141,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
                 if not any(token in cleaned for token in ["const ", "let ", "var ", "import ", "require(", "function", "{", "}", "=>", "class "]):
                     commands.append(cleaned)
 
-    # Code files extraction
     code_pattern = re.compile(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```")
     file_idx = 1
     
@@ -189,11 +188,12 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
 
     prompt_lower = user_prompt.lower()
     
-    # Intent Detection
     if mermaid_code or any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
     elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "generate wallpaper", "photo of", "paint"]):
         intent = "IMAGE"
+    elif any(k in prompt_lower for k in ["compare documents", "documents", "multi-file", "pdf summary", "extract file"]):
+        intent = "DOCS"
     elif any(k in prompt_lower for k in ["chart", "data analysis", "visualize", "plot", "graph", "analytics"]):
         intent = "DATA"
     elif any(k in prompt_lower for k in ["resume", "cv", "portfolio", "cover letter"]):
@@ -205,7 +205,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
 
-    # Auto fallback for image generation URL if LLM didn't build it
     if intent == "IMAGE" and "![" not in normalized_text:
         clean_img_prompt = urllib.parse.quote(re.sub(r'(generate|create|draw|paint|an|image|of|photo)\s+', '', user_prompt, flags=re.IGNORECASE).strip())
         img_markdown = f"\n\n![Generated Image](https://image.pollinations.ai/prompt/{clean_img_prompt}?width=1024&height=1024&nologo=true)\n\n"
@@ -331,5 +330,50 @@ async def handle_universal_prompt(req: UniversalRequest):
         ]
         raw_markdown = run_groq_inference(messages, preferred_model=req.model, user_email=req.user_email)
         return parse_llm_markdown_response(raw_markdown, req.prompt, is_web_search=is_web_query)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Multi-Document Intelligence Endpoint (Section 10 & 19)
+@app.post("/api/ai/documents-multi")
+async def handle_multi_document_prompt(
+    files: List[UploadFile] = File(...),
+    prompt: str = Form("Compare and summarize these documents"),
+    model: str = Form("llama-3.3-70b-versatile"),
+    user_email: str = Form("guest")
+):
+    try:
+        combined_text_corpus = []
+        for file in files:
+            content = await file.read()
+            filename = file.filename
+            extracted_text = ""
+            if filename.lower().endswith(".pdf"):
+                try:
+                    pdf_reader = PdfReader(io.BytesIO(content))
+                    pages_text = [p.extract_text() or "" for p in pdf_reader.pages[:10]]
+                    extracted_text = "\n".join(pages_text)
+                except Exception as ex:
+                    extracted_text = f"Error reading PDF {filename}: {ex}"
+            else:
+                try:
+                    extracted_text = content.decode("utf-8", errors="ignore")
+                except Exception as ex:
+                    extracted_text = f"Error reading file {filename}: {ex}"
+
+            combined_text_corpus.append(f"=== DOCUMENT: {filename} ===\n{extracted_text[:4000]}\n")
+
+        full_doc_context = "\n".join(combined_text_corpus)
+        composed_prompt = (
+            f"User Instruction: {prompt}\n\n"
+            f"Here are the contents of the uploaded files:\n{full_doc_context}\n\n"
+            f"Synthesize the documents, highlight similarities, differences, and key takeaways."
+        )
+
+        messages = [
+            {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
+            {"role": "user", "content": composed_prompt}
+        ]
+        raw_markdown = run_groq_inference(messages, preferred_model=model, user_email=user_email)
+        return parse_llm_markdown_response(raw_markdown, prompt)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
