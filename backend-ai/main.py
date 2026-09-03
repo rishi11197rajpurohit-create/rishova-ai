@@ -87,26 +87,25 @@ def fetch_live_web_snippets(query: str) -> str:
     return ""
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, an intelligent, empathetic, and ultra-capable conversational AI Studio (just like ChatGPT and Gemini) created by Rishikesh Singh Jagarwal.
+You are RISHOVA AI, an intelligent, conversational, and highly capable AI Studio created by Rishikesh Singh Jagarwal.
 
-UNIVERSAL MULTILINGUAL & CONVERSATIONAL DIRECTIVE:
-1. Speak naturally, warmly, and directly to the user in whatever language or dialect they communicate in!
-2. COMPLETE MULTILINGUAL SUPPORT:
-   - Understand and respond fluently in ALL Indian languages and regional dialects: Marwari (मारवाड़ी), Hindi, Hinglish, Rajasthani, Gujarati, Punjabi, Bengali, Marathi, Tamil, Telugu, Kannada, Malayalam, Odia, Urdu, etc.
-   - Support ALL global world languages: English, Spanish, French, German, Arabic, Russian, Japanese, Mandarin, etc.
-   - If the user writes in Marwari (e.g. "कैयां हो", "कांई कर रिया हो"), respond in authentic, friendly Marwari!
-   - If the user writes in Hinglish, reply in easy-to-understand conversational Hinglish.
-3. CONVERSATIONAL TONE:
-   - Don't just dump raw code. Converse like a human mentor and elite engineer.
-   - Acknowledge what the user said, explain simply, and guide them step-by-step.
-4. CODE & TECHNICAL ARTIFACTS:
-   - When generating code, keep programming syntax, variable names, and code files in standard clean English (```html, ```css, ```javascript, ```python).
-   - Put terminal commands in ```bash code blocks.
-   - Put the filename at the very top of each code block (e.g., // index.html, /* style.css */, # main.py).
-5. CAPABILITIES HANDLING:
-   - Images: Render using `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_PROMPT>?width=1024&height=1024&nologo=true)`.
-   - Diagrams: Render clean Mermaid inside ```mermaid starting with `graph TD`.
-   - Data & Analytics: Generate interactive HTML/CSS/JS dashboards using Chart.js CDN.
+CONVERSATION & LANGUAGE INSTRUCTIONS (STRICT):
+1. ALWAYS match the language, dialect, and tone of the user's message naturally, like Gemini and ChatGPT.
+2. MARWARI / RAJASTHANI:
+   - If the user greets or asks in Marwari (e.g., "राम राम सा", "आपा मारवाड़ी में बात करा के", "कांई हाल चाल है", "कांई कर रिया हो"):
+   - Respond in authentic, fluent, sweet Marwari/Rajasthani!
+   - Example reply style: "राम राम सा! बिल्कुल, आपां मारवाड़ी में ही बात करांला। हुकम करो, आज आपां कांई काम करां? कोडिंग, पढ़ाई, फोटो या कोई सॉफ्टवेयर बणावणो है?"
+   - Never repeat phrases or create loops. Never claim any other name; your identity is RISHOVA AI.
+3. HINDI & HINGLISH:
+   - If user asks in Hinglish, reply in friendly, intelligent Hinglish.
+   - If user asks in Hindi, reply in pure and polite Hindi.
+4. GLOBAL & INDIAN LANGUAGES:
+   - Fluently speak Gujarati, Punjabi, Bengali, Marathi, Tamil, Telugu, English, Spanish, etc., based on user choice.
+5. TECHNICAL & ARTIFACT GENERATION:
+   - Whenever writing source code, use English variable names and syntax in fenced blocks (```html, ```css, ```javascript, ```python) with file names on line 1.
+   - Commands in ```bash.
+   - Diagrams in ```mermaid starting with `graph TD`.
+   - Images in `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_PROMPT>?width=1024&height=1024&nologo=true)`.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool = False):
@@ -183,19 +182,19 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     
     if mermaid_code or any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
-    elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "generate wallpaper", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
+    elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
         intent = "IMAGE"
-    elif any(k in prompt_lower for k in ["compare documents", "documents", "multi-file", "pdf summary", "extract file"]):
+    elif any(k in prompt_lower for k in ["compare documents", "documents", "multi-file", "pdf summary"]):
         intent = "DOCS"
     elif any(k in prompt_lower for k in ["chart", "data analysis", "visualize", "plot", "graph", "analytics"]):
         intent = "DATA"
-    elif any(k in prompt_lower for k in ["resume", "cv", "portfolio", "cover letter"]):
+    elif any(k in prompt_lower for k in ["resume", "cv", "portfolio"]):
         intent = "CAREER"
-    elif any(k in prompt_lower for k in ["teach", "quiz", "mcq", "learn", "roadmap", "exam prep", "सिखाओ", "पढ़ाओ"]):
+    elif any(k in prompt_lower for k in ["teach", "quiz", "mcq", "learn", "roadmap", "exam prep"]):
         intent = "LEARNING"
-    elif is_web_search or any(k in prompt_lower for k in ["search", "latest", "today", "news", "current", "weather", "breakthroughs", "price"]):
+    elif is_web_search or any(k in prompt_lower for k in ["search", "latest", "today", "news", "current", "weather", "price"]):
         intent = "RESEARCH"
-    elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html", "बनाओ"]):
+    elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
 
     if intent == "IMAGE" and "![" not in normalized_text:
@@ -255,7 +254,8 @@ def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-ver
             completion = client.chat.completions.create(
                 model=model_name,
                 messages=messages,
-                temperature=0.4
+                temperature=0.7,
+                max_tokens=2048,
             )
             total_tokens = getattr(completion.usage, "total_tokens", 500) if hasattr(completion, "usage") else 500
             
@@ -277,7 +277,7 @@ def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-ver
 
 @app.get("/")
 def read_root():
-    return {"status": "RISHOVA AI Universal Multilingual Studio is Live"}
+    return {"status": "RISHOVA AI Universal Studio is Live"}
 
 @app.get("/api/usage/{user_email}")
 def get_user_usage(user_email: str):
@@ -357,8 +357,8 @@ async def handle_multi_document_prompt(
         full_doc_context = "\n".join(combined_text_corpus)
         composed_prompt = (
             f"User Prompt: {prompt}\n\n"
-            f"Documents:\n{full_doc_context}\n\n"
-            f"Respond conversationally and clearly in the exact same language or tone used by the user in their prompt."
+            f"Documents Context:\n{full_doc_context}\n\n"
+            f"Respond naturally, conversationally, and clearly in the exact same language used by the user."
         )
 
         messages = [
