@@ -1287,4 +1287,28 @@ body {
   padding: 4px 8px !important;
   font-size: 0.75rem !important;
   white-space: nowrap !important;
+}/* Bottom Console Bar for Live Preview */
+.console-toggle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #121318;
+  border-top: 1px solid #27272a;
+  padding: 6px 12px;
+}
+
+.bottom-console-btn {
+  background: #1e2029;
+  color: #38bdf8;
+  border: 1px solid #0284c7;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bottom-console-btn.open {
+  background: #0284c7;
+  color: #ffffff;
 }

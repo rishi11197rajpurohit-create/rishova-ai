@@ -991,18 +991,6 @@ export default function App() {
                 </div>
               )}
 
-              {activeTab === "preview" && (
-                <div className="canvas-controls">
-                  <button
-                    className={`action-btn ${isConsoleOpen ? "console-active" : ""}`}
-                    onClick={() => setIsConsoleOpen(!isConsoleOpen)}
-                    title="Toggle In-App Console Logs"
-                  >
-                    📟 Logs ({consoleLogs.length})
-                  </button>
-                </div>
-              )}
-
               {activeTab === "canvas" && activeSession.activeDiagram && (
                 <div className="canvas-controls">
                   <button className="action-btn" onClick={() => setZoomLevel((z) => Math.max(0.3, z - 0.2))} title="Zoom Out">🔍 -</button>
@@ -1019,6 +1007,7 @@ export default function App() {
             </div>
 
             <div className="workspace-content">
+              {/* Monaco Code Tab */}
               {activeTab === "code" && (
                 <div className="code-viewer-area">
                   {Object.keys(activeSession.workspaceFiles).length > 0 ? (
@@ -1069,24 +1058,37 @@ export default function App() {
                 </div>
               )}
 
+              {/* Live Web Preview Tab */}
               {activeTab === "preview" && (
-                <div className="live-preview-container">
+                <div className="live-preview-container" style={{ position: "relative", display: "flex", flexDirection: "column", height: "100%" }}>
                   <iframe
                     title="Live Web Sandbox"
                     srcDoc={getLivePreviewSource()}
                     sandbox="allow-scripts allow-modals"
                     className="sandbox-iframe"
+                    style={{ flex: 1, border: "none" }}
                   />
+
+                  {/* Fixed & Dedicated Bottom Bar for Console Logs */}
+                  <div className="console-toggle-bar">
+                    <button 
+                      className={`bottom-console-btn ${isConsoleOpen ? "open" : ""}`}
+                      onClick={() => setIsConsoleOpen(!isConsoleOpen)}
+                    >
+                      📟 {isConsoleOpen ? "Hide Console Logs" : `Show Console Logs (${consoleLogs.length})`}
+                    </button>
+                    {isConsoleOpen && (
+                      <button className="clear-console-btn" onClick={() => setConsoleLogs([])}>
+                        Clear Logs
+                      </button>
+                    )}
+                  </div>
 
                   {isConsoleOpen && (
                     <div className="sandbox-console-panel">
-                      <div className="console-panel-header">
-                        <span>📟 Sandbox Console Logs</span>
-                        <button className="clear-console-btn" onClick={() => setConsoleLogs([])}>Clear</button>
-                      </div>
                       <div className="console-logs-list">
                         {consoleLogs.length === 0 ? (
-                          <div className="empty-console">No logs captured yet. Any console.log() or JS errors will appear here.</div>
+                          <div className="empty-console">No logs captured yet. Any console.log() or runtime errors will appear here.</div>
                         ) : (
                           consoleLogs.map((log, idx) => (
                             <div key={idx} className={`console-log-row log-${log.level}`}>
@@ -1102,6 +1104,7 @@ export default function App() {
                 </div>
               )}
 
+              {/* Architecture Canvas Tab */}
               {activeTab === "canvas" && (
                 <div 
                   className={`canvas-area ${isDragging ? "grabbing" : "grabbable"}`}
