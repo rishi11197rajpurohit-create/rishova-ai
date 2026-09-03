@@ -1460,4 +1460,60 @@ body {
   border: 1px solid #27272a;
   margin: 14px 0;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+}/* Markdown Table & Rich Text Styling - Fix Display */
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 0.9rem;
+  background: #18181b;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #27272a;
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 10px 14px;
+  text-align: left;
+  border: 1px solid #27272a;
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.markdown-content th {
+  background: #27272a;
+  color: #60a5fa;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+}
+
+.markdown-content tr:nth-child(even) {
+  background: #141416;
+}
+
+.markdown-content tr:hover {
+  background: #202024;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  color: #f4f4f5;
+  margin-top: 18px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 22px;
+  margin: 10px 0;
+}
+
+.markdown-content li {
+  margin-bottom: 6px;
+  line-height: 1.6;
 }
