@@ -61,6 +61,11 @@ STRICT LANGUAGE & OUTPUT DIRECTIVES:
 5. Specify the exact file name or relative path at the very top of each code block as a comment (e.g., // index.html, /* style.css */, # script.py).
 6. Provide complete, production-grade, bug-free implementations without placeholders or truncations.
 
+CAREER & RESUME STUDIO DIRECTIVE:
+If the user asks for a resume, CV, portfolio, or cover letter:
+1. Generate a modern, elegant, ATS-friendly single-page HTML file (index.html) and matching CSS (style.css).
+2. Use clean typography, modern cards, and responsive layout.
+
 When requested for diagrams or flowcharts:
 1. Use standard Mermaid syntax starting with `graph TD` or `flowchart TD` or `erDiagram`.
 2. Keep all node labels in clean English inside simple quotes.
@@ -132,7 +137,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
 
         if filename not in files_map:
             files_map[filename] = {
-                "language": lang or "python" if filename.endswith(".py") else "javascript",
+                "language": "html" if filename.endswith(".html") else ("css" if filename.endswith(".css") else (lang or "javascript")),
                 "code": content
             }
             file_idx += 1
@@ -140,6 +145,8 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
     prompt_lower = user_prompt.lower()
     if any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
+    elif any(k in prompt_lower for k in ["resume", "cv", "portfolio", "cover letter"]):
+        intent = "CAREER"
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
 
@@ -165,11 +172,9 @@ def parse_llm_markdown_response(text: str, user_prompt: str):
     }
 
 def get_active_groq_models():
-    """Dynamically fetch currently active models directly from Groq API"""
     try:
         model_list = client.models.list()
         active_ids = [m.id for m in model_list.data if getattr(m, 'active', True)]
-        # Priority sort: llama-3.3 first, then any llama-3
         sorted_models = []
         for mid in active_ids:
             if "llama-3.3-70b" in mid:
@@ -181,13 +186,11 @@ def get_active_groq_models():
                 sorted_models.append(mid)
         return sorted_models
     except Exception as e:
-        print(f"Failed to fetch dynamic models: {e}")
         return ["llama-3.3-70b-versatile"]
 
 def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-versatile", user_email: str = "guest"):
     available_models = get_active_groq_models()
     
-    # Put preferred model at the top if active
     if preferred_model in available_models:
         candidate_models = [preferred_model] + [m for m in available_models if m != preferred_model]
     else:
@@ -215,7 +218,6 @@ def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-ver
             return completion.choices[0].message.content
         except Exception as err:
             last_error = err
-            print(f"Model {model_name} failed: {err}. Trying next active model...")
             continue
 
     raise HTTPException(status_code=500, detail=f"Inference failed: {str(last_error)}")
