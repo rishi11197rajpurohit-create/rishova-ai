@@ -120,7 +120,7 @@ export default function App() {
     const saved = localStorage.getItem("rishova_settings");
     return saved ? JSON.parse(saved) : {
       responseStyle: "detailed",
-      language: "en",
+      language: "mwr",
       fontSize: "14",
     };
   });
@@ -132,7 +132,7 @@ export default function App() {
       title: "New Workspace Project",
       messages: [{
         role: "assistant",
-        content: "Welcome to **RISHOVA AI Studio**. Ask me to architect, code, debug, learn, generate images, or analyze data.",
+        content: "राम राम सा! Welcome to **RISHOVA AI Studio**. Ask me to architect, code, debug, learn, or chat in any language.",
         intent: "CHAT"
       }],
       workspaceFiles: {},
@@ -293,7 +293,7 @@ export default function App() {
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
-    recognition.lang = userSettings.language === "hi" ? "hi-IN" : "en-US";
+    recognition.lang = userSettings.language === "en" ? "en-US" : "hi-IN";
     recognition.interimResults = false;
     recognition.continuous = false;
 
@@ -859,14 +859,34 @@ export default function App() {
             </div>
 
             <div className="settings-group">
-              <label>Voice Recognition Language:</label>
+              <label>Language Preference / भाषा (Section 26):</label>
               <select 
                 className="settings-input-control"
                 value={userSettings.language}
                 onChange={(e) => setUserSettings({ ...userSettings, language: e.target.value })}
               >
-                <option value="en">English (US/UK)</option>
-                <option value="hi">Hindi (India)</option>
+                <optgroup label="भारतीय भाषाएँ (Indian Languages)">
+                  <option value="mwr">मारवाड़ी / राजस्थानी (Marwari)</option>
+                  <option value="hi">हिंदी (Hindi)</option>
+                  <option value="hinglish">Hinglish (हिंदी + English)</option>
+                  <option value="gu">ગુજરાતી (Gujarati)</option>
+                  <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
+                  <option value="bn">বাংলা (Bengali)</option>
+                  <option value="mr">मराठी (Marathi)</option>
+                  <option value="ta">தமிழ் (Tamil)</option>
+                  <option value="te">తెలుగు (Telugu)</option>
+                  <option value="ur">اردو (Urdu)</option>
+                </optgroup>
+                <optgroup label="Global World Languages">
+                  <option value="en">English (US/UK)</option>
+                  <option value="es">Español (Spanish)</option>
+                  <option value="fr">Français (French)</option>
+                  <option value="de">Deutsch (German)</option>
+                  <option value="ar">العربية (Arabic)</option>
+                  <option value="ru">Русский (Russian)</option>
+                  <option value="ja">日本語 (Japanese)</option>
+                  <option value="zh">中文 (Chinese)</option>
+                </optgroup>
               </select>
             </div>
 
@@ -1040,8 +1060,8 @@ export default function App() {
                   isListening
                     ? "Listening to voice... Speak now..."
                     : selectedFiles.length > 0
-                    ? `Ask anything about these ${selectedFiles.length} files (e.g. compare, summarize)...`
-                    : "Build an API, full software, diagrams, charts, images, or search anything..."
+                    ? `Ask anything about these ${selectedFiles.length} files...`
+                    : "Build software, architecture, images, or chat in Hindi, Marwari, English..."
                 }
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}

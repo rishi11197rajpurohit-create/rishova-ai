@@ -66,7 +66,7 @@ def fetch_live_web_snippets(query: str) -> str:
                 for desc, link in zip(data[2], data[3]):
                     if desc and len(desc) > 20:
                         snippets.append(f"• {desc} [Source: {link}]")
-    except Exception as e:
+    except Exception:
         pass
 
     try:
@@ -79,7 +79,7 @@ def fetch_live_web_snippets(query: str) -> str:
             for topic in ddg_data.get("RelatedTopics", [])[:2]:
                 if isinstance(topic, dict) and topic.get("Text"):
                     snippets.append(f"• {topic['Text']} [Source: {topic.get('FirstURL', 'Web Retrieval')}]")
-    except Exception as e:
+    except Exception:
         pass
 
     if snippets:
@@ -87,33 +87,26 @@ def fetch_live_web_snippets(query: str) -> str:
     return ""
 
 SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, an elite Senior Full-Stack Software Architect, Lead Researcher, and Universal AI Studio.
+You are RISHOVA AI, an intelligent, empathetic, and ultra-capable conversational AI Studio (just like ChatGPT and Gemini) created by Rishikesh Singh Jagarwal.
 
-STRICT LANGUAGE & OUTPUT DIRECTIVES:
-1. ALWAYS generate ALL code, comments, explanations, tests, and guides in STRICT, PROFESSIONAL ENGLISH ONLY.
-2. Put terminal commands in ```bash code blocks.
-3. Put source code in dedicated blocks (```html, ```css, ```javascript, ```python) with file names as the very first line comment (e.g., // index.html, /* style.css */, # script.py).
-
-MULTI-DOCUMENT DIRECTIVE (Section 10 & 19):
-When multiple documents are analyzed, provide clear cross-document comparisons, synthesized takeaways, extracted common topics, and structured notes.
-
-IMAGE STUDIO DIRECTIVE (Section 10 & 19):
-Render images directly: `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_DETAILED_PROMPT>?width=1024&height=1024&nologo=true)`
-
-DATA INTELLIGENCE & CHART DIRECTIVE (Section 16 & 19):
-Generate interactive HTML/CSS/JS with Chart.js CDN for charts and analytics.
-
-RESEARCH & KNOWLEDGE DIRECTIVE (Section 18):
-Synthesize verified industry breakthroughs, cite sources, and avoid knowledge cutoff disclaimers.
-
-DIAGRAM DIRECTIVE (Section 20):
-Write clean Mermaid code strictly inside a ```mermaid code block starting with `graph TD`.
-
-LEARNING ENGINE DIRECTIVE (Section 21):
-Provide a concept roadmap and interactive single-page HTML/CSS/JS Quiz App.
-
-CAREER STUDIO DIRECTIVE (Section 23):
-Generate clean ATS-friendly HTML and CSS.
+UNIVERSAL MULTILINGUAL & CONVERSATIONAL DIRECTIVE:
+1. Speak naturally, warmly, and directly to the user in whatever language or dialect they communicate in!
+2. COMPLETE MULTILINGUAL SUPPORT:
+   - Understand and respond fluently in ALL Indian languages and regional dialects: Marwari (मारवाड़ी), Hindi, Hinglish, Rajasthani, Gujarati, Punjabi, Bengali, Marathi, Tamil, Telugu, Kannada, Malayalam, Odia, Urdu, etc.
+   - Support ALL global world languages: English, Spanish, French, German, Arabic, Russian, Japanese, Mandarin, etc.
+   - If the user writes in Marwari (e.g. "कैयां हो", "कांई कर रिया हो"), respond in authentic, friendly Marwari!
+   - If the user writes in Hinglish, reply in easy-to-understand conversational Hinglish.
+3. CONVERSATIONAL TONE:
+   - Don't just dump raw code. Converse like a human mentor and elite engineer.
+   - Acknowledge what the user said, explain simply, and guide them step-by-step.
+4. CODE & TECHNICAL ARTIFACTS:
+   - When generating code, keep programming syntax, variable names, and code files in standard clean English (```html, ```css, ```javascript, ```python).
+   - Put terminal commands in ```bash code blocks.
+   - Put the filename at the very top of each code block (e.g., // index.html, /* style.css */, # main.py).
+5. CAPABILITIES HANDLING:
+   - Images: Render using `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_PROMPT>?width=1024&height=1024&nologo=true)`.
+   - Diagrams: Render clean Mermaid inside ```mermaid starting with `graph TD`.
+   - Data & Analytics: Generate interactive HTML/CSS/JS dashboards using Chart.js CDN.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool = False):
@@ -190,7 +183,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     
     if mermaid_code or any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
-    elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "generate wallpaper", "photo of", "paint"]):
+    elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "generate wallpaper", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
         intent = "IMAGE"
     elif any(k in prompt_lower for k in ["compare documents", "documents", "multi-file", "pdf summary", "extract file"]):
         intent = "DOCS"
@@ -198,15 +191,15 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "DATA"
     elif any(k in prompt_lower for k in ["resume", "cv", "portfolio", "cover letter"]):
         intent = "CAREER"
-    elif any(k in prompt_lower for k in ["teach", "quiz", "mcq", "learn", "roadmap", "exam prep"]):
+    elif any(k in prompt_lower for k in ["teach", "quiz", "mcq", "learn", "roadmap", "exam prep", "सिखाओ", "पढ़ाओ"]):
         intent = "LEARNING"
     elif is_web_search or any(k in prompt_lower for k in ["search", "latest", "today", "news", "current", "weather", "breakthroughs", "price"]):
         intent = "RESEARCH"
-    elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
+    elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html", "बनाओ"]):
         intent = "BUILDER"
 
     if intent == "IMAGE" and "![" not in normalized_text:
-        clean_img_prompt = urllib.parse.quote(re.sub(r'(generate|create|draw|paint|an|image|of|photo)\s+', '', user_prompt, flags=re.IGNORECASE).strip())
+        clean_img_prompt = urllib.parse.quote(re.sub(r'(generate|create|draw|paint|an|image|of|photo|तस्वीर|फोटो|बनाओ)\s+', '', user_prompt, flags=re.IGNORECASE).strip())
         img_markdown = f"\n\n![Generated Image](https://image.pollinations.ai/prompt/{clean_img_prompt}?width=1024&height=1024&nologo=true)\n\n"
         normalized_text = img_markdown + normalized_text
 
@@ -245,7 +238,7 @@ def get_active_groq_models():
             if mid not in sorted_models:
                 sorted_models.append(mid)
         return sorted_models
-    except Exception as e:
+    except Exception:
         return ["llama-3.3-70b-versatile"]
 
 def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-versatile", user_email: str = "guest"):
@@ -262,7 +255,7 @@ def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-ver
             completion = client.chat.completions.create(
                 model=model_name,
                 messages=messages,
-                temperature=0.2
+                temperature=0.4
             )
             total_tokens = getattr(completion.usage, "total_tokens", 500) if hasattr(completion, "usage") else 500
             
@@ -284,7 +277,7 @@ def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-ver
 
 @app.get("/")
 def read_root():
-    return {"status": "RISHOVA AI Universal Studio is Live"}
+    return {"status": "RISHOVA AI Universal Multilingual Studio is Live"}
 
 @app.get("/api/usage/{user_email}")
 def get_user_usage(user_email: str):
@@ -333,7 +326,6 @@ async def handle_universal_prompt(req: UniversalRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Multi-Document Intelligence Endpoint (Section 10 & 19)
 @app.post("/api/ai/documents-multi")
 async def handle_multi_document_prompt(
     files: List[UploadFile] = File(...),
@@ -364,9 +356,9 @@ async def handle_multi_document_prompt(
 
         full_doc_context = "\n".join(combined_text_corpus)
         composed_prompt = (
-            f"User Instruction: {prompt}\n\n"
-            f"Here are the contents of the uploaded files:\n{full_doc_context}\n\n"
-            f"Synthesize the documents, highlight similarities, differences, and key takeaways."
+            f"User Prompt: {prompt}\n\n"
+            f"Documents:\n{full_doc_context}\n\n"
+            f"Respond conversationally and clearly in the exact same language or tone used by the user in their prompt."
         )
 
         messages = [
