@@ -327,10 +327,10 @@ export default function App() {
     if (isPython) {
       try {
         if (!window.loadPyodide) {
-          throw new Error("Pyodide library not found. Please refresh the page.");
+          throw new Error("Pyodide WebAssembly not loaded yet. Please refresh the page.");
         }
         if (!pyodideRef.current) {
-          setRunOutput("📦 Downloading and initializing WebAssembly Python kernel...\n");
+          setRunOutput("📦 Initializing WebAssembly Python environment...\n");
           pyodideRef.current = await window.loadPyodide({
             indexURL: "[https://cdn.jsdelivr.net/pyodide/v0.25.0/full/](https://cdn.jsdelivr.net/pyodide/v0.25.0/full/)"
           });
@@ -345,13 +345,13 @@ export default function App() {
         await pyodideRef.current.runPythonAsync(current.code);
         setRunOutput((prev) => prev + "\n✔ Execution finished successfully.");
       } catch (err) {
-        setRunOutput((prev) => prev + `\n❌ Python Runtime Error:\n${err.message}`);
+        setRunOutput((prev) => prev + `\n❌ Python Error:\n${err.message}`);
       } finally {
         setIsRunningCode(false);
       }
     } else if (isJS) {
       try {
-        setRunOutput("⚡ Executing JavaScript in Sandbox...\n--- [OUTPUT] ---\n");
+        setRunOutput("⚡ Executing JavaScript Sandbox...\n--- [OUTPUT] ---\n");
         let outputBuffer = "";
         const customConsole = {
           log: (...args) => { outputBuffer += args.join(" ") + "\n"; },
@@ -360,14 +360,14 @@ export default function App() {
         };
         const runFn = new Function("console", current.code);
         runFn(customConsole);
-        setRunOutput((prev) => prev + (outputBuffer || "Code executed with no console.log() output.\n") + "\n✔ Execution finished.");
+        setRunOutput((prev) => prev + (outputBuffer || "Code executed without console.log output.\n") + "\n✔ Execution finished.");
       } catch (err) {
-        setRunOutput((prev) => prev + `\n❌ JavaScript Runtime Error:\n${err.message}`);
+        setRunOutput((prev) => prev + `\n❌ JavaScript Error:\n${err.message}`);
       } finally {
         setIsRunningCode(false);
       }
     } else {
-      setRunOutput(`⚠️ Live execution is currently optimized for Python (.py) and JavaScript (.js). Switch to the '👁️ Preview' tab to render HTML/CSS live.`);
+      setRunOutput(`⚠️ Live execution is optimized for Python (.py) and JavaScript (.js). Open '👁️ Preview' tab for HTML/CSS.`);
       setIsRunningCode(false);
     }
   };
@@ -682,9 +682,9 @@ export default function App() {
     if (actionType === "explain") {
       actionPrompt = `Explain this file '${activeSession.selectedFileName}' in detail:\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
     } else if (actionType === "debug") {
-      actionPrompt = `Review and find potential bugs, security vulnerabilities, and logic flaws in '${activeSession.selectedFileName}':\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
+      actionPrompt = `Review and find potential bugs in '${activeSession.selectedFileName}':\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
     } else if (actionType === "optimize") {
-      actionPrompt = `Refactor and optimize this file '${activeSession.selectedFileName}' for performance, modularity, and cleanliness:\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
+      actionPrompt = `Refactor and optimize '${activeSession.selectedFileName}':\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
     }
 
     triggerPromptExecution(actionPrompt, []);
@@ -959,6 +959,7 @@ export default function App() {
         </div>
 
         <div className="user-section" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {/* Templates Trigger Button */}
           <button
             className="cloud-sync-status-btn"
             onClick={() => setIsTemplatesOpen(true)}
