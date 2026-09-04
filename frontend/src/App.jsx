@@ -3,8 +3,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
 import Editor from "@monaco-editor/react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import "./App.css";
@@ -20,23 +18,23 @@ mermaid.initialize({
 
 const PROMPT_TEMPLATES = [
   {
-    category: "🏗️ System Architecture",
-    title: "Microservices Architecture Flowchart",
-    prompt: "Design a complete scalable Microservices Architecture for an E-Commerce application with API Gateway, Auth Service, Product Catalog, Redis Cache, and Kafka message broker. Output a clean Mermaid.js flowchart in ```mermaid."
+    category: "🏗️ Architecture",
+    title: "Microservices Flowchart",
+    prompt: "Design a complete scalable Microservices Architecture for an E-Commerce application with API Gateway, Auth Service, Redis Cache, and Kafka message broker in ```mermaid graph TD."
   },
   {
-    category: "💻 Full-Stack Web App",
-    title: "Realtime Task Management Board",
-    prompt: "Build a single-file interactive Kanban Task Management Board with HTML, CSS, and vanilla JavaScript. Include drag-and-drop support, local storage persistence, and modern dark glassmorphism styling."
+    category: "💻 Full-Stack App",
+    title: "Interactive Kanban Board",
+    prompt: "Build a single-file interactive Kanban Task Management Board with HTML, CSS, and vanilla JavaScript. Include drag-and-drop support, local storage persistence, and modern dark styling."
   },
   {
-    category: "🧠 DSA & Algorithms",
+    category: "🧠 DSA Algorithms",
     title: "Dynamic Programming: 0/1 Knapsack",
-    prompt: "Explain the 0/1 Knapsack Problem with both Top-Down Memoization and Bottom-Up Tabulation in Python. Include step-by-step space & time complexity analysis and runnable test cases."
+    prompt: "Write a complete Python implementation of 0/1 Knapsack Problem with both Top-Down Memoization and Bottom-Up Tabulation. Include time & space complexity analysis and runnable test cases."
   },
   {
-    category: "📊 Data Science & Analytics",
-    title: "Sales Analytics & Trend Visualizer",
+    category: "📊 Data Analytics",
+    title: "Interactive Sales Dashboard",
     prompt: "Create an interactive HTML and Chart.js analytics dashboard demonstrating quarterly sales performance, profit margins, and KPI metric cards with mock data."
   }
 ];
@@ -54,9 +52,9 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   };
 
   const handleDownload = () => {
-    const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html", sql: "sql", srt: "srt", vtt: "vtt" };
+    const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html", sql: "sql", srt: "srt" };
     const blob = new Blob([codeContent], { type: "text/plain;charset=utf-8" });
-    saveAs(blob, `snippet.${extMap[lang] || "txt"}`);
+    saveAs(blob, `code_${Date.now()}.${extMap[lang] || "txt"}`);
   };
 
   if (inline || (!match && !codeContent.includes("\n") && codeContent.length < 40)) {
@@ -68,27 +66,18 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
       <div className="studio-code-header">
         <span className="studio-lang-title">{(lang || "CODE").toUpperCase()}</span>
         <div className="studio-code-actions">
-          <button className="circle-action-btn" title="Download Code" onClick={handleDownload}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
+          <button className="circle-action-btn" title="Download File" onClick={handleDownload}>
+            ⤓
           </button>
           <button className="circle-action-btn" title="Copy Code" onClick={handleCopy}>
-            {copied ? "✔" : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            )}
+            {copied ? "✔" : "📋"}
           </button>
         </div>
       </div>
       <div className="studio-code-body">
-        <SyntaxHighlighter "#131316", "'Fira "0.9rem", "1.6", "100%" "14px "auto", "block", "javascript"} "pre", 'Consolas', 0, 16px", Code', backgroundColor: codeTagProps="{{" customStyle="{{" display: fontFamily: fontSize: language="{lang" lineHeight: lineProps="{{" margin: monospace", overflowX: padding: showLineNumbers="{false}" style="{vscDarkPlus}" style: whiteSpace: width: wrapLines="{true}" { || } }}>
-          {codeContent}
-        </SyntaxHighlighter>
+        <pre style={{ margin: 0, padding: "14px 16px", background: "#131316", color: "#f4f4f5", overflowX: "auto", fontFamily: "'Fira Code', 'Consolas', monospace", fontSize: "0.88rem", lineHeight: "1.6" }}>
+          <code>{codeContent}</code>
+        </pre>
       </div>
     </div>
   );
@@ -136,7 +125,7 @@ export default function App() {
       pinned: false,
       messages: [{
         role: "assistant",
-        content: "राम राम सा! Welcome to **RISHOVA AI Universal Studio**.\nAsk me to code, draw architecture diagrams, analyze data, or explore structured courses and videos.",
+        content: "राम राम सा! Welcome to **RISHOVA AI Universal Studio**.\nBuild software, diagrams, analyze files, or click '💡 Templates' above.",
         intent: "CHAT"
       }],
       workspaceFiles: {},
@@ -167,7 +156,6 @@ export default function App() {
   const [consoleLogs, setConsoleLogs] = useState([]);
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
 
-  // In-Browser Code Runner State
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [runOutput, setRunOutput] = useState("");
   const [isRunOutputVisible, setIsRunOutputVisible] = useState(false);
@@ -214,7 +202,7 @@ export default function App() {
   const fetchUsage = async () => {
     try {
       const email = userName || "guest";
-      const res = await fetch(`[https://rishova-ai-backend.onrender.com/api/usage/$](https://rishova-ai-backend.onrender.com/api/usage/$){email}`);
+      const res = await fetch(`https://rishova-ai-backend.onrender.com/api/usage/${email}`);
       if (res.ok) {
         const data = await res.json();
         setUsageData(data);
@@ -308,7 +296,6 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Run Code in Browser (Python & JavaScript)
   const handleExecuteActiveCode = async () => {
     const current = activeSession.workspaceFiles[activeSession.selectedFileName];
     if (!current || !current.code) {
@@ -360,14 +347,14 @@ export default function App() {
         };
         const runFn = new Function("console", current.code);
         runFn(customConsole);
-        setRunOutput((prev) => prev + (outputBuffer || "Code executed without console.log output.\n") + "\n✔ Execution finished.");
+        setRunOutput((prev) => prev + (outputBuffer || "Code executed with no console.log output.\n") + "\n✔ Execution finished.");
       } catch (err) {
         setRunOutput((prev) => prev + `\n❌ JavaScript Error:\n${err.message}`);
       } finally {
         setIsRunningCode(false);
       }
     } else {
-      setRunOutput(`⚠️ Live execution is optimized for Python (.py) and JavaScript (.js). Open '👁️ Preview' tab for HTML/CSS.`);
+      setRunOutput("⚠️ Live execution is optimized for Python (.py) and JavaScript (.js). Open '👁️ Preview' tab for HTML/CSS.");
       setIsRunningCode(false);
     }
   };
@@ -959,7 +946,6 @@ export default function App() {
         </div>
 
         <div className="user-section" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {/* Templates Trigger Button */}
           <button
             className="cloud-sync-status-btn"
             onClick={() => setIsTemplatesOpen(true)}
@@ -1011,7 +997,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Prompt Templates Modal */}
       {isTemplatesOpen && (
         <div className="settings-modal-overlay" onClick={() => setIsTemplatesOpen(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
@@ -1046,7 +1031,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Keyboard Shortcuts Modal */}
       {isShortcutsOpen && (
         <div className="settings-modal-overlay" onClick={() => setIsShortcutsOpen(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
@@ -1082,7 +1066,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Settings Modal */}
       {isSettingsOpen && (
         <div className="settings-modal-overlay" onClick={() => setIsSettingsOpen(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
@@ -1270,25 +1253,9 @@ export default function App() {
                         <button onClick={() => copyToClipboard(m.commands.join("\n"))}>📋 Copy All</button>
                       </div>
                       <div className="studio-code-card">
-                        <SyntaxHighlighter
-                          language="bash"
-                          style={vscDarkPlus}
-                          showLineNumbers={false}
-                          wrapLines={true}
-                          lineProps={{ style: { display: "block", width: "100%" } }}
-                          customStyle={{
-                            margin: 0,
-                            padding: "12px 14px",
-                            backgroundColor: "#131316",
-                            fontSize: "0.88rem",
-                            lineHeight: "1.6"
-                          }}
-                          codeTagProps={{
-                            style: { display: "block", whiteSpace: "pre" }
-                          }}
-                        >
-                          {m.commands.join("\n")}
-                        </SyntaxHighlighter>
+                        <pre style={{ margin: 0, padding: "12px 14px", background: "#131316", color: "#4ade80", overflowX: "auto", fontFamily: "'Fira Code', monospace", fontSize: "0.85rem" }}>
+                          <code>{m.commands.join("\n")}</code>
+                        </pre>
                       </div>
                     </div>
                   )}
@@ -1517,7 +1484,6 @@ export default function App() {
                         />
                       </div>
 
-                      {/* In-Browser Execution Output Terminal */}
                       {isRunOutputVisible && (
                         <div style={{ flex: "0 0 35%", background: "#0a0a0c", borderTop: "1px solid #27272a", display: "flex", flexDirection: "column" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 14px", background: "#18181b", borderBottom: "1px solid #27272a" }}>
