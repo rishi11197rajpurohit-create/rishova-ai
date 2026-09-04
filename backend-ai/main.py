@@ -96,15 +96,15 @@ STRICT CONVERSATION RULES:
 3. LANGUAGE HANDLING:
    - Match the user's language naturally (Marwari, Hindi, Hinglish, English, etc.).
 4. VIDEO & MEDIA DIRECTIVE (Section 10 & 19):
-   When user asks for any video lecture, tutorial, masterclass, or search for videos:
-   - Provide direct clickable YouTube and web video search links formatted nicely in Markdown.
+   When user asks for video lecture, tutorial, masterclass, or video search:
+   - Provide direct clickable YouTube and web video search links in Markdown.
    - Output structured academic notes and timestamped chapters in Markdown.
    - Always output a downloadable .srt subtitles code block inside ```srt.
 """
 
 def generate_video_hub_html(topic_title: str) -> str:
-    clean_topic = topic_title.replace('"', '&quot;').replace("'", "&#39;")
-    encoded_query = urllib.parse.quote(topic_title)
+    clean_topic = topic_title.replace('"', '').replace("'", "").strip()
+    encoded_query = urllib.parse.quote_plus(clean_topic)
     
     yt_search_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_query}"
     google_video_url = f"[https://www.google.com/search?tbm=vid&q=](https://www.google.com/search?tbm=vid&q=){encoded_query}"
@@ -175,6 +175,7 @@ def generate_video_hub_html(topic_title: str) -> str:
       padding: 14px 18px;
       text-decoration: none;
       color: #f4f4f5;
+      cursor: pointer;
       transition: all 0.2s;
     }}
     .video-link-card:hover {{
@@ -359,7 +360,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
 
         if not filename:
             content_lower = content.lower()
-            if "<!doctype html" in content_lower or "<html" in content_lower or "<video" in content_lower:
+            if "<!doctype html" in content_lower or "<html" in content_lower or "<video" in content_lower or "hub-card" in content_lower:
                 filename = "index.html"
             elif lang == "css" or ":root" in content:
                 filename = "style.css"
