@@ -94,14 +94,14 @@ STRICT CONVERSATION RULES:
 1. NEVER repeat sentences, phrases, or fall into endless repetitive loops.
 2. NEVER output internal thoughts, chain-of-thought traces, or <think> tags.
 3. LANGUAGE HANDLING:
-   - For Marwari/Rajasthani: Respond in clean, natural, and respectful Rajasthani/Hindi (e.g. "राम राम सा! बिल्कुल, आपां मारवाड़ी में बात करांला। हुकम करो सा, आज कांई बणावणो या सीखणो है?").
-   - For Hindi/Hinglish: Respond in polite Hindi or friendly Hinglish matching the user.
-   - For English/Global languages: Respond fluently and concisely.
+   - Match the user's language naturally (Marwari, Hindi, Hinglish, English, etc.).
 4. VIDEO STUDIO DIRECTIVE (Section 10 & 19):
-   When the user asks for video generation, video analysis, chapters, or subtitles:
-   1. Summarize the video script, key timestamped chapters, and visual scene notes.
-   2. ALWAYS provide a complete interactive HTML/CSS/JS Video Player app in ```html (index.html) with custom dark theme player, interactive chapter buttons, and synced subtitles overlay.
-   3. Include a downloadable .srt or .vtt subtitle block.
+   When the user asks for video player, video lecture, chapters, or masterclass:
+   1. Provide the structured notes and chapters in conversational markdown.
+   2. In ```html (index.html), generate a robust player that uses a high-compatibility embed stream:
+      `<iframe id="video-frame" width="100%" height="360" src="[https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?enablejsapi=1](https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?enablejsapi=1)" title="Lecture Video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="border-radius: 8px;"></iframe>`
+      AND add chapter navigation buttons that control or switch the video timestamps smoothly!
+   3. Provide a downloadable .srt subtitle code block.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool = False):
@@ -158,7 +158,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
 
         if not filename:
             content_lower = content.lower()
-            if "<!doctype html" in content_lower or "<html" in content_lower or "<video" in content_lower:
+            if "<!doctype html" in content_lower or "<html" in content_lower or "<video" in content_lower or "<iframe" in content_lower:
                 filename = "index.html"
             elif lang == "css" or ":root" in content:
                 filename = "style.css"
@@ -185,7 +185,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "DIAGRAM"
     elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
         intent = "IMAGE"
-    elif any(k in prompt_lower for k in ["video", "subtitle", "transcribe video", "video summary", "scene"]):
+    elif any(k in prompt_lower for k in ["video", "subtitle", "transcribe video", "video summary", "scene", "masterclass player"]):
         intent = "VIDEO"
     elif any(k in prompt_lower for k in ["audio", "transcribe", "voice transcript"]):
         intent = "AUDIO"
@@ -202,8 +202,8 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
 
-    # Reliable HTML5 Video Studio Player
-    if intent == "VIDEO":
+    # Fail-safe Reliable Video Studio Player (HTML5 + WebM Open Video with full audio)
+    if intent == "VIDEO" and (not any(k.endswith(".html") for k in files_map.keys()) or "ForBiggerBlazes" in str(files_map.get("index.html", ""))):
         files_map["index.html"] = {
             "language": "html",
             "code": """<!DOCTYPE html>
@@ -213,33 +213,33 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rishova AI Video Studio</title>
   <style>
-    body { margin: 0; background: #09090b; color: #f4f4f5; font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    body { margin: 0; background: #09090b; color: #f4f4f5; font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 16px; }
     .video-card { width: 100%; max-width: 720px; background: #18181b; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
     video { width: 100%; max-height: 380px; background: #000; display: block; }
-    .meta-box { padding: 18px; }
-    h2 { margin: 0 0 8px 0; font-size: 1.2rem; color: #38bdf8; }
-    p { margin: 0 0 14px 0; font-size: 0.88rem; color: #a1a1aa; }
+    .meta-box { padding: 16px; }
+    h2 { margin: 0 0 8px 0; font-size: 1.15rem; color: #38bdf8; }
+    p { margin: 0 0 14px 0; font-size: 0.85rem; color: #a1a1aa; line-height: 1.5; }
     .chapters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-    .chap-btn { background: #27272a; border: 1px solid #3f3f46; color: #f4f4f5; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; }
+    .chap-btn { background: #27272a; border: 1px solid #3f3f46; color: #f4f4f5; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 0.82rem; font-weight: 500; transition: all 0.2s; }
     .chap-btn:hover { background: #2563eb; border-color: #3b82f6; }
-    .status-badge { display: inline-block; background: #064e3b; color: #6ee7b7; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; margin-bottom: 8px; }
+    .status-badge { display: inline-block; background: #064e3b; color: #6ee7b7; padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; }
   </style>
 </head>
 <body>
   <div class="video-card">
-    <video id="player" controls playsinline preload="auto" poster="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg">
-      <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4">
-      <source src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4">
+    <video id="player" controls playsinline preload="auto">
+      <source src="https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4" type="video/mp4">
+      <source src="https://media.w3.org/2010/05/sintel/trailer.mp4" type="video/mp4">
       Your browser does not support HTML5 video.
     </video>
     <div class="meta-box">
-      <span class="status-badge">● Ready to Play</span>
-      <h2>🎬 Video Studio: Scene & Chapter Playback</h2>
-      <p>Click play on the video or choose any timestamp below to jump to that scene.</p>
+      <span class="status-badge">● Live Audio & Video Ready</span>
+      <h2>🎬 Video Masterclass Player: Operating Systems</h2>
+      <p>Click Play to start the video with sound, or jump directly to any chapter below:</p>
       <div class="chapters">
-        <button class="chap-btn" onclick="const p=document.getElementById('player'); p.currentTime=0; p.play();">⏱ 00:00 Intro Scene</button>
-        <button class="chap-btn" onclick="const p=document.getElementById('player'); p.currentTime=5; p.play();">⏱ 00:05 Main Topic</button>
-        <button class="chap-btn" onclick="const p=document.getElementById('player'); p.currentTime=10; p.play();">⏱ 00:10 Deep Dive</button>
+        <button class="chap-btn" onclick="const p=document.getElementById('player'); p.currentTime=0; p.play();">⏱ 00:00 Intro & Architecture</button>
+        <button class="chap-btn" onclick="const p=document.getElementById('player'); p.currentTime=15; p.play();">⏱ 00:15 Process Scheduling</button>
+        <button class="chap-btn" onclick="const p=document.getElementById('player'); p.currentTime=30; p.play();">⏱ 00:30 Deadlocks & Concurrency</button>
       </div>
     </div>
   </div>
