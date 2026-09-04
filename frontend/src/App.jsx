@@ -18,6 +18,29 @@ mermaid.initialize({
   suppressErrorRendering: true,
 });
 
+const PROMPT_TEMPLATES = [
+  {
+    category: "🏗️ System Architecture",
+    title: "Microservices Architecture Flowchart",
+    prompt: "Design a complete scalable Microservices Architecture for an E-Commerce application with API Gateway, Auth Service, Product Catalog, Redis Cache, and Kafka message broker. Output a clean Mermaid.js flowchart in ```mermaid."
+  },
+  {
+    category: "💻 Full-Stack Web App",
+    title: "Realtime Task Management Board",
+    prompt: "Build a single-file interactive Kanban Task Management Board with HTML, CSS, and vanilla JavaScript. Include drag-and-drop support, local storage persistence, and modern dark glassmorphism styling."
+  },
+  {
+    category: "🧠 DSA & Algorithms",
+    title: "Dynamic Programming: 0/1 Knapsack",
+    prompt: "Explain the 0/1 Knapsack Problem with both Top-Down Memoization and Bottom-Up Tabulation in Python. Include step-by-step space & time complexity analysis and runnable test cases."
+  },
+  {
+    category: "📊 Data Science & Analytics",
+    title: "Sales Analytics & Trend Visualizer",
+    prompt: "Create an interactive HTML and Chart.js analytics dashboard demonstrating quarterly sales performance, profit margins, and KPI metric cards with mock data."
+  }
+];
+
 const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
@@ -63,29 +86,7 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
         </div>
       </div>
       <div className="studio-code-body">
-        <SyntaxHighlighter
-          language={lang || "javascript"}
-          style={vscDarkPlus}
-          showLineNumbers={false}
-          wrapLines={true}
-          lineProps={{ style: { display: "block", width: "100%" } }}
-          customStyle={{
-            margin: 0,
-            padding: "14px 16px",
-            backgroundColor: "#131316",
-            fontSize: "0.9rem",
-            lineHeight: "1.6",
-            fontFamily: "'Fira Code', 'Consolas', monospace",
-            overflowX: "auto",
-          }}
-          codeTagProps={{
-            style: {
-              display: "block",
-              fontFamily: "'Fira Code', 'Consolas', monospace",
-              whiteSpace: "pre",
-            }
-          }}
-        >
+        <SyntaxHighlighter "#131316", "'Fira "0.9rem", "1.6", "100%" "14px "auto", "block", "javascript"} "pre", 'Consolas', 0, 16px", Code', backgroundColor: codeTagProps="{{" customStyle="{{" display: fontFamily: fontSize: language="{lang" lineHeight: lineProps="{{" margin: monospace", overflowX: padding: showLineNumbers="{false}" style="{vscDarkPlus}" style: whiteSpace: width: wrapLines="{true}" { || } }}>
           {codeContent}
         </SyntaxHighlighter>
       </div>
@@ -117,6 +118,7 @@ export default function App() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [userSettings, setUserSettings] = useState(() => {
     const saved = localStorage.getItem("rishova_settings");
     return saved ? JSON.parse(saved) : {
@@ -165,6 +167,12 @@ export default function App() {
   const [consoleLogs, setConsoleLogs] = useState([]);
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
 
+  // In-Browser Code Runner State
+  const [isRunningCode, setIsRunningCode] = useState(false);
+  const [runOutput, setRunOutput] = useState("");
+  const [isRunOutputVisible, setIsRunOutputVisible] = useState(false);
+  const pyodideRef = useRef(null);
+
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -206,7 +214,7 @@ export default function App() {
   const fetchUsage = async () => {
     try {
       const email = userName || "guest";
-      const res = await fetch(`https://rishova-ai-backend.onrender.com/api/usage/${email}`);
+      const res = await fetch(`[https://rishova-ai-backend.onrender.com/api/usage/$](https://rishova-ai-backend.onrender.com/api/usage/$){email}`);
       if (res.ok) {
         const data = await res.json();
         setUsageData(data);
@@ -218,7 +226,7 @@ export default function App() {
     try {
       setIsCloudSyncing(true);
       const email = userName || "guest";
-      const res = await fetch("https://rishova-ai-backend.onrender.com/api/cloud/sync", {
+      const res = await fetch("[https://rishova-ai-backend.onrender.com/api/cloud/sync](https://rishova-ai-backend.onrender.com/api/cloud/sync)", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_email: email, sessions }),
@@ -299,6 +307,93 @@ export default function App() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Run Code in Browser (Python & JavaScript)
+  const handleExecuteActiveCode = async () => {
+    const current = activeSession.workspaceFiles[activeSession.selectedFileName];
+    if (!current || !current.code) {
+      alert("No active code to run!");
+      return;
+    }
+
+    setIsRunningCode(true);
+    setIsRunOutputVisible(true);
+    setRunOutput("⏳ Initializing runtime execution environment...\n");
+
+    const ext = (activeSession.selectedFileName || "").toLowerCase();
+    const isPython = ext.endsWith(".py") || current.language === "python";
+    const isJS = ext.endsWith(".js") || current.language === "javascript";
+
+    if (isPython) {
+      try {
+        if (!window.loadPyodide) {
+          throw new Error("Pyodide library not found. Please refresh the page.");
+        }
+        if (!pyodideRef.current) {
+          setRunOutput("📦 Downloading and initializing WebAssembly Python kernel...\n");
+          pyodideRef.current = await window.loadPyodide({
+            indexURL: "[https://cdn.jsdelivr.net/pyodide/v0.25.0/full/](https://cdn.jsdelivr.net/pyodide/v0.25.0/full/)"
+          });
+        }
+        pyodideRef.current.setStdout({
+          batched: (text) => setRunOutput((prev) => prev + text + "\n")
+        });
+        pyodideRef.current.setStderr({
+          batched: (text) => setRunOutput((prev) => prev + "⚠️ Error: " + text + "\n")
+        });
+        setRunOutput("🐍 Executing Python Script...\n--- [OUTPUT] ---\n");
+        await pyodideRef.current.runPythonAsync(current.code);
+        setRunOutput((prev) => prev + "\n✔ Execution finished successfully.");
+      } catch (err) {
+        setRunOutput((prev) => prev + `\n❌ Python Runtime Error:\n${err.message}`);
+      } finally {
+        setIsRunningCode(false);
+      }
+    } else if (isJS) {
+      try {
+        setRunOutput("⚡ Executing JavaScript in Sandbox...\n--- [OUTPUT] ---\n");
+        let outputBuffer = "";
+        const customConsole = {
+          log: (...args) => { outputBuffer += args.join(" ") + "\n"; },
+          error: (...args) => { outputBuffer += "⚠️ " + args.join(" ") + "\n"; },
+          warn: (...args) => { outputBuffer += "⚡ " + args.join(" ") + "\n"; }
+        };
+        const runFn = new Function("console", current.code);
+        runFn(customConsole);
+        setRunOutput((prev) => prev + (outputBuffer || "Code executed with no console.log() output.\n") + "\n✔ Execution finished.");
+      } catch (err) {
+        setRunOutput((prev) => prev + `\n❌ JavaScript Runtime Error:\n${err.message}`);
+      } finally {
+        setIsRunningCode(false);
+      }
+    } else {
+      setRunOutput(`⚠️ Live execution is currently optimized for Python (.py) and JavaScript (.js). Switch to the '👁️ Preview' tab to render HTML/CSS live.`);
+      setIsRunningCode(false);
+    }
+  };
+
+  const handleClearCurrentChat = () => {
+    if (window.confirm("Are you sure you want to clear messages in this project?")) {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeSessionId
+            ? {
+                ...s,
+                messages: [{
+                  role: "assistant",
+                  content: "Chat cleared. What software, architecture, or project would you like to explore next?",
+                  intent: "CHAT"
+                }],
+                workspaceFiles: {},
+                selectedFileName: "",
+                activeDiagram: "",
+                commands: []
+              }
+            : s
+        )
+      );
+    }
+  };
 
   const handleTextToSpeech = (text, index) => {
     if (!('speechSynthesis' in window)) {
@@ -413,6 +508,8 @@ export default function App() {
     setPanPosition({ x: 0, y: 0 });
     setZoomLevel(1);
     setConsoleLogs([]);
+    setIsRunOutputVisible(false);
+    setRunOutput("");
   };
 
   const togglePinSession = (sessionId, e) => {
@@ -471,12 +568,12 @@ export default function App() {
         formData.append("model", selectedModel);
         formData.append("user_email", userName || "guest");
 
-        res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/documents-multi", {
+        res = await fetch("[https://rishova-ai-backend.onrender.com/api/ai/documents-multi](https://rishova-ai-backend.onrender.com/api/ai/documents-multi)", {
           method: "POST",
           body: formData,
         });
       } else {
-        res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/universal", {
+        res = await fetch("[https://rishova-ai-backend.onrender.com/api/ai/universal](https://rishova-ai-backend.onrender.com/api/ai/universal)", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -520,9 +617,9 @@ export default function App() {
         }
       } else if (responseData.code_snippet) {
         newWorkspaceFiles = {
-          "app.js": { language: responseData.language || "javascript", code: responseData.code_snippet }
+          "main.py": { language: responseData.language || "python", code: responseData.code_snippet }
         };
-        newSelectedFile = "app.js";
+        newSelectedFile = "main.py";
         setActiveTab("code");
       }
 
@@ -862,6 +959,15 @@ export default function App() {
         </div>
 
         <div className="user-section" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <button
+            className="cloud-sync-status-btn"
+            onClick={() => setIsTemplatesOpen(true)}
+            title="Prompt Templates Library"
+            style={{ background: "#1e293b", borderColor: "#38bdf8", color: "#38bdf8" }}
+          >
+            💡 Templates
+          </button>
+
           <div className="usage-meter-pill" title="Daily API Quota Usage">
             <span>⚡ {usageData.tokens_used || 0} / {usageData.daily_limit || 50000} Tokens</span>
             <div className="usage-progress-track">
@@ -903,6 +1009,41 @@ export default function App() {
           <button className="logout-btn" onClick={() => { localStorage.clear(); setToken(null); }}>Logout</button>
         </div>
       </header>
+
+      {/* Prompt Templates Modal */}
+      {isTemplatesOpen && (
+        <div className="settings-modal-overlay" onClick={() => setIsTemplatesOpen(false)}>
+          <div className="settings-modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
+            <div className="settings-modal-header">
+              <h3>💡 Prompt Templates Library</h3>
+              <button className="settings-close-btn" onClick={() => setIsTemplatesOpen(false)}>✕</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" }}>
+              {PROMPT_TEMPLATES.map((tmpl, i) => (
+                <div 
+                  key={i} 
+                  style={{
+                    background: "#27272a",
+                    border: "1px solid #3f3f46",
+                    borderRadius: "8px",
+                    padding: "12px",
+                    cursor: "pointer",
+                    transition: "all 0.2s"
+                  }}
+                  onClick={() => {
+                    setInputPrompt(tmpl.prompt);
+                    setIsTemplatesOpen(false);
+                  }}
+                >
+                  <span style={{ fontSize: "0.72rem", color: "#38bdf8", textTransform: "uppercase", fontWeight: "600" }}>{tmpl.category}</span>
+                  <h4 style={{ margin: "4px 0", color: "#f4f4f5", fontSize: "0.95rem" }}>{tmpl.title}</h4>
+                  <p style={{ margin: 0, color: "#a1a1aa", fontSize: "0.82rem", lineBreak: "anywhere" }}>{tmpl.prompt.slice(0, 95)}...</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Keyboard Shortcuts Modal */}
       {isShortcutsOpen && (
@@ -1187,6 +1328,16 @@ export default function App() {
 
               <button
                 type="button"
+                className="attach-btn"
+                onClick={handleClearCurrentChat}
+                title="Clear Current Chat History"
+                style={{ fontSize: "0.9rem" }}
+              >
+                🗑️
+              </button>
+
+              <button
+                type="button"
                 className={`voice-btn ${isListening ? "listening" : ""}`}
                 onClick={handleToggleVoice}
                 title={isListening ? "Listening... Click to Stop" : "Voice Input (Speech-to-Text)"}
@@ -1200,8 +1351,8 @@ export default function App() {
                   isListening
                     ? "Listening to voice... Speak now..."
                     : selectedFiles.length > 0
-                    ? `Ask anything about these ${selectedFiles.length} files (images, audio, docs)...`
-                    : "Build software, architecture, analyze data, images, or chat in any language..."
+                    ? `Ask anything about these ${selectedFiles.length} files...`
+                    : "Build software, architecture, analyze data, or click '💡 Templates'..."
                 }
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
@@ -1236,14 +1387,24 @@ export default function App() {
 
               {activeTab === "code" && Object.keys(activeSession.workspaceFiles).length > 0 && (
                 <div className="canvas-controls">
+                  <button 
+                    className="action-btn"
+                    onClick={handleExecuteActiveCode}
+                    disabled={isRunningCode}
+                    title="Run Active Code in Browser (Python/JS)"
+                    style={{ background: "#16a34a", borderColor: "#22c55e", color: "#fff", fontWeight: "600" }}
+                  >
+                    {isRunningCode ? "⏳ Running..." : "▶ Run Code"}
+                  </button>
+
                   <div className="ai-actions-group">
                     <button className="ai-action-btn" onClick={() => handleAIAction("explain")} title="Explain active code">
                       ⚡ Explain
                     </button>
-                    <button className="ai-action-btn" onClick={() => handleAIAction("debug")} title="Scan for bugs & security flaws">
+                    <button className="ai-action-btn" onClick={() => handleAIAction("debug")} title="Scan for bugs">
                       🐛 Find Bugs
                     </button>
-                    <button className="ai-action-btn" onClick={() => handleAIAction("optimize")} title="Refactor and optimize code">
+                    <button className="ai-action-btn" onClick={() => handleAIAction("optimize")} title="Refactor code">
                       ✨ Optimize
                     </button>
                   </div>
@@ -1315,9 +1476,9 @@ export default function App() {
 
             <div className="workspace-content">
               {activeTab === "code" && (
-                <div className="code-viewer-area">
+                <div className="code-viewer-area" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
                   {Object.keys(activeSession.workspaceFiles).length > 0 ? (
-                    <div className="multi-file-workspace">
+                    <div className="multi-file-workspace" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
                       <div className="file-tabs-bar">
                         {Object.keys(activeSession.workspaceFiles).map((fname) => (
                           <button
@@ -1334,7 +1495,7 @@ export default function App() {
                         ))}
                       </div>
 
-                      <div className="active-code-card">
+                      <div className="active-code-card" style={{ flex: isRunOutputVisible ? "0 0 65%" : "1" }}>
                         <Editor
                           height="100%"
                           language={getMonacoLang(activeSession.selectedFileName)}
@@ -1354,11 +1515,27 @@ export default function App() {
                           }}
                         />
                       </div>
+
+                      {/* In-Browser Execution Output Terminal */}
+                      {isRunOutputVisible && (
+                        <div style={{ flex: "0 0 35%", background: "#0a0a0c", borderTop: "1px solid #27272a", display: "flex", flexDirection: "column" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 14px", background: "#18181b", borderBottom: "1px solid #27272a" }}>
+                            <span style={{ fontSize: "0.78rem", fontWeight: "600", color: "#38bdf8" }}>💻 Terminal Execution Output</span>
+                            <div style={{ display: "flex", gap: "8px" }}>
+                              <button onClick={() => setRunOutput("")} style={{ background: "transparent", border: "none", color: "#a1a1aa", cursor: "pointer", fontSize: "0.75rem" }}>Clear</button>
+                              <button onClick={() => setIsRunOutputVisible(false)} style={{ background: "transparent", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "0.75rem" }}>✕ Close</button>
+                            </div>
+                          </div>
+                          <pre style={{ margin: 0, padding: "12px", flex: 1, overflowY: "auto", fontFamily: "'Fira Code', monospace", fontSize: "0.82rem", color: "#e4e4e7", whiteSpace: "pre-wrap" }}>
+                            {runOutput}
+                          </pre>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="canvas-placeholder">
                       <p>💻 Monaco Code Workspace Ready</p>
-                      <span>Ask Rishova AI to build software or APIs to write, edit, and export code here.</span>
+                      <span>Ask Rishova AI to build software or click '💡 Templates' at the top to load a project.</span>
                     </div>
                   )}
                 </div>
