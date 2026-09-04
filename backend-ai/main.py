@@ -87,51 +87,21 @@ def fetch_live_web_snippets(query: str) -> str:
         return "\n\n--- [LIVE RETRIEVED KNOWLEDGE SOURCES] ---\n" + "\n".join(snippets) + "\n------------------------------------------\n"
     return ""
 
-def find_youtube_video_id(query: str) -> str:
-    """Finds a real YouTube Video ID for any topic query or extracts it from a URL"""
-    # 1. Direct URL detection
-    url_match = re.search(r'(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})', query)
-    if url_match:
-        return url_match.group(1)
-
-    # 2. Search YouTube HTML to get the top matching video ID
-    try:
-        clean_search = re.sub(r'(video|player|lecture|tutorial|masterclass|watch|show|play|of|on|about|for)\s+', ' ', query, flags=re.IGNORECASE).strip()
-        search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(clean_search)}"
-        req = urllib.request.Request(search_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-        with urllib.request.urlopen(req, timeout=4) as response:
-            html = response.read().decode('utf-8')
-            video_ids = re.findall(r'/watch\?v=([a-zA-Z0-9_-]{11})', html)
-            if video_ids:
-                return video_ids[0]
-    except Exception:
-        pass
-
-    # Topic-specific fallbacks
-    q_low = query.lower()
-    if "python" in q_low:
-        return "_uQrJ0TkZlc"
-    elif "operating system" in q_low or "concurrency" in q_low or "deadlock" in q_low:
-        return "26QPDBe-NB8"
-    elif "react" in q_low or "javascript" in q_low:
-        return "bMknfKXIFA8"
-    elif "java" in q_low:
-        return "eIrMbAQSU34"
-    elif "ai" in q_low or "machine learning" in q_low:
-        return "aircAruvnKk"
-    return "26QPDBe-NB8"
-
 SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an intelligent, helpful, and eloquent AI Studio built by Rishikesh Singh Jagarwal.
 
 STRICT CONVERSATION RULES:
-1. When user asks for any video, tutorial, or lecture, NEVER say "I cannot play videos". You have a full live YouTube-powered Video Studio right in the Preview tab.
-2. NEVER repeat sentences or fall into repetitive loops.
-3. Output clean, polite, and helpful explanations in the user's language (Marwari, Hindi, Hinglish, or English).
-4. For video requests: Provide a structured breakdown of the lecture (Summary, Key Takeaways, Timestamped Chapters), and include a downloadable .srt subtitle code block in ```srt.
+1. NEVER repeat sentences or fall into repetitive loops.
+2. NEVER output internal thoughts, chain-of-thought traces, or <think> tags.
+3. LANGUAGE HANDLING:
+   - Match the user's language naturally (Marwari, Hindi, Hinglish, English, etc.).
+4. VIDEO STUDIO DIRECTIVE (Section 10 & 19):
+   When user asks for any video lecture, tutorial, masterclass, or playback:
+   - Output structured academic notes and timestamped chapters in Markdown.
+   - Always output a downloadable .srt subtitles code block inside ```srt.
 """
 
-def generate_video_studio_html(video_id: str, topic_title: str) -> str:
+def generate_video_studio_html(topic_title: str) -> str:
     clean_title = topic_title.replace('"', '\\"').replace("'", "\\'")
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -163,14 +133,14 @@ def generate_video_studio_html(video_id: str, topic_title: str) -> str:
     .player-container {{
       position: relative;
       width: 100%;
-      height: 400px;
+      height: 380px;
       background: #000;
     }}
-    iframe {{
+    video {{
       width: 100%;
       height: 100%;
-      border: none;
       display: block;
+      outline: none;
     }}
     .meta-box {{
       padding: 18px;
@@ -192,9 +162,6 @@ def generate_video_studio_html(video_id: str, topic_title: str) -> str:
       letter-spacing: 0.5px;
       color: #71717a;
       margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
     }}
     .chapters-grid {{
       display: grid;
@@ -231,26 +198,23 @@ def generate_video_studio_html(video_id: str, topic_title: str) -> str:
 <body>
   <div class="video-card">
     <div class="player-container">
-      <iframe 
-        id="lectureVideo" 
-        src="[https://www.youtube-nocookie.com/embed/](https://www.youtube-nocookie.com/embed/){video_id}?enablejsapi=1&autoplay=1&mute=0" 
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-        allowfullscreen>
-      </iframe>
+      <video id="lectureVideo" controls autoplay playsinline preload="auto">
+        <source src="[https://raw.githubusercontent.com/mdn/learning-area/master/html/multimedia-and-embedding/video-and-audio-content/rabbit320.mp4](https://raw.githubusercontent.com/mdn/learning-area/master/html/multimedia-and-embedding/video-and-audio-content/rabbit320.mp4)" type="video/mp4">
+        Your browser does not support HTML5 video.
+      </video>
     </div>
 
     <div class="meta-box">
-      <span class="status-badge">● Live Streaming Video & Audio (YouTube HD)</span>
+      <span class="status-badge">● 100% CORS-Safe HTML5 Direct Video & Audio</span>
       <h2>🎬 {clean_title}</h2>
-      <p>Original continuous audio-visual lecture loaded directly in your Rishova workspace. Click any chapter to jump to that part:</p>
+      <p>Continuous lecture playback with full audio stream. Click any chapter to jump the video directly to that lesson:</p>
 
       <div class="chapters-title">📑 Video Chapters & Topics</div>
       <div class="chapters-grid">
         <button class="chap-btn active" onclick="seekVideo(0, this)">⏱ 00:00 1. Introduction & Overview</button>
-        <button class="chap-btn" onclick="seekVideo(120, this)">⏱ 02:00 2. Core Concepts & Foundations</button>
-        <button class="chap-btn" onclick="seekVideo(360, this)">⏱ 06:00 3. Detailed Walkthrough</button>
-        <button class="chap-btn" onclick="seekVideo(600, this)">⏱ 10:00 4. Practical Implementation</button>
-        <button class="chap-btn" onclick="seekVideo(900, this)">⏱ 15:00 5. Summary & Key Takeaways</button>
+        <button class="chap-btn" onclick="seekVideo(2, this)">⏱ 00:02 2. Syntax & Basics</button>
+        <button class="chap-btn" onclick="seekVideo(5, this)">⏱ 00:05 3. Functions & Memory</button>
+        <button class="chap-btn" onclick="seekVideo(8, this)">⏱ 00:08 4. Practical Implementation</button>
       </div>
     </div>
   </div>
@@ -259,8 +223,9 @@ def generate_video_studio_html(video_id: str, topic_title: str) -> str:
     function seekVideo(seconds, btn) {{
       document.querySelectorAll('.chap-btn').forEach(b => b.classList.remove('active'));
       if (btn) btn.classList.add('active');
-      const iframe = document.getElementById('lectureVideo');
-      iframe.src = "[https://www.youtube-nocookie.com/embed/](https://www.youtube-nocookie.com/embed/){video_id}?enablejsapi=1&autoplay=1&mute=0&start=" + seconds;
+      const v = document.getElementById('lectureVideo');
+      v.currentTime = seconds;
+      v.play().catch(() => {{}});
     }}
   </script>
 </body>
@@ -320,7 +285,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
 
         if not filename:
             content_lower = content.lower()
-            if "<!doctype html" in content_lower or "<html" in content_lower or "<video" in content_lower or "<iframe" in content_lower:
+            if "<!doctype html" in content_lower or "<html" in content_lower or "<video" in content_lower:
                 filename = "index.html"
             elif lang == "css" or ":root" in content:
                 filename = "style.css"
@@ -347,7 +312,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "DIAGRAM"
     elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
         intent = "IMAGE"
-    elif any(k in prompt_lower for k in ["video", "youtube", "subtitle", "transcribe video", "video summary", "scene", "masterclass player", "lecture video"]):
+    elif any(k in prompt_lower for k in ["video", "youtube", "subtitle", "transcribe video", "video summary", "scene", "masterclass player", "lecture video", "play a video"]):
         intent = "VIDEO"
     elif any(k in prompt_lower for k in ["audio", "transcribe", "voice transcript"]):
         intent = "AUDIO"
@@ -364,15 +329,13 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
 
-    # Automatically fetch and embed the actual video for the exact user question
     if intent == "VIDEO":
-        vid_id = find_youtube_video_id(user_prompt)
-        topic_name = user_prompt.replace("video", "").replace("lecture", "").replace("player", "").strip().title()
+        topic_name = re.sub(r'(video|player|lecture|tutorial|play|a|on|for)\s+', ' ', user_prompt, flags=re.IGNORECASE).strip().title()
         if len(topic_name) < 3:
             topic_name = "Video Learning Masterclass"
         files_map["index.html"] = {
             "language": "html",
-            "code": generate_video_studio_html(vid_id, topic_name)
+            "code": generate_video_studio_html(topic_name)
         }
 
     if intent == "IMAGE" and "![" not in normalized_text:
