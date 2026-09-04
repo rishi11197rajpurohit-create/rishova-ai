@@ -31,7 +31,7 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   };
 
   const handleDownload = () => {
-    const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html", sql: "sql" };
+    const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html", sql: "sql", srt: "srt" };
     const blob = new Blob([codeContent], { type: "text/plain;charset=utf-8" });
     saveAs(blob, `snippet.${extMap[lang] || "txt"}`);
   };
@@ -63,29 +63,7 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
         </div>
       </div>
       <div className="studio-code-body">
-        <SyntaxHighlighter
-          language={lang || "javascript"}
-          style={vscDarkPlus}
-          showLineNumbers={false}
-          wrapLines={true}
-          lineProps={{ style: { display: "block", width: "100%" } }}
-          customStyle={{
-            margin: 0,
-            padding: "14px 16px",
-            backgroundColor: "#131316",
-            fontSize: "0.9rem",
-            lineHeight: "1.6",
-            fontFamily: "'Fira Code', 'Consolas', monospace",
-            overflowX: "auto",
-          }}
-          codeTagProps={{
-            style: {
-              display: "block",
-              fontFamily: "'Fira Code', 'Consolas', monospace",
-              whiteSpace: "pre",
-            }
-          }}
-        >
+        <SyntaxHighlighter "#131316", "'Fira "0.9rem", "1.6", "100%" "14px "auto", "block", "javascript"} "pre", 'Consolas', 0, 16px", Code', backgroundColor: codeTagProps="{{" customStyle="{{" display: fontFamily: fontSize: language="{lang" lineHeight: lineProps="{{" margin: monospace", overflowX: padding: showLineNumbers="{false}" style="{vscDarkPlus}" style: whiteSpace: width: wrapLines="{true}" { || } }}>
           {codeContent}
         </SyntaxHighlighter>
       </div>
@@ -115,7 +93,9 @@ export default function App() {
   const [usageData, setUsageData] = useState({ tokens_used: 0, daily_limit: 50000 });
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
+  // Settings Modal State (Section 26)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [userSettings, setUserSettings] = useState(() => {
     const saved = localStorage.getItem("rishova_settings");
     return saved ? JSON.parse(saved) : {
@@ -130,9 +110,10 @@ export default function App() {
     return saved ? JSON.parse(saved) : [{
       id: "default-session",
       title: "New Workspace Project",
+      pinned: false,
       messages: [{
         role: "assistant",
-        content: "राम राम सा! Welcome to **RISHOVA AI Studio**. Ask me to architect, code, debug, learn, or chat in any language.",
+        content: "राम राम सा! Welcome to **RISHOVA AI Universal Studio**.\nAsk me to code, draw architecture diagrams, analyze data, create images, or transcribe audio and video.",
         intent: "CHAT"
       }],
       workspaceFiles: {},
@@ -144,6 +125,7 @@ export default function App() {
 
   const [activeSessionId, setActiveSessionId] = useState("default-session");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
 
@@ -156,6 +138,8 @@ export default function App() {
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
+
+  const [speakingIndex, setSpeakingIndex] = useState(null);
 
   const [consoleLogs, setConsoleLogs] = useState([]);
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
@@ -183,6 +167,21 @@ export default function App() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, loading]);
+
+  // Global Keyboard Shortcuts (Section 26)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        createNewSession();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+        e.preventDefault();
+        setSidebarOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const fetchUsage = async () => {
     try {
@@ -278,6 +277,32 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Text-To-Speech (AI Voice Output - Section 10 & 19)
+  const handleTextToSpeech = (text, index) => {
+    if (!('speechSynthesis' in window)) {
+      alert("Text-to-speech is not supported in this browser.");
+      return;
+    }
+
+    if (speakingIndex === index) {
+      window.speechSynthesis.cancel();
+      setSpeakingIndex(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const cleanText = text.replace(/```[\s\S]*?```/g, "Code block omitted from audio speech.").replace(/[#*_`]/g, "");
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = userSettings.language === "en" ? "en-US" : "hi-IN";
+    utterance.rate = 1.0;
+
+    utterance.onend = () => setSpeakingIndex(null);
+    utterance.onerror = () => setSpeakingIndex(null);
+
+    setSpeakingIndex(index);
+    window.speechSynthesis.speak(utterance);
+  };
+
   const handleToggleVoice = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -349,6 +374,7 @@ export default function App() {
     const newSession = {
       id: newId,
       title: "New Project",
+      pinned: false,
       messages: [{
         role: "assistant",
         content: "New workspace ready. What software, diagram, or analytics would you like to build?",
@@ -365,6 +391,13 @@ export default function App() {
     setPanPosition({ x: 0, y: 0 });
     setZoomLevel(1);
     setConsoleLogs([]);
+  };
+
+  const togglePinSession = (sessionId, e) => {
+    e.stopPropagation();
+    setSessions((prev) =>
+      prev.map((s) => s.id === sessionId ? { ...s, pinned: !s.pinned } : s)
+    );
   };
 
   const deleteSession = (sessionId, e) => {
@@ -384,7 +417,7 @@ export default function App() {
     if (!textToSend && (!attachedFilesList || attachedFilesList.length === 0)) return;
 
     const fileNames = attachedFilesList.map((f) => f.name).join(", ");
-    const userText = textToSend || (attachedFilesList.length > 0 ? `Analyze uploaded files: ${fileNames}` : "");
+    const userText = textToSend || (attachedFilesList.length > 0 ? `Process attached files: ${fileNames}` : "");
     const updatedMessages = [
       ...activeSession.messages,
       { role: "user", content: userText, attachedFile: fileNames || null }
@@ -733,6 +766,11 @@ export default function App() {
     return "javascript";
   };
 
+  // Filtered Sessions (Search & Pinned logic - Section 24)
+  const sortedAndFilteredSessions = [...sessions]
+    .filter((s) => s.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
   if (!token) {
     return (
       <div className="auth-wrapper">
@@ -780,7 +818,7 @@ export default function App() {
           <button 
             className="icon-toggle-btn"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            title="Toggle Sessions Sidebar"
+            title="Toggle Sessions Sidebar (Ctrl+B)"
           >
             ☰
           </button>
@@ -824,6 +862,15 @@ export default function App() {
 
           <button
             className="cloud-sync-status-btn"
+            onClick={() => setIsShortcutsOpen(true)}
+            title="Keyboard Shortcuts & Help Guide (Section 26)"
+            style={{ background: "#27272a" }}
+          >
+            ⌨️ Shortcuts
+          </button>
+
+          <button
+            className="cloud-sync-status-btn"
             onClick={() => setIsSettingsOpen(true)}
             title="Studio Settings & Preferences (Section 26)"
             style={{ background: "#27272a" }}
@@ -835,6 +882,42 @@ export default function App() {
           <button className="logout-btn" onClick={() => { localStorage.clear(); setToken(null); }}>Logout</button>
         </div>
       </header>
+
+      {/* Keyboard Shortcuts Modal (Section 26) */}
+      {isShortcutsOpen && (
+        <div className="settings-modal-overlay" onClick={() => setIsShortcutsOpen(false)}>
+          <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-modal-header">
+              <h3>⌨️ Keyboard Shortcuts & Quick Navigation</h3>
+              <button className="settings-close-btn" onClick={() => setIsShortcutsOpen(false)}>✕</button>
+            </div>
+            <table className="shortcuts-table">
+              <tbody>
+                <tr>
+                  <td><kbd>Ctrl</kbd> + <kbd>K</kbd></td>
+                  <td>Create New Project / Clear Workspace</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl</kbd> + <kbd>B</kbd></td>
+                  <td>Toggle Left Sidebar</td>
+                </tr>
+                <tr>
+                  <td><kbd>Enter</kbd></td>
+                  <td>Send Prompt to Rishova AI</td>
+                </tr>
+                <tr>
+                  <td><kbd>🔊 Listen</kbd></td>
+                  <td>AI Text-to-Speech Output (Hear response aloud)</td>
+                </tr>
+                <tr>
+                  <td><kbd>🎤 Mic</kbd></td>
+                  <td>Speech-to-Text Voice Input</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal - Section 26 */}
       {isSettingsOpen && (
@@ -926,26 +1009,47 @@ export default function App() {
           <aside className="sessions-sidebar">
             <div className="sidebar-header">
               <button className="new-project-btn" onClick={createNewSession}>
-                <span>+</span> New Project
+                <span>+</span> New Project (Ctrl+K)
               </button>
             </div>
+
+            {/* Sidebar Search Bar (Section 24) */}
+            <div className="sidebar-search-box">
+              <input
+                type="text"
+                placeholder="🔍 Search projects & history..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="sidebar-search-input"
+              />
+            </div>
+
             <div className="sessions-list">
               <div className="sessions-section-title">Projects & History</div>
-              {sessions.map((s) => (
+              {sortedAndFilteredSessions.map((s) => (
                 <div
                   key={s.id}
                   className={`session-item ${s.id === activeSessionId ? "active" : ""}`}
                   onClick={() => setActiveSessionId(s.id)}
                 >
-                  <span className="session-icon">📁</span>
+                  <span className="session-icon">{s.pinned ? "📌" : "📁"}</span>
                   <span className="session-title" title={s.title}>{s.title}</span>
-                  <button
-                    className="delete-session-btn"
-                    onClick={(e) => deleteSession(s.id, e)}
-                    title="Delete Project"
-                  >
-                    ×
-                  </button>
+                  <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                    <button
+                      className={`pin-session-btn ${s.pinned ? "pinned" : ""}`}
+                      onClick={(e) => togglePinSession(s.id, e)}
+                      title={s.pinned ? "Unpin Project" : "Pin Project to Top"}
+                    >
+                      ★
+                    </button>
+                    <button
+                      className="delete-session-btn"
+                      onClick={(e) => deleteSession(s.id, e)}
+                      title="Delete Project"
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -959,7 +1063,18 @@ export default function App() {
                 <div key={idx} className={`chat-message ${m.role}`}>
                   <div className="message-header">
                     <strong>{m.role === "user" ? "You" : "Rishova AI"}</strong>
-                    {m.intent && <span className="intent-tag">{m.intent}</span>}
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      {m.intent && <span className="intent-tag">{m.intent}</span>}
+                      {m.role === "assistant" && (
+                        <button 
+                          className="tts-speaker-btn"
+                          onClick={() => handleTextToSpeech(m.content, idx)}
+                          title="Read response aloud (Text-to-Speech)"
+                        >
+                          {speakingIndex === idx ? "⏹ Stop" : "🔊 Listen"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {m.attachedFile && (
                     <div className="file-badge">📎 {m.attachedFile}</div>
@@ -1012,7 +1127,7 @@ export default function App() {
                   )}
                 </div>
               ))}
-              {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is processing...</div>}
+              {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is processing multimodal request...</div>}
               <div ref={chatBottomRef} />
             </div>
 
@@ -1029,7 +1144,7 @@ export default function App() {
                 ref={fileInputRef}
                 multiple
                 style={{ display: "none" }}
-                accept=".pdf,.txt,.md,.js,.py,.json,.csv,.sql"
+                accept=".pdf,.txt,.md,.js,.py,.json,.csv,.sql,.png,.jpg,.jpeg,.webp,.mp3,.wav"
                 onChange={(e) => {
                   if (e.target.files) {
                     setSelectedFiles(Array.from(e.target.files));
@@ -1040,7 +1155,7 @@ export default function App() {
                 type="button"
                 className="attach-btn"
                 onClick={() => fileInputRef.current?.click()}
-                title="Upload One or Multiple Documents"
+                title="Upload Documents, Images (OCR), or Audio"
               >
                 📎
               </button>
@@ -1060,8 +1175,8 @@ export default function App() {
                   isListening
                     ? "Listening to voice... Speak now..."
                     : selectedFiles.length > 0
-                    ? `Ask anything about these ${selectedFiles.length} files...`
-                    : "Build software, architecture, images, or chat in Hindi, Marwari, English..."
+                    ? `Ask anything about these ${selectedFiles.length} files (images, audio, docs)...`
+                    : "Build software, architecture, analyze data, images, or chat in any language..."
                 }
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}

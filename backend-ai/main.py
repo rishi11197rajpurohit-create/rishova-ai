@@ -2,6 +2,7 @@ import os
 import re
 import json
 import io
+import base64
 import urllib.parse
 import urllib.request
 from typing import List
@@ -94,13 +95,15 @@ STRICT CONVERSATION RULES:
 2. NEVER output internal thoughts, chain-of-thought traces, or <think> tags.
 3. LANGUAGE HANDLING:
    - For Marwari/Rajasthani: Respond in clean, natural, and respectful Rajasthani/Hindi (e.g. "राम राम सा! बिल्कुल, आपां मारवाड़ी में बात करांला। हुकम करो सा, आज कांई बणावणो या सीखणो है?").
-   - For Hindi/Hinglish: Respond in polished, conversational Hindi or Hinglish matching the user.
+   - For Hindi/Hinglish: Respond in polite Hindi or friendly Hinglish matching the user.
    - For English/Global languages: Respond fluently and concisely.
 4. CODE & ARTIFACTS:
    - Always output programming code in clean English using markdown code fences (```html, ```css, ```javascript, ```python) with file names on line 1.
    - Terminal commands in ```bash.
    - Diagrams in ```mermaid starting with `graph TD`.
    - Images in `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_PROMPT>?width=1024&height=1024&nologo=true)`.
+5. VIDEO STUDIO (Section 10 & 19):
+   - When asked to analyze a video topic, summarize, or create subtitles, generate structured timestamped chapters and a downloadable .srt subtitle code block.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool = False):
@@ -150,7 +153,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         for line in first_lines:
             clean_l = re.sub(r"^(//|/\*|\*|#|<!--)\s*", "", line)
             clean_l = re.sub(r"\s*(\*/|-->)$", "", clean_l).strip()
-            match_name = re.search(r"([\w\-./]+\.(html|css|js|jsx|ts|tsx|json|py|sql|sh|md))", clean_l, re.IGNORECASE)
+            match_name = re.search(r"([\w\-./]+\.(html|css|js|jsx|ts|tsx|json|py|sql|sh|md|srt))", clean_l, re.IGNORECASE)
             if match_name:
                 filename = os.path.basename(match_name.group(1))
                 break
@@ -165,8 +168,10 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
                 filename = "script.js"
             elif lang in ["py", "python"]:
                 filename = f"main_{file_idx}.py"
+            elif lang == "srt":
+                filename = "subtitles.srt"
             else:
-                ext = lang if lang in ["js", "py", "json", "html", "css", "ts", "sql"] else "txt"
+                ext = lang if lang in ["js", "py", "json", "html", "css", "ts", "sql", "srt"] else "txt"
                 filename = f"file_{file_idx}.{ext}"
 
         if filename not in files_map:
@@ -182,6 +187,10 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "DIAGRAM"
     elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
         intent = "IMAGE"
+    elif any(k in prompt_lower for k in ["video", "subtitle", "transcribe video", "video summary"]):
+        intent = "VIDEO"
+    elif any(k in prompt_lower for k in ["audio", "transcribe", "voice transcript"]):
+        intent = "AUDIO"
     elif any(k in prompt_lower for k in ["compare documents", "documents", "multi-file", "pdf summary"]):
         intent = "DOCS"
     elif any(k in prompt_lower for k in ["chart", "data analysis", "visualize", "plot", "graph", "analytics"]):
@@ -325,39 +334,90 @@ async def handle_universal_prompt(req: UniversalRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Multi-Document & Vision & Audio Multi-Modal Endpoint (Section 10, 19, 20)
 @app.post("/api/ai/documents-multi")
 async def handle_multi_document_prompt(
     files: List[UploadFile] = File(...),
-    prompt: str = Form("Compare and summarize these documents"),
+    prompt: str = Form("Analyze these files"),
     model: str = Form("llama-3.3-70b-versatile"),
     user_email: str = Form("guest")
 ):
     try:
         combined_text_corpus = []
+        has_image = False
+        image_base64 = None
+
         for file in files:
             content = await file.read()
-            filename = file.filename
+            filename = file.filename.lower()
             extracted_text = ""
-            if filename.lower().endswith(".pdf"):
+
+            # Check if Image (Vision & OCR - Section 19 & 20)
+            if filename.endswith((".png", ".jpg", ".jpeg", ".webp")):
+                has_image = True
+                image_base64 = base64.b64encode(content).decode("utf-8")
+                combined_text_corpus.append(f"=== ATTACHED IMAGE: {file.filename} ===")
+
+            # Check if Audio (Audio Studio - Section 10 & 19)
+            elif filename.endswith((".mp3", ".wav", ".m4a", ".ogg")):
+                try:
+                    # Groq Whisper Audio Transcription API
+                    transcription = client.audio.transcriptions.create(
+                        file=(file.filename, io.BytesIO(content)),
+                        model="whisper-large-v3-turbo",
+                        response_format="text",
+                        language="en"
+                    )
+                    combined_text_corpus.append(f"=== AUDIO TRANSCRIPT ({file.filename}) ===\n{transcription}\n")
+                except Exception as ex:
+                    combined_text_corpus.append(f"=== AUDIO FILE ({file.filename}) ===\n(Audio Transcription processing notes: {ex})\n")
+
+            # Check if PDF
+            elif filename.endswith(".pdf"):
                 try:
                     pdf_reader = PdfReader(io.BytesIO(content))
                     pages_text = [p.extract_text() or "" for p in pdf_reader.pages[:10]]
                     extracted_text = "\n".join(pages_text)
+                    combined_text_corpus.append(f"=== DOCUMENT: {file.filename} ===\n{extracted_text[:4000]}\n")
                 except Exception as ex:
-                    extracted_text = f"Error reading PDF {filename}: {ex}"
+                    combined_text_corpus.append(f"Error reading PDF {file.filename}: {ex}")
+
+            # Text / Code / CSV
             else:
                 try:
                     extracted_text = content.decode("utf-8", errors="ignore")
+                    combined_text_corpus.append(f"=== DOCUMENT: {file.filename} ===\n{extracted_text[:4000]}\n")
                 except Exception as ex:
-                    extracted_text = f"Error reading file {filename}: {ex}"
+                    combined_text_corpus.append(f"Error reading file {file.filename}: {ex}")
 
-            combined_text_corpus.append(f"=== DOCUMENT: {filename} ===\n{extracted_text[:4000]}\n")
+        # If image is present, invoke Llama 3.2 Vision Model
+        if has_image and image_base64:
+            vision_messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": f"{prompt}\n\nIf this image contains a diagram, flowchart, or architecture, convert it into clean Mermaid.js code starting with `graph TD` in ```mermaid. If it contains text or a certificate, extract it accurately using OCR."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+                    ]
+                }
+            ]
+            try:
+                completion = client.chat.completions.create(
+                    model="llama-3.2-11b-vision-preview",
+                    messages=vision_messages,
+                    temperature=0.2
+                )
+                raw_markdown = completion.choices[0].message.content
+                return parse_llm_markdown_response(raw_markdown, prompt)
+            except Exception as e:
+                pass
 
+        # Text / Document / Audio Synthesis
         full_doc_context = "\n".join(combined_text_corpus)
         composed_prompt = (
-            f"User Prompt: {prompt}\n\n"
-            f"Documents Context:\n{full_doc_context}\n\n"
-            f"Respond directly, naturally, and clearly in the exact same language used by the user without internal thought traces or repetition."
+            f"User Instruction: {prompt}\n\n"
+            f"Attached Files & Content:\n{full_doc_context}\n\n"
+            f"Synthesize, extract, transcribe, or compare as requested without repetition."
         )
 
         messages = [

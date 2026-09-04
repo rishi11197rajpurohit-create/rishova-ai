@@ -1516,4 +1516,81 @@ body {
 .markdown-content li {
   margin-bottom: 6px;
   line-height: 1.6;
+}/* TTS Listen Button, Search & Pinned Sidebar Styles */
+.tts-speaker-btn {
+  background: none;
+  border: 1px solid #3f3f46;
+  color: #a1a1aa;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+
+.tts-speaker-btn:hover {
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.sidebar-search-box {
+  padding: 8px 12px;
+  border-bottom: 1px solid #27272a;
+}
+
+.sidebar-search-input {
+  width: 100%;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 6px;
+  color: #f4f4f5;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.sidebar-search-input:focus {
+  border-color: #3b82f6;
+}
+
+.pin-session-btn {
+  background: none;
+  border: none;
+  color: #71717a;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0 4px;
+  transition: color 0.2s;
+}
+
+.pin-session-btn.pinned {
+  color: #f59e0b;
+}
+
+.pin-session-btn:hover {
+  color: #fbbf24;
+}
+
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.shortcuts-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #27272a;
+}
+
+.shortcuts-table kbd {
+  background: #27272a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: #38bdf8;
 }
