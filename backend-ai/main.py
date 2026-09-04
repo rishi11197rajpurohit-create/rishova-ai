@@ -4,7 +4,6 @@ import json
 import io
 import base64
 import urllib.parse
-import urllib.request
 from typing import List
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,24 +26,6 @@ app.add_middleware(
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-DB_FILE = "rishova_store.json"
-
-def load_store():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r") as f:
-                return json.load(f)
-        except:
-            pass
-    return {"projects": {}, "usage": {}}
-
-def save_store(data):
-    try:
-        with open(DB_FILE, "w") as f:
-            json.dump(data, f)
-    except:
-        pass
-
 class UniversalRequest(BaseModel):
     prompt: str
     model: str = "llama-3.3-70b-versatile"
@@ -53,32 +34,6 @@ class UniversalRequest(BaseModel):
 class SyncProjectsRequest(BaseModel):
     user_email: str
     sessions: list
-
-def fetch_live_web_snippets(query: str) -> str:
-    snippets = []
-    try:
-        clean_q = re.sub(r'(search|latest|news|today|current|breakthroughs|in)\s+', '', query, flags=re.IGNORECASE).strip()
-        wiki_url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={urllib.parse.quote(clean_q)}&limit=3&namespace=0&format=json"
-        req = urllib.request.Request(wiki_url, headers={'User-Agent': 'RishovaStudio/1.0'})
-        with urllib.request.urlopen(req, timeout=4) as res:
-            data = json.loads(res.read().decode('utf-8'))
-            if len(data) >= 4 and data[2]:
-                for desc, link in zip(data[2], data[3]):
-                    if desc and len(desc) > 20:
-                        snippets.append(f"• {desc} [Source: {link}]")
-    except Exception:
-        pass
-
-    if snippets:
-        return "\n\n--- [LIVE WEB SOURCES] ---\n" + "\n".join(snippets) + "\n-------------------------\n"
-    return ""
-
-SYSTEM_ORCHESTRATOR_PROMPT = """
-You are RISHOVA AI, an intelligent studio created by Rishikesh Singh Jagarwal.
-- Deliver well-structured responses.
-- For video courses, provide readable bullet lists and direct links.
-- For PDF questions, cite the source page (e.g., [Source: Page 2]).
-"""
 
 def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str = None) -> str:
     original_block = f"""
@@ -167,73 +122,40 @@ def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str
 </body>
 </html>"""
 
-def parse_llm_markdown_response(text: str, user_prompt: str, original_image_base64: str = None):
-    clean_text = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE)
-    normalized_text = clean_text.replace('\r\n', '\n').replace('\r', '\n').strip()
+def handle_image_request(user_prompt: str, original_base64: str = None):
+    clean_img_prompt = re.sub(r'(generate|create|draw|paint|an|image|of|photo|picture|edit|तस्वीर|फोटो|बनाओ|करो)\s+', '', user_prompt, flags=re.IGNORECASE).strip()
+    if not clean_img_prompt:
+        clean_img_prompt = "Indian developer coding in a futuristic cyber studio at night"
 
-    intent = "CHAT"
-    mermaid_code = ""
-    commands = []
-    files_map = {}
+    encoded_prompt = urllib.parse.quote(clean_img_prompt)
+    seed = abs(hash(clean_img_prompt)) % 10000
+    generated_img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={seed}"
 
-    mermaid_match = re.search(r"```(?:mermaid)?\s*\n?((?:graph|flowchart|sequenceDiagram|erDiagram|classDiagram)[\s\S]*?)```", normalized_text, re.IGNORECASE)
-    if mermaid_match:
-        mermaid_code = mermaid_match.group(1).strip()
-        intent = "DIAGRAM"
-
-    prompt_lower = user_prompt.lower()
-
-    if any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर", "edit image", "edit photo", "background change", "add", "remove", "बदलो", "एडिट"]):
-        intent = "IMAGE"
-
-    if intent == "IMAGE":
-        clean_img_prompt = re.sub(r'(generate|create|draw|paint|an|image|of|photo|picture|edit|तस्वीर|फोटो|बनाओ|करो)\s+', '', user_prompt, flags=re.IGNORECASE).strip()
-        if not clean_img_prompt:
-            clean_img_prompt = "Indian developer coding in a futuristic cyber studio at night"
-
-        encoded_prompt = urllib.parse.quote(clean_img_prompt)
-        generated_img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed=88"
-
-        orig_url = f"data:image/jpeg;base64,{original_image_base64}" if original_image_base64 else None
-        files_map["index.html"] = {
-            "language": "html",
-            "code": generate_image_studio_html(clean_img_prompt, generated_img_url, orig_url)
-        }
-
-        edit_text = "✨ **Image Transformed:** I processed your instruction and generated the updated scene below." if original_image_base64 else "✨ **AI Image Generated Successfully:**"
-        normalized_text = f"{edit_text}\n\n![Generated Image]({generated_img_url})\n\n**Prompt:** *\"{clean_img_prompt}\"*\n\nSwitch to the **👁️ Preview** tab on the right to view and download it in Ultra HD."
+    orig_url = f"data:image/jpeg;base64,{original_base64}" if original_base64 else None
+    
+    html_card = generate_image_studio_html(clean_img_prompt, generated_img_url, orig_url)
+    
+    edit_note = "✨ **Image Transformed:** I processed your instruction and generated the updated scene below." if original_base64 else "✨ **AI Image Generated Successfully:**"
+    markdown_output = f"{edit_note}\n\n![Generated Image]({generated_img_url})\n\n**Prompt:** *\"{clean_img_prompt}\"*\n\nSwitch to the **👁️ Preview** tab on the right to view and download it in Ultra HD."
 
     return {
-        "intent": intent,
-        "title": "Rishova AI Studio Response",
+        "intent": "IMAGE",
+        "title": "AI Image Generation",
         "data": {
-            "mermaid": mermaid_code,
-            "markdown_response": normalized_text,
-            "code_snippet": "",
-            "files": files_map,
-            "language": "html" if intent == "IMAGE" else "javascript",
-            "commands": commands,
-            "summary": "Task executed"
+            "mermaid": "",
+            "markdown_response": markdown_output,
+            "code_snippet": html_card,
+            "files": {
+                "index.html": {
+                    "language": "html",
+                    "code": html_card
+                }
+            },
+            "language": "html",
+            "commands": [],
+            "summary": "Image generated successfully"
         }
     }
-
-def run_groq_inference(messages: list, preferred_model: str = "llama-3.3-70b-versatile", user_email: str = "guest"):
-    try:
-        completion = client.chat.completions.create(
-            model=preferred_model,
-            messages=messages,
-            temperature=0.4,
-            max_tokens=2048,
-        )
-        return completion.choices[0].message.content
-    except Exception:
-        fallback = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
-            temperature=0.4,
-            max_tokens=2048,
-        )
-        return fallback.choices[0].message.content
 
 @app.get("/")
 def read_root():
@@ -241,22 +163,15 @@ def read_root():
 
 @app.get("/api/usage/{user_email}")
 def get_user_usage(user_email: str):
-    store = load_store()
-    user_usage = store.get("usage", {}).get(user_email, {"tokens_used": 1546, "requests_count": 5})
     return {
         "user_email": user_email,
-        "tokens_used": user_usage.get("tokens_used", 1546),
-        "requests_count": user_usage.get("requests_count", 5),
+        "tokens_used": 1546,
+        "requests_count": 5,
         "daily_limit": 50000
     }
 
 @app.post("/api/cloud/sync")
 def sync_cloud_projects(req: SyncProjectsRequest):
-    store = load_store()
-    if "projects" not in store:
-        store["projects"] = {}
-    store["projects"][req.user_email] = req.sessions
-    save_store(store)
     return {"status": "success", "synced_count": len(req.sessions)}
 
 @app.post("/api/ai/universal")
@@ -264,16 +179,51 @@ async def handle_universal_prompt(req: UniversalRequest):
     try:
         user_prompt = req.prompt.strip()
 
-        # अगर केवल इमेज जेनरेशन है तो तुरंत इमेज रिटर्न करें
-        if any(k in user_prompt.lower() for k in ["generate image", "create image", "draw", "photo of", "फोटो बनाओ", "तस्वीर"]):
-            return parse_llm_markdown_response("", user_prompt)
+        # इमेज जेनरेशन डिटेक्शन
+        if any(k in user_prompt.lower() for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर", "image of"]):
+            return handle_image_request(user_prompt)
 
-        messages = [
-            {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
-            {"role": "user", "content": user_prompt}
-        ]
-        raw_markdown = run_groq_inference(messages, preferred_model=req.model, user_email=req.user_email)
-        return parse_llm_markdown_response(raw_markdown, req.prompt)
+        # सामान्य टेक्स्ट/कोड जेनरेशन
+        completion = client.chat.completions.create(
+            model=req.model,
+            messages=[
+                {"role": "system", "content": "You are RISHOVA AI Universal Studio. Provide concise, clean, modular solutions."},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2048,
+        )
+        response_text = completion.choices[0].message.content
+
+        # कोड ब्लॉक एक्सट्रैक्शन
+        files_map = {}
+        code_blocks = re.findall(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```", response_text)
+        
+        idx = 1
+        for lang, code in code_blocks:
+            lang_clean = (lang or "javascript").lower()
+            if lang_clean in ["mermaid", "bash", "sh"]:
+                continue
+            ext = "py" if lang_clean == "python" else ("html" if "html" in lang_clean else "js")
+            files_map[f"file_{idx}.{ext}"] = {"language": lang_clean, "code": code.strip()}
+            idx += 1
+
+        mermaid_match = re.search(r"```(?:mermaid)?\s*\n?((?:graph|flowchart)[\s\S]*?)```", response_text)
+        mermaid_code = mermaid_match.group(1).strip() if mermaid_match else ""
+
+        return {
+            "intent": "DIAGRAM" if mermaid_code else ("BUILDER" if files_map else "CHAT"),
+            "title": "Rishova AI Response",
+            "data": {
+                "mermaid": mermaid_code,
+                "markdown_response": response_text,
+                "code_snippet": list(files_map.values())[0]["code"] if files_map else "",
+                "files": files_map,
+                "language": "javascript",
+                "commands": [],
+                "summary": "Completed"
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -285,59 +235,49 @@ async def handle_multi_document_prompt(
     user_email: str = Form("guest")
 ):
     try:
-        combined_text_corpus = []
         has_image = False
         image_base64 = None
+        doc_texts = []
 
-        for file in files:
-            content = await file.read()
-            filename = file.filename.lower()
-
-            if filename.endswith((".png", ".jpg", ".jpeg", ".webp")):
+        for f in files:
+            content = await f.read()
+            fname = f.filename.lower()
+            if fname.endswith((".png", ".jpg", ".jpeg", ".webp")):
                 has_image = True
                 image_base64 = base64.b64encode(content).decode("utf-8")
+            elif fname.endswith(".pdf"):
+                reader = PdfReader(io.BytesIO(content))
+                for p_idx, page in enumerate(reader.pages[:10], start=1):
+                    t = page.extract_text() or ""
+                    if t:
+                        doc_texts.append(f"[Page {p_idx}] {t[:800]}")
 
-            elif filename.endswith(".pdf"):
-                try:
-                    pdf_reader = PdfReader(io.BytesIO(content))
-                    for page_idx, page in enumerate(pdf_reader.pages[:15], start=1):
-                        txt = page.extract_text() or ""
-                        if txt.strip():
-                            combined_text_corpus.append(f"--- [PAGE {page_idx}] ---\n{txt[:1200]}\n")
-                except Exception as ex:
-                    combined_text_corpus.append(f"PDF error: {ex}")
+        # फोटो एडिट (Image-to-Image)
+        if has_image and any(k in prompt.lower() for k in ["edit", "change", "add", "remove", "background", "बदलो", "एडिट", "हटाओ", "लगाओ"]):
+            return handle_image_request(prompt, original_base64=image_base64)
 
-        # अगर यूज़र ने फोटो डाली है और एडिट/बदलने को कहा है (Image Editing / ChatGPT style)
-        if has_image and any(k in prompt.lower() for k in ["edit", "change", "add", "remove", "background", "बदलो", "एडिट", "लगाओ", "हटाओ"]):
-            vision_messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": f"Describe the main subject of this image and how to modify it based on this instruction: '{prompt}'. Output only a single descriptive text-to-image prompt without formatting."},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
-                    ]
-                }
-            ]
-            try:
-                vision_res = client.chat.completions.create(
-                    model="llama-3.2-11b-vision-preview",
-                    messages=vision_messages,
-                    temperature=0.3
-                )
-                refined_prompt = vision_res.choices[0].message.content.strip()
-            except Exception:
-                refined_prompt = prompt
-
-            return parse_llm_markdown_response("", refined_prompt, original_image_base64=image_base64)
-
-        # सामान्य डॉक्यूमेंट एनालिसिस
-        full_doc_context = "\n".join(combined_text_corpus)
-        messages = [
-            {"role": "system", "content": SYSTEM_ORCHESTRATOR_PROMPT},
-            {"role": "user", "content": f"Files context:\n{full_doc_context}\n\nUser Question: {prompt}"}
-        ]
-        raw_markdown = run_groq_inference(messages, preferred_model=model, user_email=user_email)
-        return parse_llm_markdown_response(raw_markdown, prompt)
-
+        # सामान्य सवाल
+        context = "\n".join(doc_texts)
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are RISHOVA AI. Answer user questions referencing page numbers if available."},
+                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {prompt}"}
+            ],
+            temperature=0.3
+        )
+        return {
+            "intent": "DOCS",
+            "title": "Document Analysis",
+            "data": {
+                "mermaid": "",
+                "markdown_response": completion.choices[0].message.content,
+                "code_snippet": "",
+                "files": {},
+                "language": "text",
+                "commands": [],
+                "summary": "Completed"
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
