@@ -111,7 +111,7 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 16px;
+      padding: 14px;
       background: #09090b;
       color: #f4f4f5;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -121,69 +121,46 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
     }
     .video-card {
       width: 100%;
-      max-width: 760px;
+      max-width: 780px;
       background: #18181b;
       border: 1px solid #27272a;
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 12px 30px rgba(0,0,0,0.6);
     }
-    .screen-container {
+    .video-wrapper {
       position: relative;
       width: 100%;
-      height: 340px;
       background: #000;
-      overflow: hidden;
+    }
+    video {
+      width: 100%;
+      max-height: 380px;
+      display: block;
+      outline: none;
+    }
+    .captions-box {
+      padding: 10px 16px;
+      background: #111113;
+      border-top: 1px solid #27272a;
+      border-bottom: 1px solid #27272a;
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 10px;
     }
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-    .overlay-captions {
-      position: absolute;
-      bottom: 14px;
-      left: 20px;
-      right: 20px;
-      text-align: center;
-      background: rgba(0,0,0,0.75);
-      padding: 6px 14px;
-      border-radius: 6px;
+    .captions-text {
       font-size: 0.9rem;
       color: #38bdf8;
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      pointer-events: none;
+      font-weight: 500;
+      flex: 1;
     }
-    .controls-bar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      background: #141416;
-      border-top: 1px solid #27272a;
-    }
-    .ctrl-btn {
-      background: #2563eb;
-      border: none;
-      color: #fff;
-      padding: 6px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.85rem;
+    .voice-badge {
+      background: #1e3a8a;
+      color: #93c5fd;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
       font-weight: 600;
-    }
-    .ctrl-btn:hover { background: #1d4ed8; }
-    .timer-display {
-      font-family: monospace;
-      font-size: 0.85rem;
-      color: #a1a1aa;
-    }
-    .vol-slider {
-      width: 90px;
-      accent-color: #38bdf8;
     }
     .meta-box {
       padding: 16px;
@@ -199,19 +176,26 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
       color: #a1a1aa;
       line-height: 1.4;
     }
+    .chapters-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #71717a;
+      margin-bottom: 8px;
+    }
     .chapters-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 8px;
     }
     .chap-btn {
       background: #27272a;
       border: 1px solid #3f3f46;
       color: #f4f4f5;
-      padding: 8px 10px;
-      border-radius: 6px;
+      padding: 10px 12px;
+      border-radius: 8px;
       cursor: pointer;
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       text-align: left;
       transition: all 0.2s;
     }
@@ -233,155 +217,66 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <div class="video-card">
-    <div class="screen-container">
-      <canvas id="visualizer"></canvas>
-      <div class="overlay-captions" id="captionsText">▶ Click 'Play Lecture' to start Video & Audio playback</div>
+    <div class="video-wrapper">
+      <video id="mainVideo" controls playsinline preload="auto" poster="[https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80](https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80)">
+        <source src="[https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4](https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4)" type="video/mp4">
+        <source src="[https://media.w3.org/2010/05/sintel/trailer.mp4](https://media.w3.org/2010/05/sintel/trailer.mp4)" type="video/mp4">
+        Your browser does not support HTML5 video.
+      </video>
     </div>
-    
-    <div class="controls-bar">
-      <button class="ctrl-btn" id="playBtn" onclick="togglePlay()">▶ Play Lecture</button>
-      <span class="timer-display" id="timeDisplay">00:00 / 02:00</span>
-      <span style="font-size:0.8rem; color:#a1a1aa; margin-left:auto;">🔊 Vol:</span>
-      <input type="range" class="vol-slider" id="volControl" min="0" max="1" step="0.1" value="0.7">
+
+    <div class="captions-box">
+      <span class="voice-badge">🔊 AI LECTURE VOICE</span>
+      <div class="captions-text" id="captionLine">Chapter 1: Welcome to Operating Systems & Concurrency Architecture</div>
     </div>
 
     <div class="meta-box">
-      <span class="status-badge">● Active Media Stream Ready</span>
-      <h2>🎬 Video Masterclass: Operating Systems & Concurrency</h2>
-      <p>Click any chapter below to jump the video stream, audio synthesis, and live captions directly to that topic:</p>
-      
+      <span class="status-badge">● Masterclass Video & Audio Synced</span>
+      <h2>🎬 Operating Systems: Concurrency & Architecture Lecture</h2>
+      <p>Click any chapter button below. The video jumps to that section and the AI voice explains the topic with audio:</p>
+
+      <div class="chapters-title">Jump to Chapter Lecture</div>
       <div class="chapters-grid">
-        <button class="chap-btn active" onclick="jumpChapter(0, 'Chapter 1: Welcome & OS Architecture Overview')">⏱ 00:00 1. Architecture</button>
-        <button class="chap-btn" onclick="jumpChapter(20, 'Chapter 2: Process Scheduling & Context Switching')">⏱ 00:20 2. Process Scheduling</button>
-        <button class="chap-btn" onclick="jumpChapter(45, 'Chapter 3: Threads, Concurrency & Mutex Locks')">⏱ 00:45 3. Concurrency & Locks</button>
-        <button class="chap-btn" onclick="jumpChapter(75, 'Chapter 4: Deadlocks & Banker\\'s Algorithm')">⏱ 01:15 4. Deadlock Prevention</button>
-        <button class="chap-btn" onclick="jumpChapter(100, 'Chapter 5: Virtual Memory, Paging & Summary')">⏱ 01:40 5. Paging & Summary</button>
+        <button class="chap-btn active" onclick="playChapter(0, 'Chapter 1: Welcome and Introduction to Operating Systems Architecture and Kernel Design.', 'Welcome to Operating Systems Concurrency lecture. Today we will explore system architecture, process scheduling, and multi-threading.')">⏱ 00:00 1. OS Architecture</button>
+        <button class="chap-btn" onclick="playChapter(4, 'Chapter 2: Process Management, States and Context Switching in Operating Systems.', 'In process management, each process contains code, data, heap, and stack. The operating system performs context switching using the Process Control Block.')">⏱ 00:04 2. Process Scheduling</button>
+        <button class="chap-btn" onclick="playChapter(8, 'Chapter 3: Multi-threading, Race Conditions and Synchronization Primitives.', 'Concurrency allows multiple threads to execute simultaneously. To prevent race conditions, we use mutex locks, semaphores, and monitors.')">⏱ 00:08 3. Concurrency & Locks</button>
+        <button class="chap-btn" onclick="playChapter(12, 'Chapter 4: Deadlocks, Mutual Exclusion, and Resource Allocation Graph.', 'A deadlock occurs when processes hold resources and wait for others. The four necessary conditions are mutual exclusion, hold and wait, no preemption, and circular wait.')">⏱ 00:12 4. Deadlock Prevention</button>
       </div>
     </div>
   </div>
 
   <script>
-    const canvas = document.getElementById('visualizer');
-    const ctx = canvas.getContext('2d');
-    const captionsText = document.getElementById('captionsText');
-    const playBtn = document.getElementById('playBtn');
-    const timeDisplay = document.getElementById('timeDisplay');
-    const volControl = document.getElementById('volControl');
+    const video = document.getElementById('mainVideo');
+    const captionLine = document.getElementById('captionLine');
 
-    let isPlaying = false;
-    let currentTime = 0;
-    let currentTopic = "Chapter 1: Welcome & OS Architecture Overview";
-    let audioCtx = null;
-    let osc = null;
-    let gainNode = null;
-
-    function resizeCanvas() {
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = canvas.parentElement.clientHeight;
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    function initAudio() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        gainNode = audioCtx.createGain();
-        gainNode.gain.value = parseFloat(volControl.value) * 0.15;
-        gainNode.connect(audioCtx.destination);
+    function speakText(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
+        utter.lang = 'en-US';
+        window.speechSynthesis.speak(utter);
       }
     }
 
-    volControl.addEventListener('input', (e) => {
-      if (gainNode) gainNode.gain.value = parseFloat(e.target.value) * 0.15;
-    });
-
-    function playTone(freq) {
-      if (!audioCtx) initAudio();
-      try {
-        const o = audioCtx.createOscillator();
-        o.type = 'sine';
-        o.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        o.connect(gainNode);
-        o.start();
-        o.stop(audioCtx.currentTime + 0.3);
-      } catch(e){}
-    }
-
-    function togglePlay() {
-      initAudio();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      isPlaying = !isPlaying;
-      playBtn.textContent = isPlaying ? '⏸ Pause' : '▶ Play Lecture';
-      if (isPlaying) {
-        playTone(440);
-      }
-    }
-
-    function jumpChapter(time, topic) {
-      initAudio();
-      currentTime = time;
-      currentTopic = topic;
-      captionsText.textContent = topic;
-      document.querySelectorAll('.chap-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.textContent.includes(topic.split(':')[0].replace('Chapter ', '')));
+    function playChapter(seconds, caption, speech) {
+      captionLine.textContent = caption;
+      document.querySelectorAll('.chap-btn').forEach(b => {
+        b.classList.toggle('active', b.textContent.includes(caption.split(':')[0].replace('Chapter ', '')));
       });
-      playTone(520);
-      if (!isPlaying) togglePlay();
+
+      try {
+        video.currentTime = seconds;
+        video.play().catch(() => {});
+      } catch (e) {}
+
+      speakText(speech);
     }
 
-    let frame = 0;
-    function renderLoop() {
-      requestAnimationFrame(renderLoop);
-      frame++;
-      
-      const w = canvas.width;
-      const h = canvas.height;
-      
-      ctx.fillStyle = '#060810';
-      ctx.fillRect(0, 0, w, h);
-
-      // Draw Grid
-      ctx.strokeStyle = 'rgba(30, 41, 59, 0.4)';
-      ctx.lineWidth = 1;
-      for (let x = 0; x < w; x += 30) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-      }
-      for (let y = 0; y < h; y += 30) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-      }
-
-      // Draw Animated Waveforms / Visuals
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = isPlaying ? '#38bdf8' : '#475569';
-      ctx.beginPath();
-      for (let x = 0; x < w; x++) {
-        const wave = isPlaying ? Math.sin((x * 0.02) + (frame * 0.08)) * 35 : 0;
-        const y = (h / 2) + wave;
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-
-      // Draw Topic Title Card in center of video
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 18px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(currentTopic, w / 2, h / 2 - 50);
-
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '13px monospace';
-      ctx.fillText(isPlaying ? "STATUS: STREAMING HIGH-DEFINITION AUDIO & VIDEO" : "STATUS: PAUSED - CLICK PLAY", w / 2, h / 2 - 20);
-
-      // Timer update
-      if (isPlaying && frame % 60 === 0) {
-        currentTime++;
-        if (currentTime > 120) currentTime = 0;
-        const mins = String(Math.floor(currentTime / 60)).padStart(2, '0');
-        const secs = String(currentTime % 60).padStart(2, '0');
-        timeDisplay.textContent = `${mins}:${secs} / 02:00`;
-      }
-    }
-    renderLoop();
+    video.addEventListener('play', () => {
+      speakText(captionLine.textContent);
+    });
   </script>
 </body>
 </html>"""
@@ -440,7 +335,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
 
         if not filename:
             content_lower = content.lower()
-            if "<!doctype html" in content_lower or "<html" in content_lower or "<canvas" in content_lower:
+            if "<!doctype html" in content_lower or "<html" in content_lower or "<video" in content_lower:
                 filename = "index.html"
             elif lang == "css" or ":root" in content:
                 filename = "style.css"
@@ -484,7 +379,6 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
 
-    # Always provide the zero-failure Video Studio Player
     if intent == "VIDEO":
         files_map["index.html"] = {
             "language": "html",
