@@ -9,7 +9,7 @@ import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import "./App.css";
 
-const AUTH_API = "https://rishova-auth-backend.onrender.com/api/auth";
+const AUTH_API = "[https://rishova-auth-backend.onrender.com/api/auth](https://rishova-auth-backend.onrender.com/api/auth)";
 
 mermaid.initialize({
   startOnLoad: false,
@@ -31,7 +31,7 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
   };
 
   const handleDownload = () => {
-    const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html", sql: "sql", srt: "srt" };
+    const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html", sql: "sql", srt: "srt", vtt: "vtt" };
     const blob = new Blob([codeContent], { type: "text/plain;charset=utf-8" });
     saveAs(blob, `snippet.${extMap[lang] || "txt"}`);
   };
@@ -63,29 +63,7 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
         </div>
       </div>
       <div className="studio-code-body">
-        <SyntaxHighlighter
-          language={lang || "javascript"}
-          style={vscDarkPlus}
-          showLineNumbers={false}
-          wrapLines={true}
-          lineProps={{ style: { display: "block", width: "100%" } }}
-          customStyle={{
-            margin: 0,
-            padding: "14px 16px",
-            backgroundColor: "#131316",
-            fontSize: "0.9rem",
-            lineHeight: "1.6",
-            fontFamily: "'Fira Code', 'Consolas', monospace",
-            overflowX: "auto",
-          }}
-          codeTagProps={{
-            style: {
-              display: "block",
-              fontFamily: "'Fira Code', 'Consolas', monospace",
-              whiteSpace: "pre",
-            }
-          }}
-        >
+        <SyntaxHighlighter "#131316", "'Fira "0.9rem", "1.6", "100%" "14px "auto", "block", "javascript"} "pre", 'Consolas', 0, 16px", Code', backgroundColor: codeTagProps="{{" customStyle="{{" display: fontFamily: fontSize: language="{lang" lineHeight: lineProps="{{" margin: monospace", overflowX: padding: showLineNumbers="{false}" style="{vscDarkPlus}" style: whiteSpace: width: wrapLines="{true}" { || } }}>
           {codeContent}
         </SyntaxHighlighter>
       </div>
@@ -206,7 +184,7 @@ export default function App() {
   const fetchUsage = async () => {
     try {
       const email = userName || "guest";
-      const res = await fetch(`https://rishova-ai-backend.onrender.com/api/usage/${email}`);
+      const res = await fetch(`[https://rishova-ai-backend.onrender.com/api/usage/$](https://rishova-ai-backend.onrender.com/api/usage/$){email}`);
       if (res.ok) {
         const data = await res.json();
         setUsageData(data);
@@ -218,7 +196,7 @@ export default function App() {
     try {
       setIsCloudSyncing(true);
       const email = userName || "guest";
-      const res = await fetch("https://rishova-ai-backend.onrender.com/api/cloud/sync", {
+      const res = await fetch("[https://rishova-ai-backend.onrender.com/api/cloud/sync](https://rishova-ai-backend.onrender.com/api/cloud/sync)", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_email: email, sessions }),
@@ -468,12 +446,12 @@ export default function App() {
         formData.append("model", selectedModel);
         formData.append("user_email", userName || "guest");
 
-        res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/documents-multi", {
+        res = await fetch("[https://rishova-ai-backend.onrender.com/api/ai/documents-multi](https://rishova-ai-backend.onrender.com/api/ai/documents-multi)", {
           method: "POST",
           body: formData,
         });
       } else {
-        res = await fetch("https://rishova-ai-backend.onrender.com/api/ai/universal", {
+        res = await fetch("[https://rishova-ai-backend.onrender.com/api/ai/universal](https://rishova-ai-backend.onrender.com/api/ai/universal)", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -510,7 +488,7 @@ export default function App() {
       } else if (Object.keys(returnedFiles).length > 0) {
         newWorkspaceFiles = returnedFiles;
         newSelectedFile = Object.keys(returnedFiles)[0];
-        if (data.intent === "CAREER" || data.intent === "LEARNING" || data.intent === "DATA") {
+        if (data.intent === "CAREER" || data.intent === "LEARNING" || data.intent === "DATA" || data.intent === "VIDEO") {
           setActiveTab("preview");
         } else {
           setActiveTab("code");
@@ -706,7 +684,7 @@ export default function App() {
       const lower = name.toLowerCase();
       const code = file.code || "";
 
-      if (lower.endsWith(".html") || code.includes("<!DOCTYPE") || code.includes("<html") || code.includes("<header")) {
+      if (lower.endsWith(".html") || code.includes("<!DOCTYPE") || code.includes("<html") || code.includes("<header") || code.includes("<video")) {
         htmlContent = code;
       } else if (lower.endsWith(".css") || file.language === "css" || code.includes(":root") || (code.includes("{") && code.includes("margin") && code.includes("color"))) {
         cssContent += `\n<style>\n${code}\n</style>\n`;
@@ -717,13 +695,13 @@ export default function App() {
 
     if (!htmlContent) {
       const current = files[activeSession.selectedFileName];
-      if (current && (current.language === "html" || current.code.includes("<div") || current.code.includes("<button"))) {
+      if (current && (current.language === "html" || current.code.includes("<div") || current.code.includes("<button") || current.code.includes("<video"))) {
         htmlContent = current.code;
       } else {
         htmlContent = `
           <div style="font-family: sans-serif; padding: 50px 20px; text-align: center; color: #a1a1aa; background: #0b0b0e; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;">
             <h2 style="color: #f4f4f5; margin-bottom: 10px;">⚡ Live Preview Sandbox</h2>
-            <p style="font-size: 0.95rem;">Ask Rishova to generate an HTML/CSS landing page, resume, quiz, or data dashboard to view live here.</p>
+            <p style="font-size: 0.95rem;">Ask Rishova to generate an HTML/CSS landing page, resume, quiz, or video player to view live here.</p>
           </div>
         `;
       }
@@ -1031,7 +1009,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Sidebar Search Bar */}
             <div className="sidebar-search-box">
               <input
                 type="text"
@@ -1362,7 +1339,8 @@ export default function App() {
                   <iframe
                     title="Live Web Sandbox"
                     srcDoc={getLivePreviewSource()}
-                    sandbox="allow-scripts allow-modals"
+                    sandbox="allow-scripts allow-modals allow-same-origin"
+                    allow="autoplay; fullscreen"
                     className="sandbox-iframe"
                     style={{ flex: 1, border: "none" }}
                   />

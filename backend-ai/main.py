@@ -100,7 +100,7 @@ STRICT CONVERSATION RULES:
 4. VIDEO STUDIO DIRECTIVE (Section 10 & 19):
    When the user asks for video generation, video analysis, chapters, or subtitles:
    1. Summarize the video script, key timestamped chapters, and visual scene notes.
-   2. ALWAYS provide a complete interactive HTML/CSS/JS Video Player app in ```html (index.html) using a standard web video stream (e.g., `[https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4](https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4)`) with a custom dark theme player, interactive chapter buttons, and synced subtitles overlay!
+   2. ALWAYS provide a complete interactive HTML/CSS/JS Video Player app in ```html (index.html) with custom dark theme player, interactive chapter buttons, and synced subtitles overlay.
    3. Include a downloadable .srt or .vtt subtitle block.
 """
 
@@ -202,8 +202,8 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
 
-    # Default interactive video sandbox generator if LLM returned only text
-    if intent == "VIDEO" and not any(k.endswith(".html") for k in files_map.keys()):
+    # Reliable HTML5 Video Studio Player
+    if intent == "VIDEO":
         files_map["index.html"] = {
             "language": "html",
             "code": """<!DOCTYPE html>
@@ -220,24 +220,26 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     h2 { margin: 0 0 8px 0; font-size: 1.2rem; color: #38bdf8; }
     p { margin: 0 0 14px 0; font-size: 0.88rem; color: #a1a1aa; }
     .chapters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-    .chap-btn { background: #27272a; border: 1px solid #3f3f46; color: #f4f4f5; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
-    .chap-btn:hover { background: #3b82f6; border-color: #3b82f6; }
+    .chap-btn { background: #27272a; border: 1px solid #3f3f46; color: #f4f4f5; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; }
+    .chap-btn:hover { background: #2563eb; border-color: #3b82f6; }
+    .status-badge { display: inline-block; background: #064e3b; color: #6ee7b7; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; margin-bottom: 8px; }
   </style>
 </head>
 <body>
   <div class="video-card">
-    <video id="player" controls poster="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80">
-      <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+    <video id="player" controls playsinline preload="auto" poster="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg">
+      <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4">
+      <source src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4">
       Your browser does not support HTML5 video.
     </video>
     <div class="meta-box">
+      <span class="status-badge">● Ready to Play</span>
       <h2>🎬 Video Studio: Scene & Chapter Playback</h2>
-      <p>Interactive playback with automated timeline chapters and synchronized subtitles.</p>
+      <p>Click play on the video or choose any timestamp below to jump to that scene.</p>
       <div class="chapters">
-        <button class="chap-btn" onclick="document.getElementById('player').currentTime=0">⏱ 00:00 Intro</button>
-        <button class="chap-btn" onclick="document.getElementById('player').currentTime=15">⏱ 00:15 Concept</button>
-        <button class="chap-btn" onclick="document.getElementById('player').currentTime=35">⏱ 00:35 Deep Dive</button>
-        <button class="chap-btn" onclick="document.getElementById('player').currentTime=50">⏱ 00:50 Summary</button>
+        <button class="chap-btn" onclick="const p=document.getElementById('player'); p.currentTime=0; p.play();">⏱ 00:00 Intro Scene</button>
+        <button class="chap-btn" onclick="const p=document.getElementById('player'); p.currentTime=5; p.play();">⏱ 00:05 Main Topic</button>
+        <button class="chap-btn" onclick="const p=document.getElementById('player'); p.currentTime=10; p.play();">⏱ 00:10 Deep Dive</button>
       </div>
     </div>
   </div>
@@ -406,7 +408,7 @@ async def handle_multi_document_prompt(
                     )
                     combined_text_corpus.append(f"=== AUDIO TRANSCRIPT ({file.filename}) ===\n{transcription}\n")
                 except Exception as ex:
-                    combined_text_corpus.append(f"=== AUDIO FILE ({file.filename}) ===\n(Audio Transcription processing notes: {ex})\n")
+                    combined_text_corpus.append(f"=== AUDIO FILE ({file.filename}) ===\n(Audio Transcription notes: {ex})\n")
 
             elif filename.endswith(".pdf"):
                 try:
