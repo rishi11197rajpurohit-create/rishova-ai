@@ -91,14 +91,15 @@ SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an intelligent, helpful, and eloquent AI Studio built by Rishikesh Singh Jagarwal.
 
 STRICT CONVERSATION RULES:
-1. NEVER repeat sentences, phrases, or fall into endless repetitive loops.
-2. NEVER output internal thoughts, chain-of-thought traces, or <think> tags.
-3. LANGUAGE HANDLING:
+1. NEVER say "I cannot render a live video player" or provide text-based button simulations. You HAVE a live video player studio running on the right Preview panel!
+2. NEVER repeat sentences, phrases, or fall into endless repetitive loops.
+3. NEVER output internal thoughts, chain-of-thought traces, or <think> tags.
+4. LANGUAGE HANDLING:
    - Match the user's language naturally (Marwari, Hindi, Hinglish, English, etc.).
-4. VIDEO STUDIO DIRECTIVE (Section 10 & 19):
+5. VIDEO STUDIO DIRECTIVE (Section 10 & 19):
    When the user asks for video player, video lecture, chapters, or masterclass:
-   1. Provide the structured notes and chapter timetable in clean Markdown.
-   2. Provide downloadable .srt subtitles inside a ```srt block.
+   - Provide concise, high-value academic notes in formatted Markdown tables and lists.
+   - Always output downloadable .srt subtitles in a ```srt block.
 """
 
 RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
@@ -111,7 +112,7 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 14px;
+      padding: 16px;
       background: #09090b;
       color: #f4f4f5;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -128,42 +129,20 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
       overflow: hidden;
       box-shadow: 0 12px 30px rgba(0,0,0,0.6);
     }
-    .video-wrapper {
+    .player-container {
       position: relative;
       width: 100%;
+      height: 380px;
       background: #000;
     }
-    video {
+    iframe {
       width: 100%;
-      max-height: 380px;
+      height: 100%;
+      border: none;
       display: block;
-      outline: none;
-    }
-    .captions-box {
-      padding: 10px 16px;
-      background: #111113;
-      border-top: 1px solid #27272a;
-      border-bottom: 1px solid #27272a;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .captions-text {
-      font-size: 0.9rem;
-      color: #38bdf8;
-      font-weight: 500;
-      flex: 1;
-    }
-    .voice-badge {
-      background: #1e3a8a;
-      color: #93c5fd;
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 0.72rem;
-      font-weight: 600;
     }
     .meta-box {
-      padding: 16px;
+      padding: 18px;
     }
     h2 {
       margin: 0 0 6px 0;
@@ -181,18 +160,21 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: #71717a;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .chapters-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 8px;
+      gap: 10px;
     }
     .chap-btn {
       background: #27272a;
       border: 1px solid #3f3f46;
       color: #f4f4f5;
-      padding: 10px 12px;
+      padding: 10px 14px;
       border-radius: 8px;
       cursor: pointer;
       font-size: 0.82rem;
@@ -217,66 +199,38 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <div class="video-card">
-    <div class="video-wrapper">
-      <video id="mainVideo" controls playsinline preload="auto" poster="[https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80](https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80)">
-        <source src="[https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4](https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4)" type="video/mp4">
-        <source src="[https://media.w3.org/2010/05/sintel/trailer.mp4](https://media.w3.org/2010/05/sintel/trailer.mp4)" type="video/mp4">
-        Your browser does not support HTML5 video.
-      </video>
-    </div>
-
-    <div class="captions-box">
-      <span class="voice-badge">🔊 AI LECTURE VOICE</span>
-      <div class="captions-text" id="captionLine">Chapter 1: Welcome to Operating Systems & Concurrency Architecture</div>
+    <div class="player-container">
+      <iframe 
+        id="lectureVideo" 
+        src="[https://www.youtube-nocookie.com/embed/26QPDBe-NB8?enablejsapi=1&autoplay=1&mute=0](https://www.youtube-nocookie.com/embed/26QPDBe-NB8?enablejsapi=1&autoplay=1&mute=0)" 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+        allowfullscreen>
+      </iframe>
     </div>
 
     <div class="meta-box">
-      <span class="status-badge">● Masterclass Video & Audio Synced</span>
-      <h2>🎬 Operating Systems: Concurrency & Architecture Lecture</h2>
-      <p>Click any chapter button below. The video jumps to that section and the AI voice explains the topic with audio:</p>
+      <span class="status-badge">● Live Streaming Video & Audio (1080p HD)</span>
+      <h2>🎬 Operating Systems: Concurrency, Architecture & Process Management</h2>
+      <p>Continuous video lecture with synchronized high-definition audio. Click any chapter to jump the video directly to that lesson:</p>
 
-      <div class="chapters-title">Jump to Chapter Lecture</div>
+      <div class="chapters-title">📑 Video Chapters (Click to Jump)</div>
       <div class="chapters-grid">
-        <button class="chap-btn active" onclick="playChapter(0, 'Chapter 1: Welcome and Introduction to Operating Systems Architecture and Kernel Design.', 'Welcome to Operating Systems Concurrency lecture. Today we will explore system architecture, process scheduling, and multi-threading.')">⏱ 00:00 1. OS Architecture</button>
-        <button class="chap-btn" onclick="playChapter(4, 'Chapter 2: Process Management, States and Context Switching in Operating Systems.', 'In process management, each process contains code, data, heap, and stack. The operating system performs context switching using the Process Control Block.')">⏱ 00:04 2. Process Scheduling</button>
-        <button class="chap-btn" onclick="playChapter(8, 'Chapter 3: Multi-threading, Race Conditions and Synchronization Primitives.', 'Concurrency allows multiple threads to execute simultaneously. To prevent race conditions, we use mutex locks, semaphores, and monitors.')">⏱ 00:08 3. Concurrency & Locks</button>
-        <button class="chap-btn" onclick="playChapter(12, 'Chapter 4: Deadlocks, Mutual Exclusion, and Resource Allocation Graph.', 'A deadlock occurs when processes hold resources and wait for others. The four necessary conditions are mutual exclusion, hold and wait, no preemption, and circular wait.')">⏱ 00:12 4. Deadlock Prevention</button>
+        <button class="chap-btn active" onclick="seekVideo(0, this)">⏱ 00:00 1. OS Overview & Architecture</button>
+        <button class="chap-btn" onclick="seekVideo(120, this)">⏱ 02:00 2. Processes & States</button>
+        <button class="chap-btn" onclick="seekVideo(300, this)">⏱ 05:00 3. CPU Scheduling Algorithms</button>
+        <button class="chap-btn" onclick="seekVideo(480, this)">⏱ 08:00 4. Concurrency, Threads & Locks</button>
+        <button class="chap-btn" onclick="seekVideo(720, this)">⏱ 12:00 5. Deadlock Prevention</button>
       </div>
     </div>
   </div>
 
   <script>
-    const video = document.getElementById('mainVideo');
-    const captionLine = document.getElementById('captionLine');
-
-    function speakText(text) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.rate = 1.0;
-        utter.pitch = 1.0;
-        utter.lang = 'en-US';
-        window.speechSynthesis.speak(utter);
-      }
+    function seekVideo(seconds, btn) {
+      document.querySelectorAll('.chap-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      const iframe = document.getElementById('lectureVideo');
+      iframe.src = "[https://www.youtube-nocookie.com/embed/26QPDBe-NB8?enablejsapi=1&autoplay=1&mute=0&start=](https://www.youtube-nocookie.com/embed/26QPDBe-NB8?enablejsapi=1&autoplay=1&mute=0&start=)" + seconds;
     }
-
-    function playChapter(seconds, caption, speech) {
-      captionLine.textContent = caption;
-      document.querySelectorAll('.chap-btn').forEach(b => {
-        b.classList.toggle('active', b.textContent.includes(caption.split(':')[0].replace('Chapter ', '')));
-      });
-
-      try {
-        video.currentTime = seconds;
-        video.play().catch(() => {});
-      } catch (e) {}
-
-      speakText(speech);
-    }
-
-    video.addEventListener('play', () => {
-      speakText(captionLine.textContent);
-    });
   </script>
 </body>
 </html>"""
@@ -335,7 +289,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
 
         if not filename:
             content_lower = content.lower()
-            if "<!doctype html" in content_lower or "<html" in content_lower or "<video" in content_lower:
+            if "<!doctype html" in content_lower or "<html" in content_lower or "<video" in content_lower or "<iframe" in content_lower:
                 filename = "index.html"
             elif lang == "css" or ":root" in content:
                 filename = "style.css"
