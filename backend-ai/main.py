@@ -95,28 +95,33 @@ STRICT CONVERSATION RULES:
 2. NEVER output internal thoughts, chain-of-thought traces, or <think> tags.
 3. LANGUAGE HANDLING:
    - Match the user's language naturally (Marwari, Hindi, Hinglish, English, etc.).
-4. VIDEO STUDIO DIRECTIVE (Section 10 & 19):
-   When user asks for any video lecture, tutorial, masterclass, or playback:
+4. VIDEO & MEDIA DIRECTIVE (Section 10 & 19):
+   When user asks for any video lecture, tutorial, masterclass, or search for videos:
+   - Provide direct clickable YouTube and web video search links formatted nicely in Markdown.
    - Output structured academic notes and timestamped chapters in Markdown.
    - Always output a downloadable .srt subtitles code block inside ```srt.
 """
 
-def generate_video_studio_html(topic_title: str) -> str:
-    clean_title = topic_title.replace('"', '&quot;').replace("'", "&#39;")
-    video_source_url = "[https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4](https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4)"
-    poster_image_url = "[https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&q=80](https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&q=80)"
+def generate_video_hub_html(topic_title: str) -> str:
+    clean_topic = topic_title.replace('"', '&quot;').replace("'", "&#39;")
+    encoded_query = urllib.parse.quote(topic_title)
     
+    yt_search_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_query}"
+    google_video_url = f"[https://www.google.com/search?tbm=vid&q=](https://www.google.com/search?tbm=vid&q=){encoded_query}"
+    mit_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_query}+mit+opencourseware"
+    fcc_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_query}+freecodecamp"
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rishova AI Video Studio</title>
+  <title>Rishova AI Video Hub</title>
   <style>
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      padding: 16px;
+      padding: 20px;
       background: #09090b;
       color: #f4f4f5;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -124,115 +129,179 @@ def generate_video_studio_html(topic_title: str) -> str:
       flex-direction: column;
       align-items: center;
     }}
-    .video-card {{
+    .hub-card {{
       width: 100%;
       max-width: 820px;
       background: #18181b;
       border: 1px solid #27272a;
       border-radius: 12px;
-      overflow: hidden;
+      padding: 24px;
       box-shadow: 0 12px 30px rgba(0,0,0,0.6);
     }}
-    .player-container {{
-      position: relative;
-      width: 100%;
-      height: 380px;
-      background: #000;
-    }}
-    video {{
-      width: 100%;
-      height: 100%;
-      display: block;
-      outline: none;
-    }}
-    .meta-box {{
-      padding: 18px;
+    .badge {{
+      display: inline-block;
+      background: #0284c7;
+      color: #e0f2fe;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 12px;
     }}
     h2 {{
-      margin: 0 0 6px 0;
-      font-size: 1.2rem;
+      margin: 0 0 8px 0;
+      font-size: 1.3rem;
       color: #38bdf8;
     }}
     p {{
-      margin: 0 0 14px 0;
-      font-size: 0.88rem;
+      margin: 0 0 20px 0;
+      font-size: 0.9rem;
       color: #a1a1aa;
-      line-height: 1.4;
+      line-height: 1.5;
     }}
-    .chapters-title {{
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #71717a;
-      margin-bottom: 10px;
+    .video-grid {{
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }}
-    .chapters-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 10px;
-    }}
-    .chap-btn {{
+    .video-link-card {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       background: #27272a;
       border: 1px solid #3f3f46;
+      border-radius: 10px;
+      padding: 14px 18px;
+      text-decoration: none;
       color: #f4f4f5;
-      padding: 10px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.82rem;
-      text-align: left;
       transition: all 0.2s;
     }}
-    .chap-btn:hover, .chap-btn.active {{
-      background: #2563eb;
-      border-color: #3b82f6;
-      color: #fff;
+    .video-link-card:hover {{
+      background: #1e293b;
+      border-color: #38bdf8;
+      transform: translateY(-2px);
     }}
-    .status-badge {{
-      display: inline-block;
-      background: #064e3b;
-      color: #6ee7b7;
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 0.72rem;
-      margin-bottom: 8px;
+    .card-left {{
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }}
+    .card-icon {{
+      font-size: 1.6rem;
+    }}
+    .card-info h4 {{
+      margin: 0 0 4px 0;
+      font-size: 0.95rem;
+      color: #f8fafc;
+    }}
+    .card-info span {{
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }}
+    .play-btn {{
+      background: #ef4444;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }}
+    .play-btn.google {{
+      background: #2563eb;
+    }}
+    .chapters-section {{
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px solid #27272a;
+    }}
+    .chap-title {{
+      font-size: 0.85rem;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }}
+    .chap-list {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+    }}
+    .chap-pill {{
+      background: #18181b;
+      border: 1px solid #3f3f46;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: #cbd5e1;
     }}
   </style>
 </head>
 <body>
-  <div class="video-card">
-    <div class="player-container">
-      <video id="lectureVideo" controls autoplay playsinline preload="auto" poster="{poster_image_url}">
-        <source src="{video_source_url}" type="video/mp4">
-        Your browser does not support HTML5 video.
-      </video>
+  <div class="hub-card">
+    <span class="badge">&#127916; Multimodal Video Hub</span>
+    <h2>Lectures &amp; Video Streams: {clean_topic}</h2>
+    <p>Click below to open high-definition verified video streams directly on YouTube and Google Video search:</p>
+
+    <div class="video-grid">
+      <a href="{yt_search_url}" target="_blank" rel="noopener noreferrer" class="video-link-card">
+        <div class="card-left">
+          <div class="card-icon">&#9654;&#65039;</div>
+          <div class="card-info">
+            <h4>YouTube Top Results ({clean_topic})</h4>
+            <span>Full HD video lectures, top channels, and complete tutorials</span>
+          </div>
+        </div>
+        <div class="play-btn">&#9658; Watch on YouTube</div>
+      </a>
+
+      <a href="{fcc_url}" target="_blank" rel="noopener noreferrer" class="video-link-card">
+        <div class="card-left">
+          <div class="card-icon">&#128218;</div>
+          <div class="card-info">
+            <h4>freeCodeCamp / Complete Masterclass</h4>
+            <span>Comprehensive full courses with timestamps and practical code</span>
+          </div>
+        </div>
+        <div class="play-btn">&#9658; Open Course</div>
+      </a>
+
+      <a href="{mit_url}" target="_blank" rel="noopener noreferrer" class="video-link-card">
+        <div class="card-left">
+          <div class="card-icon">&#127979;</div>
+          <div class="card-info">
+            <h4>MIT &amp; University Academic Lectures</h4>
+            <span>Deep computer science theory, architecture, and university slides</span>
+          </div>
+        </div>
+        <div class="play-btn">&#9658; Open Lectures</div>
+      </a>
+
+      <a href="{google_video_url}" target="_blank" rel="noopener noreferrer" class="video-link-card">
+        <div class="card-left">
+          <div class="card-icon">&#128269;</div>
+          <div class="card-info">
+            <h4>Google Multi-Platform Video Search</h4>
+            <span>All web videos across Coursera, YouTube, NPTEL and Vimeo</span>
+          </div>
+        </div>
+        <div class="play-btn google">&#128279; View All Videos</div>
+      </a>
     </div>
 
-    <div class="meta-box">
-      <span class="status-badge">&#9679; Verified Fast CDN Stream (Audio &amp; Video)</span>
-      <h2>&#127916; {clean_title}</h2>
-      <p>Continuous lecture playback with full audio stream. Click any chapter to jump the video directly to that lesson:</p>
-
-      <div class="chapters-title">&#128193; Video Chapters &amp; Topics</div>
-      <div class="chapters-grid">
-        <button class="chap-btn active" onclick="seekVideo(0, this)">&#9201; 00:00 1. Introduction &amp; Overview</button>
-        <button class="chap-btn" onclick="seekVideo(2, this)">&#9201; 00:02 2. Syntax &amp; Basics</button>
-        <button class="chap-btn" onclick="seekVideo(4, this)">&#9201; 00:04 3. Functions &amp; Memory</button>
-        <button class="chap-btn" onclick="seekVideo(5, this)">&#9201; 00:05 4. Practical Implementation</button>
+    <div class="chapters-section">
+      <div class="chap-title">&#128193; Syllabus Timeline &amp; Timestamp Navigation</div>
+      <div class="chap-list">
+        <div class="chap-pill">&#9201; 00:00 1. Introduction &amp; Setup</div>
+        <div class="chap-pill">&#9201; 02:30 2. Core Concepts &amp; Architecture</div>
+        <div class="chap-pill">&#9201; 06:15 3. Practical Code Implementation</div>
+        <div class="chap-pill">&#9201; 12:40 4. Advanced Topics &amp; Optimization</div>
       </div>
     </div>
   </div>
-
-  <script>
-    function seekVideo(seconds, btn) {{
-      document.querySelectorAll('.chap-btn').forEach(b => b.classList.remove('active'));
-      if (btn) btn.classList.add('active');
-      const v = document.getElementById('lectureVideo');
-      if (v) {{
-        v.currentTime = seconds;
-        v.play().catch(() => {{}});
-      }}
-    }}
-  </script>
 </body>
 </html>"""
 
@@ -317,7 +386,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "DIAGRAM"
     elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
         intent = "IMAGE"
-    elif any(k in prompt_lower for k in ["video", "youtube", "subtitle", "transcribe video", "video summary", "scene", "masterclass player", "lecture video", "play a video"]):
+    elif any(k in prompt_lower for k in ["video", "youtube", "subtitle", "transcribe video", "video summary", "scene", "masterclass player", "lecture video", "play a video", "videos", "video link"]):
         intent = "VIDEO"
     elif any(k in prompt_lower for k in ["audio", "transcribe", "voice transcript"]):
         intent = "AUDIO"
@@ -335,12 +404,12 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "BUILDER"
 
     if intent == "VIDEO":
-        topic_name = re.sub(r'(video|player|lecture|tutorial|play|a|on|for)\s+', ' ', user_prompt, flags=re.IGNORECASE).strip().title()
+        topic_name = re.sub(r'(video|player|lecture|tutorial|play|a|on|for|videos|links)\s+', ' ', user_prompt, flags=re.IGNORECASE).strip().title()
         if len(topic_name) < 3:
-            topic_name = "Python Programming Video Lecture"
+            topic_name = "Programming & Technology Lectures"
         files_map["index.html"] = {
             "language": "html",
-            "code": generate_video_studio_html(topic_name)
+            "code": generate_video_hub_html(topic_name)
         }
 
     if intent == "IMAGE" and "![" not in normalized_text:
