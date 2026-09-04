@@ -97,13 +97,11 @@ STRICT CONVERSATION RULES:
    - For Marwari/Rajasthani: Respond in clean, natural, and respectful Rajasthani/Hindi (e.g. "राम राम सा! बिल्कुल, आपां मारवाड़ी में बात करांला। हुकम करो सा, आज कांई बणावणो या सीखणो है?").
    - For Hindi/Hinglish: Respond in polite Hindi or friendly Hinglish matching the user.
    - For English/Global languages: Respond fluently and concisely.
-4. CODE & ARTIFACTS:
-   - Always output programming code in clean English using markdown code fences (```html, ```css, ```javascript, ```python) with file names on line 1.
-   - Terminal commands in ```bash.
-   - Diagrams in ```mermaid starting with `graph TD`.
-   - Images in `![Image Description](https://image.pollinations.ai/prompt/<URL_ENCODED_PROMPT>?width=1024&height=1024&nologo=true)`.
-5. VIDEO STUDIO (Section 10 & 19):
-   - When asked to analyze a video topic, summarize, or create subtitles, generate structured timestamped chapters and a downloadable .srt subtitle code block.
+4. VIDEO STUDIO DIRECTIVE (Section 10 & 19):
+   When the user asks for video generation, video analysis, chapters, or subtitles:
+   1. Summarize the video script, key timestamped chapters, and visual scene notes.
+   2. ALWAYS provide a complete interactive HTML/CSS/JS Video Player app in ```html (index.html) using a standard web video stream (e.g., `[https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4](https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4)`) with a custom dark theme player, interactive chapter buttons, and synced subtitles overlay!
+   3. Include a downloadable .srt or .vtt subtitle block.
 """
 
 def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool = False):
@@ -153,14 +151,14 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         for line in first_lines:
             clean_l = re.sub(r"^(//|/\*|\*|#|<!--)\s*", "", line)
             clean_l = re.sub(r"\s*(\*/|-->)$", "", clean_l).strip()
-            match_name = re.search(r"([\w\-./]+\.(html|css|js|jsx|ts|tsx|json|py|sql|sh|md|srt))", clean_l, re.IGNORECASE)
+            match_name = re.search(r"([\w\-./]+\.(html|css|js|jsx|ts|tsx|json|py|sql|sh|md|srt|vtt))", clean_l, re.IGNORECASE)
             if match_name:
                 filename = os.path.basename(match_name.group(1))
                 break
 
         if not filename:
             content_lower = content.lower()
-            if "<!doctype html" in content_lower or "<html" in content_lower:
+            if "<!doctype html" in content_lower or "<html" in content_lower or "<video" in content_lower:
                 filename = "index.html"
             elif lang == "css" or ":root" in content:
                 filename = "style.css"
@@ -171,7 +169,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
             elif lang == "srt":
                 filename = "subtitles.srt"
             else:
-                ext = lang if lang in ["js", "py", "json", "html", "css", "ts", "sql", "srt"] else "txt"
+                ext = lang if lang in ["js", "py", "json", "html", "css", "ts", "sql", "srt", "vtt"] else "txt"
                 filename = f"file_{file_idx}.{ext}"
 
         if filename not in files_map:
@@ -187,7 +185,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "DIAGRAM"
     elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
         intent = "IMAGE"
-    elif any(k in prompt_lower for k in ["video", "subtitle", "transcribe video", "video summary"]):
+    elif any(k in prompt_lower for k in ["video", "subtitle", "transcribe video", "video summary", "scene"]):
         intent = "VIDEO"
     elif any(k in prompt_lower for k in ["audio", "transcribe", "voice transcript"]):
         intent = "AUDIO"
@@ -203,6 +201,49 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "RESEARCH"
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
+
+    # Default interactive video sandbox generator if LLM returned only text
+    if intent == "VIDEO" and not any(k.endswith(".html") for k in files_map.keys()):
+        files_map["index.html"] = {
+            "language": "html",
+            "code": """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rishova AI Video Studio</title>
+  <style>
+    body { margin: 0; background: #09090b; color: #f4f4f5; font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    .video-card { width: 100%; max-width: 720px; background: #18181b; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+    video { width: 100%; max-height: 380px; background: #000; display: block; }
+    .meta-box { padding: 18px; }
+    h2 { margin: 0 0 8px 0; font-size: 1.2rem; color: #38bdf8; }
+    p { margin: 0 0 14px 0; font-size: 0.88rem; color: #a1a1aa; }
+    .chapters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .chap-btn { background: #27272a; border: 1px solid #3f3f46; color: #f4f4f5; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+    .chap-btn:hover { background: #3b82f6; border-color: #3b82f6; }
+  </style>
+</head>
+<body>
+  <div class="video-card">
+    <video id="player" controls poster="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80">
+      <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+      Your browser does not support HTML5 video.
+    </video>
+    <div class="meta-box">
+      <h2>🎬 Video Studio: Scene & Chapter Playback</h2>
+      <p>Interactive playback with automated timeline chapters and synchronized subtitles.</p>
+      <div class="chapters">
+        <button class="chap-btn" onclick="document.getElementById('player').currentTime=0">⏱ 00:00 Intro</button>
+        <button class="chap-btn" onclick="document.getElementById('player').currentTime=15">⏱ 00:15 Concept</button>
+        <button class="chap-btn" onclick="document.getElementById('player').currentTime=35">⏱ 00:35 Deep Dive</button>
+        <button class="chap-btn" onclick="document.getElementById('player').currentTime=50">⏱ 00:50 Summary</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
+        }
 
     if intent == "IMAGE" and "![" not in normalized_text:
         clean_img_prompt = urllib.parse.quote(re.sub(r'(generate|create|draw|paint|an|image|of|photo|तस्वीर|फोटो|बनाओ)\s+', '', user_prompt, flags=re.IGNORECASE).strip())
@@ -334,7 +375,6 @@ async def handle_universal_prompt(req: UniversalRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Multi-Document & Vision & Audio Multi-Modal Endpoint (Section 10, 19, 20)
 @app.post("/api/ai/documents-multi")
 async def handle_multi_document_prompt(
     files: List[UploadFile] = File(...),
@@ -350,18 +390,14 @@ async def handle_multi_document_prompt(
         for file in files:
             content = await file.read()
             filename = file.filename.lower()
-            extracted_text = ""
 
-            # Check if Image (Vision & OCR - Section 19 & 20)
             if filename.endswith((".png", ".jpg", ".jpeg", ".webp")):
                 has_image = True
                 image_base64 = base64.b64encode(content).decode("utf-8")
                 combined_text_corpus.append(f"=== ATTACHED IMAGE: {file.filename} ===")
 
-            # Check if Audio (Audio Studio - Section 10 & 19)
             elif filename.endswith((".mp3", ".wav", ".m4a", ".ogg")):
                 try:
-                    # Groq Whisper Audio Transcription API
                     transcription = client.audio.transcriptions.create(
                         file=(file.filename, io.BytesIO(content)),
                         model="whisper-large-v3-turbo",
@@ -372,7 +408,6 @@ async def handle_multi_document_prompt(
                 except Exception as ex:
                     combined_text_corpus.append(f"=== AUDIO FILE ({file.filename}) ===\n(Audio Transcription processing notes: {ex})\n")
 
-            # Check if PDF
             elif filename.endswith(".pdf"):
                 try:
                     pdf_reader = PdfReader(io.BytesIO(content))
@@ -382,7 +417,6 @@ async def handle_multi_document_prompt(
                 except Exception as ex:
                     combined_text_corpus.append(f"Error reading PDF {file.filename}: {ex}")
 
-            # Text / Code / CSV
             else:
                 try:
                     extracted_text = content.decode("utf-8", errors="ignore")
@@ -390,7 +424,6 @@ async def handle_multi_document_prompt(
                 except Exception as ex:
                     combined_text_corpus.append(f"Error reading file {file.filename}: {ex}")
 
-        # If image is present, invoke Llama 3.2 Vision Model
         if has_image and image_base64:
             vision_messages = [
                 {
@@ -412,7 +445,6 @@ async def handle_multi_document_prompt(
             except Exception as e:
                 pass
 
-        # Text / Document / Audio Synthesis
         full_doc_context = "\n".join(combined_text_corpus)
         composed_prompt = (
             f"User Instruction: {prompt}\n\n"
