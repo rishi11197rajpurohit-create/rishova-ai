@@ -92,13 +92,13 @@ You are RISHOVA AI, an intelligent, helpful, and eloquent AI Studio built by Ris
 
 STRICT PRESENTATION GUIDELINES:
 1. NEVER output narrow, congested Markdown tables for multi-line text that break words like 'Pyth on' or 'Cras h'.
-2. For course curricula or video lists, use clean, readable Bold bullet points and numbered cards:
+2. For course curricula or video lists, use clean, readable Bold bullet points and cards:
    - **Course Title** (Instructor / Channel) &mdash; Duration
    - *Key Highlights:* Bullet point overview
    - *Direct Link:* Provide clean Markdown links [Watch Course on YouTube](https://www.youtube.com/results?search_query=topic_name)
 3. Never put brackets inside URLs like `[link]([https://...])`. Links MUST be plain: `[Watch on YouTube](https://www.youtube.com/results?search_query=python+course)`.
-4. LANGUAGE HANDLING:
-   - Match the user's natural language (Marwari, Hindi, Hinglish, English).
+4. When answering questions from uploaded PDF documents, explicitly cite the exact page number in brackets, for example: `(Source: Page 2)`.
+5. Match the user's natural language (Marwari, Hindi, Hinglish, English).
 """
 
 def generate_video_hub_html(topic_title: str) -> str:
@@ -107,7 +107,6 @@ def generate_video_hub_html(topic_title: str) -> str:
         clean_topic = "Python Programming"
         
     encoded_topic = urllib.parse.quote_plus(clean_topic)
-    
     yt_url = f"https://www.youtube.com/results?search_query={encoded_topic}"
     fcc_url = f"https://www.youtube.com/results?search_query={encoded_topic}+freecodecamp"
     mit_url = f"https://www.youtube.com/results?search_query={encoded_topic}+mit+opencourseware"
@@ -215,31 +214,6 @@ def generate_video_hub_html(topic_title: str) -> str:
     .action-tag.blue {{
       background: #2563eb;
     }}
-    .chapters-section {{
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid #27272a;
-    }}
-    .chap-title {{
-      font-size: 0.82rem;
-      color: #71717a;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 10px;
-    }}
-    .chap-list {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 8px;
-    }}
-    .chap-pill {{
-      background: #18181b;
-      border: 1px solid #3f3f46;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 0.8rem;
-      color: #cbd5e1;
-    }}
   </style>
 </head>
 <body>
@@ -293,16 +267,6 @@ def generate_video_hub_html(topic_title: str) -> str:
         <div class="action-tag blue">&#128279; View All Videos</div>
       </div>
     </div>
-
-    <div class="chapters-section">
-      <div class="chap-title">&#128193; Structured Syllabus &amp; Milestones</div>
-      <div class="chap-list">
-        <div class="chap-pill">&#9201; 00:00 1. Setup &amp; Foundations</div>
-        <div class="chap-pill">&#9201; 02:30 2. Syntax, Variables &amp; Logic</div>
-        <div class="chap-pill">&#9201; 06:15 3. Functions &amp; Data Structures</div>
-        <div class="chap-pill">&#9201; 12:40 4. Real Projects &amp; Best Practices</div>
-      </div>
-    </div>
   </div>
 
   <script>
@@ -310,6 +274,100 @@ def generate_video_hub_html(topic_title: str) -> str:
       window.parent.postMessage({{ type: 'OPEN_EXTERNAL_URL', url: url }}, '*');
     }}
   </script>
+</body>
+</html>"""
+
+def generate_image_studio_html(prompt_text: str, img_url: str) -> str:
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rishova AI Image Studio</title>
+  <style>
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      padding: 16px;
+      background: #09090b;
+      color: #f4f4f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }}
+    .image-card {{
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 12px;
+      padding: 16px;
+      max-width: 720px;
+      width: 100%;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      text-align: center;
+    }}
+    .img-wrapper {{
+      width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 12px;
+      border: 1px solid #3f3f46;
+      background: #000;
+    }}
+    .img-wrapper img {{
+      width: 100%;
+      height: auto;
+      display: block;
+      transition: transform 0.3s ease;
+    }}
+    .img-wrapper img:hover {{
+      transform: scale(1.02);
+    }}
+    .btn-row {{
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 16px;
+    }}
+    .action-btn {{
+      background: #0284c7;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s;
+    }}
+    .action-btn:hover {{
+      background: #0369a1;
+    }}
+    .prompt-tag {{
+      color: #94a3b8;
+      font-size: 0.85rem;
+      margin-top: 8px;
+      font-style: italic;
+    }}
+  </style>
+</head>
+<body>
+  <div class="image-card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span style="background: #3b82f6; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600;">✨ FLUX AI GENERATION</span>
+      <span style="color: #a1a1aa; font-size: 0.8rem;">1024 x 1024 HD</span>
+    </div>
+    <div class="prompt-tag">"{prompt_text}"</div>
+    <div class="img-wrapper">
+      <img src="{img_url}" alt="{prompt_text}" />
+    </div>
+    <div class="btn-row">
+      <a href="{img_url}" target="_blank" download="rishova_ai_image.jpg" class="action-btn">⬇ Download Ultra HD Image</a>
+    </div>
+  </div>
 </body>
 </html>"""
 
@@ -394,7 +452,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     
     if mermaid_code or any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
-    elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint"]):
+    elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
         intent = "IMAGE"
     elif any(k in prompt_lower for k in ["video", "youtube", "subtitle", "transcribe video", "video summary", "scene", "masterclass player", "lecture video", "play a video", "videos", "video link", "lecture"]):
         intent = "VIDEO"
@@ -422,10 +480,19 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
             "code": generate_video_hub_html(topic_name)
         }
 
-    if intent == "IMAGE" and "![" not in normalized_text:
-        clean_img_prompt = urllib.parse.quote(re.sub(r'(generate|create|draw|paint|an|image|of|photo)\s+', '', user_prompt, flags=re.IGNORECASE).strip())
-        img_markdown = f"\n\n![Generated Image](https://image.pollinations.ai/prompt/{clean_img_prompt}?width=1024&height=1024&nologo=true)\n\n"
-        normalized_text = img_markdown + normalized_text
+    if intent == "IMAGE":
+        clean_img_prompt = re.sub(r'(generate|create|draw|paint|an|image|of|photo|तस्वीर|फोटो|बनाओ)\s+', '', user_prompt, flags=re.IGNORECASE).strip()
+        if not clean_img_prompt:
+            clean_img_prompt = "Futuristic AI Studio Workspace in Cyberpunk aesthetic"
+        encoded_prompt = urllib.parse.quote(clean_img_prompt)
+        generated_img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed=42"
+        
+        files_map["index.html"] = {
+            "language": "html",
+            "code": generate_image_studio_html(clean_img_prompt, generated_img_url)
+        }
+        if "![" not in normalized_text:
+            normalized_text = f"### ✨ AI Generated Artwork\n\n![Generated Image]({generated_img_url})\n\n**Prompt:** *\"{clean_img_prompt}\"*\n\n" + normalized_text
 
     primary_code = ""
     primary_lang = "javascript"
@@ -588,9 +655,10 @@ async def handle_multi_document_prompt(
             elif filename.endswith(".pdf"):
                 try:
                     pdf_reader = PdfReader(io.BytesIO(content))
-                    pages_text = [p.extract_text() or "" for p in pdf_reader.pages[:10]]
-                    extracted_text = "\n".join(pages_text)
-                    combined_text_corpus.append(f"=== DOCUMENT: {file.filename} ===\n{extracted_text[:4000]}\n")
+                    for page_idx, page in enumerate(pdf_reader.pages[:15], start=1):
+                        txt = page.extract_text() or ""
+                        if txt.strip():
+                            combined_text_corpus.append(f"--- [DOCUMENT: {file.filename} | PAGE {page_idx}] ---\n{txt[:1200]}\n")
                 except Exception as ex:
                     combined_text_corpus.append(f"Error reading PDF {file.filename}: {ex}")
 
@@ -624,9 +692,9 @@ async def handle_multi_document_prompt(
 
         full_doc_context = "\n".join(combined_text_corpus)
         composed_prompt = (
-            f"User Instruction: {prompt}\n\n"
-            f"Attached Files & Content:\n{full_doc_context}\n\n"
-            f"Synthesize, extract, transcribe, or compare as requested without repetition."
+            f"User Query / Instruction: {prompt}\n\n"
+            f"Document Corpus with Page Demarcations:\n{full_doc_context}\n\n"
+            f"Synthesize the answer accurately. Always state which document and page number the answer came from (e.g. '[Source: Page X]')."
         )
 
         messages = [
