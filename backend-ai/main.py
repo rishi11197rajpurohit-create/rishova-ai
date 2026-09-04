@@ -87,30 +87,61 @@ def fetch_live_web_snippets(query: str) -> str:
         return "\n\n--- [LIVE RETRIEVED KNOWLEDGE SOURCES] ---\n" + "\n".join(snippets) + "\n------------------------------------------\n"
     return ""
 
+def find_youtube_video_id(query: str) -> str:
+    """Finds a real YouTube Video ID for any topic query or extracts it from a URL"""
+    # 1. Direct URL detection
+    url_match = re.search(r'(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})', query)
+    if url_match:
+        return url_match.group(1)
+
+    # 2. Search YouTube HTML to get the top matching video ID
+    try:
+        clean_search = re.sub(r'(video|player|lecture|tutorial|masterclass|watch|show|play|of|on|about|for)\s+', ' ', query, flags=re.IGNORECASE).strip()
+        search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(clean_search)}"
+        req = urllib.request.Request(search_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req, timeout=4) as response:
+            html = response.read().decode('utf-8')
+            video_ids = re.findall(r'/watch\?v=([a-zA-Z0-9_-]{11})', html)
+            if video_ids:
+                return video_ids[0]
+    except Exception:
+        pass
+
+    # Topic-specific fallbacks
+    q_low = query.lower()
+    if "python" in q_low:
+        return "_uQrJ0TkZlc"
+    elif "operating system" in q_low or "concurrency" in q_low or "deadlock" in q_low:
+        return "26QPDBe-NB8"
+    elif "react" in q_low or "javascript" in q_low:
+        return "bMknfKXIFA8"
+    elif "java" in q_low:
+        return "eIrMbAQSU34"
+    elif "ai" in q_low or "machine learning" in q_low:
+        return "aircAruvnKk"
+    return "26QPDBe-NB8"
+
 SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an intelligent, helpful, and eloquent AI Studio built by Rishikesh Singh Jagarwal.
 
 STRICT CONVERSATION RULES:
-1. NEVER say "I cannot render a live video player" or provide text-based button simulations. You HAVE a live video player studio running on the right Preview panel!
-2. NEVER repeat sentences, phrases, or fall into endless repetitive loops.
-3. NEVER output internal thoughts, chain-of-thought traces, or <think> tags.
-4. LANGUAGE HANDLING:
-   - Match the user's language naturally (Marwari, Hindi, Hinglish, English, etc.).
-5. VIDEO STUDIO DIRECTIVE (Section 10 & 19):
-   When the user asks for video player, video lecture, chapters, or masterclass:
-   - Provide concise, high-value academic notes in formatted Markdown tables and lists.
-   - Always output downloadable .srt subtitles in a ```srt block.
+1. When user asks for any video, tutorial, or lecture, NEVER say "I cannot play videos". You have a full live YouTube-powered Video Studio right in the Preview tab.
+2. NEVER repeat sentences or fall into repetitive loops.
+3. Output clean, polite, and helpful explanations in the user's language (Marwari, Hindi, Hinglish, or English).
+4. For video requests: Provide a structured breakdown of the lecture (Summary, Key Takeaways, Timestamped Chapters), and include a downloadable .srt subtitle code block in ```srt.
 """
 
-RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
+def generate_video_studio_html(video_id: str, topic_title: str) -> str:
+    clean_title = topic_title.replace('"', '\\"').replace("'", "\\'")
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rishova AI Video Studio</title>
   <style>
-    * { box-sizing: border-box; }
-    body {
+    * {{ box-sizing: border-box; }}
+    body {{
       margin: 0;
       padding: 16px;
       background: #09090b;
@@ -119,43 +150,43 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
       display: flex;
       flex-direction: column;
       align-items: center;
-    }
-    .video-card {
+    }}
+    .video-card {{
       width: 100%;
-      max-width: 780px;
+      max-width: 820px;
       background: #18181b;
       border: 1px solid #27272a;
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 12px 30px rgba(0,0,0,0.6);
-    }
-    .player-container {
+    }}
+    .player-container {{
       position: relative;
       width: 100%;
-      height: 380px;
+      height: 400px;
       background: #000;
-    }
-    iframe {
+    }}
+    iframe {{
       width: 100%;
       height: 100%;
       border: none;
       display: block;
-    }
-    .meta-box {
+    }}
+    .meta-box {{
       padding: 18px;
-    }
-    h2 {
+    }}
+    h2 {{
       margin: 0 0 6px 0;
-      font-size: 1.15rem;
-      color: #60a5fa;
-    }
-    p {
+      font-size: 1.2rem;
+      color: #38bdf8;
+    }}
+    p {{
       margin: 0 0 14px 0;
-      font-size: 0.85rem;
+      font-size: 0.88rem;
       color: #a1a1aa;
       line-height: 1.4;
-    }
-    .chapters-title {
+    }}
+    .chapters-title {{
       font-size: 0.8rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -164,13 +195,13 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
       display: flex;
       align-items: center;
       gap: 6px;
-    }
-    .chapters-grid {
+    }}
+    .chapters-grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 10px;
-    }
-    .chap-btn {
+    }}
+    .chap-btn {{
       background: #27272a;
       border: 1px solid #3f3f46;
       color: #f4f4f5;
@@ -180,13 +211,13 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
       font-size: 0.82rem;
       text-align: left;
       transition: all 0.2s;
-    }
-    .chap-btn:hover, .chap-btn.active {
+    }}
+    .chap-btn:hover, .chap-btn.active {{
       background: #2563eb;
       border-color: #3b82f6;
       color: #fff;
-    }
-    .status-badge {
+    }}
+    .status-badge {{
       display: inline-block;
       background: #064e3b;
       color: #6ee7b7;
@@ -194,7 +225,7 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
       border-radius: 4px;
       font-size: 0.72rem;
       margin-bottom: 8px;
-    }
+    }}
   </style>
 </head>
 <body>
@@ -202,35 +233,35 @@ RELIABLE_VIDEO_STUDIO_HTML = """<!DOCTYPE html>
     <div class="player-container">
       <iframe 
         id="lectureVideo" 
-        src="[https://www.youtube-nocookie.com/embed/26QPDBe-NB8?enablejsapi=1&autoplay=1&mute=0](https://www.youtube-nocookie.com/embed/26QPDBe-NB8?enablejsapi=1&autoplay=1&mute=0)" 
+        src="[https://www.youtube-nocookie.com/embed/](https://www.youtube-nocookie.com/embed/){video_id}?enablejsapi=1&autoplay=1&mute=0" 
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
         allowfullscreen>
       </iframe>
     </div>
 
     <div class="meta-box">
-      <span class="status-badge">● Live Streaming Video & Audio (1080p HD)</span>
-      <h2>🎬 Operating Systems: Concurrency, Architecture & Process Management</h2>
-      <p>Continuous video lecture with synchronized high-definition audio. Click any chapter to jump the video directly to that lesson:</p>
+      <span class="status-badge">● Live Streaming Video & Audio (YouTube HD)</span>
+      <h2>🎬 {clean_title}</h2>
+      <p>Original continuous audio-visual lecture loaded directly in your Rishova workspace. Click any chapter to jump to that part:</p>
 
-      <div class="chapters-title">📑 Video Chapters (Click to Jump)</div>
+      <div class="chapters-title">📑 Video Chapters & Topics</div>
       <div class="chapters-grid">
-        <button class="chap-btn active" onclick="seekVideo(0, this)">⏱ 00:00 1. OS Overview & Architecture</button>
-        <button class="chap-btn" onclick="seekVideo(120, this)">⏱ 02:00 2. Processes & States</button>
-        <button class="chap-btn" onclick="seekVideo(300, this)">⏱ 05:00 3. CPU Scheduling Algorithms</button>
-        <button class="chap-btn" onclick="seekVideo(480, this)">⏱ 08:00 4. Concurrency, Threads & Locks</button>
-        <button class="chap-btn" onclick="seekVideo(720, this)">⏱ 12:00 5. Deadlock Prevention</button>
+        <button class="chap-btn active" onclick="seekVideo(0, this)">⏱ 00:00 1. Introduction & Overview</button>
+        <button class="chap-btn" onclick="seekVideo(120, this)">⏱ 02:00 2. Core Concepts & Foundations</button>
+        <button class="chap-btn" onclick="seekVideo(360, this)">⏱ 06:00 3. Detailed Walkthrough</button>
+        <button class="chap-btn" onclick="seekVideo(600, this)">⏱ 10:00 4. Practical Implementation</button>
+        <button class="chap-btn" onclick="seekVideo(900, this)">⏱ 15:00 5. Summary & Key Takeaways</button>
       </div>
     </div>
   </div>
 
   <script>
-    function seekVideo(seconds, btn) {
+    function seekVideo(seconds, btn) {{
       document.querySelectorAll('.chap-btn').forEach(b => b.classList.remove('active'));
       if (btn) btn.classList.add('active');
       const iframe = document.getElementById('lectureVideo');
-      iframe.src = "[https://www.youtube-nocookie.com/embed/26QPDBe-NB8?enablejsapi=1&autoplay=1&mute=0&start=](https://www.youtube-nocookie.com/embed/26QPDBe-NB8?enablejsapi=1&autoplay=1&mute=0&start=)" + seconds;
-    }
+      iframe.src = "[https://www.youtube-nocookie.com/embed/](https://www.youtube-nocookie.com/embed/){video_id}?enablejsapi=1&autoplay=1&mute=0&start=" + seconds;
+    }}
   </script>
 </body>
 </html>"""
@@ -316,7 +347,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "DIAGRAM"
     elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
         intent = "IMAGE"
-    elif any(k in prompt_lower for k in ["video", "subtitle", "transcribe video", "video summary", "scene", "masterclass player"]):
+    elif any(k in prompt_lower for k in ["video", "youtube", "subtitle", "transcribe video", "video summary", "scene", "masterclass player", "lecture video"]):
         intent = "VIDEO"
     elif any(k in prompt_lower for k in ["audio", "transcribe", "voice transcript"]):
         intent = "AUDIO"
@@ -333,10 +364,15 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     elif any(k in prompt_lower for k in ["build", "create", "api", "code", "app", "python", "calculator", "html"]):
         intent = "BUILDER"
 
+    # Automatically fetch and embed the actual video for the exact user question
     if intent == "VIDEO":
+        vid_id = find_youtube_video_id(user_prompt)
+        topic_name = user_prompt.replace("video", "").replace("lecture", "").replace("player", "").strip().title()
+        if len(topic_name) < 3:
+            topic_name = "Video Learning Masterclass"
         files_map["index.html"] = {
             "language": "html",
-            "code": RELIABLE_VIDEO_STUDIO_HTML
+            "code": generate_video_studio_html(vid_id, topic_name)
         }
 
     if intent == "IMAGE" and "![" not in normalized_text:
