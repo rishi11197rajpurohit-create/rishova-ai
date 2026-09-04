@@ -90,30 +90,28 @@ def fetch_live_web_snippets(query: str) -> str:
 SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an intelligent, helpful, and eloquent AI Studio built by Rishikesh Singh Jagarwal.
 
-STRICT CONVERSATION RULES:
-1. NEVER output markdown brackets inside links like `[link]([https://...])`. Links MUST be plain and valid: `[Watch on YouTube](https://www.youtube.com/results?search_query=topic)`.
-2. NEVER repeat sentences or fall into repetitive loops.
-3. LANGUAGE HANDLING:
-   - Match the user's language naturally (Marwari, Hindi, Hinglish, English, etc.).
-4. VIDEO & MEDIA DIRECTIVE (Section 10 & 19):
-   When user asks for video lectures, tutorials, or video search:
-   - Provide clean, direct links to YouTube courses and tutorials.
-   - Outline key timestamped chapters and syllabus notes.
-   - Always output a downloadable .srt subtitles code block inside ```srt.
+STRICT PRESENTATION GUIDELINES:
+1. NEVER output narrow, congested Markdown tables for multi-line text that break words like 'Pyth on' or 'Cras h'.
+2. For course curricula or video lists, use clean, readable Bold bullet points and numbered cards:
+   - **Course Title** (Instructor / Channel) &mdash; Duration
+   - *Key Highlights:* Bullet point overview
+   - *Direct Link:* Provide clean Markdown links [Watch Course on YouTube](https://www.youtube.com/results?search_query=topic_name)
+3. Never put brackets inside URLs like `[link]([https://...])`. Links MUST be plain: `[Watch on YouTube](https://www.youtube.com/results?search_query=python+course)`.
+4. LANGUAGE HANDLING:
+   - Match the user's natural language (Marwari, Hindi, Hinglish, English).
 """
 
 def generate_video_hub_html(topic_title: str) -> str:
-    # Clean topic string - remove all brackets and special characters
     clean_topic = re.sub(r'[^\w\s]', '', topic_title).strip()
     if not clean_topic:
         clean_topic = "Python Programming"
         
     encoded_topic = urllib.parse.quote_plus(clean_topic)
     
-    yt_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_topic}"
-    fcc_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_topic}+freecodecamp"
-    mit_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_topic}+mit+opencourseware"
-    google_url = f"[https://www.google.com/search?tbm=vid&q=](https://www.google.com/search?tbm=vid&q=){encoded_topic}"
+    yt_url = f"https://www.youtube.com/results?search_query={encoded_topic}"
+    fcc_url = f"https://www.youtube.com/results?search_query={encoded_topic}+freecodecamp"
+    mit_url = f"https://www.youtube.com/results?search_query={encoded_topic}+mit+opencourseware"
+    google_url = f"https://www.google.com/search?tbm=vid&q={encoded_topic}"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -247,49 +245,49 @@ def generate_video_hub_html(topic_title: str) -> str:
 <body>
   <div class="hub-card">
     <span class="badge">&#127916; Verified Video Resource Hub</span>
-    <h2>{clean_topic} &mdash; Top Verified Video Lectures</h2>
-    <p>Click any card below to open the authentic lectures directly in a new window:</p>
+    <h2>{clean_topic} &mdash; Top Video Lectures</h2>
+    <p>Click any card below to launch verified lectures in an external window:</p>
 
     <div class="video-grid">
-      <div class="card-btn" onclick="openLink('{yt_url}')">
+      <div class="card-btn" onclick="openVerifiedUrl('{yt_url}')">
         <div class="left-box">
           <span class="icon">&#9654;&#65039;</span>
           <div class="info">
-            <h4>YouTube Top Tutorials &amp; Playlists</h4>
-            <span>High-definition verified video courses, code-alongs and community favorites</span>
+            <h4>YouTube Top Courses &amp; Tutorials</h4>
+            <span>Full HD video lectures, top channels, and complete roadmaps</span>
           </div>
         </div>
         <div class="action-tag">&#9658; Watch on YouTube</div>
       </div>
 
-      <div class="card-btn" onclick="openLink('{fcc_url}')">
+      <div class="card-btn" onclick="openVerifiedUrl('{fcc_url}')">
         <div class="left-box">
           <span class="icon">&#128218;</span>
           <div class="info">
-            <h4>freeCodeCamp Full Masterclasses</h4>
-            <span>Complete 5-10 hour end-to-end courses with hands-on projects</span>
+            <h4>freeCodeCamp Complete Masterclasses</h4>
+            <span>Comprehensive end-to-end courses with hands-on projects</span>
           </div>
         </div>
         <div class="action-tag">&#9658; Open Course</div>
       </div>
 
-      <div class="card-btn" onclick="openLink('{mit_url}')">
+      <div class="card-btn" onclick="openVerifiedUrl('{mit_url}')">
         <div class="left-box">
           <span class="icon">&#127979;</span>
           <div class="info">
-            <h4>MIT OpenCourseWare &amp; University Lectures</h4>
-            <span>In-depth computer science theory, professors' lectures &amp; slides</span>
+            <h4>MIT OpenCourseWare University Lectures</h4>
+            <span>In-depth computer science theory, slides &amp; recorded classrooms</span>
           </div>
         </div>
         <div class="action-tag">&#9658; Open Lecture</div>
       </div>
 
-      <div class="card-btn" onclick="openLink('{google_url}')">
+      <div class="card-btn" onclick="openVerifiedUrl('{google_url}')">
         <div class="left-box">
           <span class="icon">&#128269;</span>
           <div class="info">
-            <h4>All Web Videos (Coursera, NPTEL &amp; YouTube)</h4>
-            <span>Multi-platform global search across all engineering platforms</span>
+            <h4>Global Web Video Search</h4>
+            <span>Multi-platform search across Coursera, YouTube, NPTEL &amp; edX</span>
           </div>
         </div>
         <div class="action-tag blue">&#128279; View All Videos</div>
@@ -297,19 +295,19 @@ def generate_video_hub_html(topic_title: str) -> str:
     </div>
 
     <div class="chapters-section">
-      <div class="chap-title">&#128193; Recommended Timeline &amp; Core Syllabus</div>
+      <div class="chap-title">&#128193; Structured Syllabus &amp; Milestones</div>
       <div class="chap-list">
         <div class="chap-pill">&#9201; 00:00 1. Setup &amp; Foundations</div>
         <div class="chap-pill">&#9201; 02:30 2. Syntax, Variables &amp; Logic</div>
         <div class="chap-pill">&#9201; 06:15 3. Functions &amp; Data Structures</div>
-        <div class="chap-pill">&#9201; 12:40 4. Projects &amp; Best Practices</div>
+        <div class="chap-pill">&#9201; 12:40 4. Real Projects &amp; Best Practices</div>
       </div>
     </div>
   </div>
 
   <script>
-    function openLink(url) {{
-      window.open(url, '_blank', 'noopener,noreferrer');
+    function openVerifiedUrl(url) {{
+      window.parent.postMessage({{ type: 'OPEN_EXTERNAL_URL', url: url }}, '*');
     }}
   </script>
 </body>
@@ -318,6 +316,8 @@ def generate_video_hub_html(topic_title: str) -> str:
 def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool = False):
     clean_text = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE)
     clean_text = re.sub(r"^Here's a thinking process:[\s\S]*?(?=\n\n|\Z)", "", clean_text, flags=re.IGNORECASE)
+    
+    clean_text = re.sub(r'\]\(\[(https?://[^\]]+)\]\)', r'](\1)', clean_text)
     normalized_text = clean_text.replace('\r\n', '\n').replace('\r', '\n').strip()
 
     intent = "CHAT"
@@ -394,7 +394,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     
     if mermaid_code or any(k in prompt_lower for k in ["diagram", "flowchart", "architecture", "erd", "schema"]):
         intent = "DIAGRAM"
-    elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
+    elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint"]):
         intent = "IMAGE"
     elif any(k in prompt_lower for k in ["video", "youtube", "subtitle", "transcribe video", "video summary", "scene", "masterclass player", "lecture video", "play a video", "videos", "video link", "lecture"]):
         intent = "VIDEO"
@@ -423,7 +423,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         }
 
     if intent == "IMAGE" and "![" not in normalized_text:
-        clean_img_prompt = urllib.parse.quote(re.sub(r'(generate|create|draw|paint|an|image|of|photo|तस्वीर|फोटो|बनाओ)\s+', '', user_prompt, flags=re.IGNORECASE).strip())
+        clean_img_prompt = urllib.parse.quote(re.sub(r'(generate|create|draw|paint|an|image|of|photo)\s+', '', user_prompt, flags=re.IGNORECASE).strip())
         img_markdown = f"\n\n![Generated Image](https://image.pollinations.ai/prompt/{clean_img_prompt}?width=1024&height=1024&nologo=true)\n\n"
         normalized_text = img_markdown + normalized_text
 
@@ -583,7 +583,7 @@ async def handle_multi_document_prompt(
                     )
                     combined_text_corpus.append(f"=== AUDIO TRANSCRIPT ({file.filename}) ===\n{transcription}\n")
                 except Exception as ex:
-                    combined_text_corpus.append(f"=== AUDIO FILE ({file.filename}) ===\n(Audio Transcription notes: {ex})\n")
+                    combined_text_corpus.append(f"=== AUDIO FILE ({file.filename}) ===\n(Audio notes: {ex})\n")
 
             elif filename.endswith(".pdf"):
                 try:

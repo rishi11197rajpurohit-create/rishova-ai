@@ -134,7 +134,7 @@ export default function App() {
       pinned: false,
       messages: [{
         role: "assistant",
-        content: "राम राम सा! Welcome to **RISHOVA AI Universal Studio**.\nAsk me to code, draw architecture diagrams, analyze data, create images, or find video lectures.",
+        content: "राम राम सा! Welcome to **RISHOVA AI Universal Studio**.\nAsk me to code, draw architecture diagrams, analyze data, or explore structured courses and videos.",
         intent: "CHAT"
       }],
       workspaceFiles: {},
@@ -240,13 +240,16 @@ export default function App() {
   }, [sessions]);
 
   useEffect(() => {
-    const handleSandboxMessage = (event) => {
-      if (event.data && event.data.type === "PREVIEW_CONSOLE_LOG") {
+    const handleWindowMessages = (event) => {
+      if (!event.data) return;
+      if (event.data.type === "PREVIEW_CONSOLE_LOG") {
         setConsoleLogs((prev) => [...prev, { level: event.data.level, message: event.data.message, time: new Date().toLocaleTimeString() }]);
+      } else if (event.data.type === "OPEN_EXTERNAL_URL" && event.data.url) {
+        window.open(event.data.url, "_blank", "noopener,noreferrer");
       }
     };
-    window.addEventListener("message", handleSandboxMessage);
-    return () => window.removeEventListener("message", handleSandboxMessage);
+    window.addEventListener("message", handleWindowMessages);
+    return () => window.removeEventListener("message", handleWindowMessages);
   }, []);
 
   useEffect(() => {
@@ -310,7 +313,7 @@ export default function App() {
     }
 
     window.speechSynthesis.cancel();
-    const cleanText = text.replace(/```[\s\S]*?```/g, "Code block omitted from audio speech.").replace(/[#*_`]/g, "");
+    const cleanText = text.replace(/```[\s\S]*?```/g, "Code block omitted.").replace(/[#*_`]/g, "");
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = userSettings.language === "en" ? "en-US" : "hi-IN";
     utterance.rate = 1.0;
@@ -396,7 +399,7 @@ export default function App() {
       pinned: false,
       messages: [{
         role: "assistant",
-        content: "New workspace ready. What software, diagram, or video lectures would you like to explore?",
+        content: "New workspace ready. What software, diagram, or courses would you like to explore?",
         intent: "CHAT"
       }],
       workspaceFiles: {},
@@ -706,7 +709,7 @@ export default function App() {
       const lower = name.toLowerCase();
       const code = file.code || "";
 
-      if (lower.endsWith(".html") || code.includes("<!DOCTYPE") || code.includes("<html") || code.includes("<header") || code.includes("<video") || code.includes("hub-card")) {
+      if (lower.endsWith(".html") || code.includes("<!DOCTYPE") || code.includes("<html") || code.includes("<header") || code.includes("hub-card")) {
         htmlContent = code;
       } else if (lower.endsWith(".css") || file.language === "css" || code.includes(":root") || (code.includes("{") && code.includes("margin") && code.includes("color"))) {
         cssContent += `\n<style>\n${code}\n</style>\n`;
@@ -723,7 +726,7 @@ export default function App() {
         htmlContent = `
           <div style="font-family: sans-serif; padding: 50px 20px; text-align: center; color: #a1a1aa; background: #0b0b0e; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;">
             <h2 style="color: #f4f4f5; margin-bottom: 10px;">⚡ Live Preview Sandbox</h2>
-            <p style="font-size: 0.95rem;">Ask Rishova to generate an HTML/CSS landing page, resume, quiz, or video hub to view live here.</p>
+            <p style="font-size: 0.95rem;">Ask Rishova to generate an interactive app, diagram, or video hub to preview here.</p>
           </div>
         `;
       }
@@ -1105,7 +1108,12 @@ export default function App() {
                         remarkPlugins={[remarkGfm]}
                         components={{
                           pre: ({ children }) => <>{children}</>,
-                          code: StudioCodeBlock
+                          code: StudioCodeBlock,
+                          a: ({ href, children }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: "#38bdf8", textDecoration: "underline" }}>
+                              {children}
+                            </a>
+                          )
                         }}
                       >
                         {m.content}
@@ -1358,15 +1366,15 @@ export default function App() {
 
               {activeTab === "preview" && (
                 <div className="live-preview-container" style={{ position: "relative", display: "flex", flexDirection: "column", height: "100%" }}>
-                 <iframe
-  title="Live Web Sandbox"
-  srcDoc={getLivePreviewSource()}
-  sandbox="allow-scripts allow-modals allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  allowFullScreen
-  className="sandbox-iframe"
-  style={{ flex: 1, border: "none" }}
-/>
+                  <iframe
+                    title="Live Web Sandbox"
+                    srcDoc={getLivePreviewSource()}
+                    sandbox="allow-scripts allow-modals allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="sandbox-iframe"
+                    style={{ flex: 1, border: "none" }}
+                  />
 
                   <div className="console-toggle-bar">
                     <button 
