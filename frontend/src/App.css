@@ -1593,4 +1593,16 @@ body {
   border-radius: 4px;
   font-family: monospace;
   color: #38bdf8;
+}@media (max-width: 900px) {
+  .studio-body-layout {
+    flex-direction: column !important;
+  }
+  .chat-panel {
+    width: 100% !important;
+    height: 50vh !important;
+  }
+  .preview-panel {
+    width: 100% !important;
+    height: 50vh !important;
+  }
 }
