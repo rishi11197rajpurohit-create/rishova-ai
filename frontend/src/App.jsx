@@ -63,7 +63,29 @@ const StudioCodeBlock = ({ inline, className, children, ...props }) => {
         </div>
       </div>
       <div className="studio-code-body">
-        <SyntaxHighlighter "#131316", "'Fira "0.9rem", "1.6", "100%" "14px "auto", "block", "javascript"} "pre", 'Consolas', 0, 16px", Code', backgroundColor: codeTagProps="{{" customStyle="{{" display: fontFamily: fontSize: language="{lang" lineHeight: lineProps="{{" margin: monospace", overflowX: padding: showLineNumbers="{false}" style="{vscDarkPlus}" style: whiteSpace: width: wrapLines="{true}" { || } }}>
+        <SyntaxHighlighter
+          language={lang || "javascript"}
+          style={vscDarkPlus}
+          showLineNumbers={false}
+          wrapLines={true}
+          lineProps={{ style: { display: "block", width: "100%" } }}
+          customStyle={{
+            margin: 0,
+            padding: "14px 16px",
+            backgroundColor: "#131316",
+            fontSize: "0.9rem",
+            lineHeight: "1.6",
+            fontFamily: "'Fira Code', 'Consolas', monospace",
+            overflowX: "auto",
+          }}
+          codeTagProps={{
+            style: {
+              display: "block",
+              fontFamily: "'Fira Code', 'Consolas', monospace",
+              whiteSpace: "pre",
+            }
+          }}
+        >
           {codeContent}
         </SyntaxHighlighter>
       </div>
@@ -93,7 +115,6 @@ export default function App() {
   const [usageData, setUsageData] = useState({ tokens_used: 0, daily_limit: 50000 });
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
-  // Settings Modal State (Section 26)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [userSettings, setUserSettings] = useState(() => {
@@ -168,7 +189,6 @@ export default function App() {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, loading]);
 
-  // Global Keyboard Shortcuts (Section 26)
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -277,7 +297,6 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Text-To-Speech (AI Voice Output - Section 10 & 19)
   const handleTextToSpeech = (text, index) => {
     if (!('speechSynthesis' in window)) {
       alert("Text-to-speech is not supported in this browser.");
@@ -766,7 +785,6 @@ export default function App() {
     return "javascript";
   };
 
-  // Filtered Sessions (Search & Pinned logic - Section 24)
   const sortedAndFilteredSessions = [...sessions]
     .filter((s) => s.title.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
@@ -883,7 +901,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Keyboard Shortcuts Modal (Section 26) */}
+      {/* Keyboard Shortcuts Modal */}
       {isShortcutsOpen && (
         <div className="settings-modal-overlay" onClick={() => setIsShortcutsOpen(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
@@ -919,7 +937,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Settings Modal - Section 26 */}
+      {/* Settings Modal */}
       {isSettingsOpen && (
         <div className="settings-modal-overlay" onClick={() => setIsSettingsOpen(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
@@ -1013,7 +1031,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* Sidebar Search Bar (Section 24) */}
+            {/* Sidebar Search Bar */}
             <div className="sidebar-search-box">
               <input
                 type="text"
