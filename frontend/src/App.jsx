@@ -1358,15 +1358,15 @@ export default function App() {
 
               {activeTab === "preview" && (
                 <div className="live-preview-container" style={{ position: "relative", display: "flex", flexDirection: "column", height: "100%" }}>
-                  <iframe
-                    title="Live Web Sandbox"
-                    srcDoc={getLivePreviewSource()}
-                    sandbox="allow-scripts allow-modals allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    className="sandbox-iframe"
-                    style={{ flex: 1, border: "none" }}
-                  />
+                 <iframe
+  title="Live Web Sandbox"
+  srcDoc={getLivePreviewSource()}
+  sandbox="allow-scripts allow-modals allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  allowFullScreen
+  className="sandbox-iframe"
+  style={{ flex: 1, border: "none" }}
+/>
 
                   <div className="console-toggle-bar">
                     <button 

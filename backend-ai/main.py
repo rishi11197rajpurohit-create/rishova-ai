@@ -91,25 +91,29 @@ SYSTEM_ORCHESTRATOR_PROMPT = """
 You are RISHOVA AI, an intelligent, helpful, and eloquent AI Studio built by Rishikesh Singh Jagarwal.
 
 STRICT CONVERSATION RULES:
-1. NEVER repeat sentences or fall into repetitive loops.
-2. NEVER output internal thoughts, chain-of-thought traces, or <think> tags.
+1. NEVER output markdown brackets inside links like `[link]([https://...])`. Links MUST be plain and valid: `[Watch on YouTube](https://www.youtube.com/results?search_query=topic)`.
+2. NEVER repeat sentences or fall into repetitive loops.
 3. LANGUAGE HANDLING:
    - Match the user's language naturally (Marwari, Hindi, Hinglish, English, etc.).
 4. VIDEO & MEDIA DIRECTIVE (Section 10 & 19):
-   When user asks for video lecture, tutorial, masterclass, or video search:
-   - Provide direct clickable YouTube and web video search links in Markdown.
-   - Output structured academic notes and timestamped chapters in Markdown.
+   When user asks for video lectures, tutorials, or video search:
+   - Provide clean, direct links to YouTube courses and tutorials.
+   - Outline key timestamped chapters and syllabus notes.
    - Always output a downloadable .srt subtitles code block inside ```srt.
 """
 
 def generate_video_hub_html(topic_title: str) -> str:
-    clean_topic = topic_title.replace('"', '').replace("'", "").strip()
-    encoded_query = urllib.parse.quote_plus(clean_topic)
+    # Clean topic string - remove all brackets and special characters
+    clean_topic = re.sub(r'[^\w\s]', '', topic_title).strip()
+    if not clean_topic:
+        clean_topic = "Python Programming"
+        
+    encoded_topic = urllib.parse.quote_plus(clean_topic)
     
-    yt_search_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_query}"
-    google_video_url = f"[https://www.google.com/search?tbm=vid&q=](https://www.google.com/search?tbm=vid&q=){encoded_query}"
-    mit_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_query}+mit+opencourseware"
-    fcc_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_query}+freecodecamp"
+    yt_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_topic}"
+    fcc_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_topic}+freecodecamp"
+    mit_url = f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){encoded_topic}+mit+opencourseware"
+    google_url = f"[https://www.google.com/search?tbm=vid&q=](https://www.google.com/search?tbm=vid&q=){encoded_topic}"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -121,7 +125,7 @@ def generate_video_hub_html(topic_title: str) -> str:
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      padding: 20px;
+      padding: 16px;
       background: #09090b;
       color: #f4f4f5;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -131,12 +135,12 @@ def generate_video_hub_html(topic_title: str) -> str:
     }}
     .hub-card {{
       width: 100%;
-      max-width: 820px;
+      max-width: 800px;
       background: #18181b;
       border: 1px solid #27272a;
       border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+      padding: 22px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     }}
     .badge {{
       display: inline-block;
@@ -147,25 +151,25 @@ def generate_video_hub_html(topic_title: str) -> str:
       font-size: 0.75rem;
       font-weight: 600;
       text-transform: uppercase;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }}
     h2 {{
-      margin: 0 0 8px 0;
-      font-size: 1.3rem;
+      margin: 0 0 6px 0;
+      font-size: 1.25rem;
       color: #38bdf8;
     }}
     p {{
-      margin: 0 0 20px 0;
-      font-size: 0.9rem;
+      margin: 0 0 18px 0;
+      font-size: 0.88rem;
       color: #a1a1aa;
-      line-height: 1.5;
+      line-height: 1.4;
     }}
     .video-grid {{
       display: flex;
       flex-direction: column;
       gap: 12px;
     }}
-    .video-link-card {{
+    .card-btn {{
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -173,58 +177,57 @@ def generate_video_hub_html(topic_title: str) -> str:
       border: 1px solid #3f3f46;
       border-radius: 10px;
       padding: 14px 18px;
-      text-decoration: none;
       color: #f4f4f5;
       cursor: pointer;
+      text-align: left;
+      width: 100%;
       transition: all 0.2s;
     }}
-    .video-link-card:hover {{
+    .card-btn:hover {{
       background: #1e293b;
       border-color: #38bdf8;
       transform: translateY(-2px);
     }}
-    .card-left {{
+    .left-box {{
       display: flex;
       align-items: center;
       gap: 14px;
     }}
-    .card-icon {{
+    .icon {{
       font-size: 1.6rem;
     }}
-    .card-info h4 {{
+    .info h4 {{
       margin: 0 0 4px 0;
       font-size: 0.95rem;
       color: #f8fafc;
     }}
-    .card-info span {{
+    .info span {{
       font-size: 0.78rem;
       color: #94a3b8;
     }}
-    .play-btn {{
+    .action-tag {{
       background: #ef4444;
       color: #fff;
-      padding: 8px 16px;
+      padding: 8px 14px;
       border-radius: 6px;
       font-size: 0.82rem;
       font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      white-space: nowrap;
     }}
-    .play-btn.google {{
+    .action-tag.blue {{
       background: #2563eb;
     }}
     .chapters-section {{
-      margin-top: 24px;
-      padding-top: 18px;
+      margin-top: 20px;
+      padding-top: 16px;
       border-top: 1px solid #27272a;
     }}
     .chap-title {{
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       color: #71717a;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }}
     .chap-list {{
       display: grid;
@@ -243,66 +246,72 @@ def generate_video_hub_html(topic_title: str) -> str:
 </head>
 <body>
   <div class="hub-card">
-    <span class="badge">&#127916; Multimodal Video Hub</span>
-    <h2>Lectures &amp; Video Streams: {clean_topic}</h2>
-    <p>Click below to open high-definition verified video streams directly on YouTube and Google Video search:</p>
+    <span class="badge">&#127916; Verified Video Resource Hub</span>
+    <h2>{clean_topic} &mdash; Top Verified Video Lectures</h2>
+    <p>Click any card below to open the authentic lectures directly in a new window:</p>
 
     <div class="video-grid">
-      <a href="{yt_search_url}" target="_blank" rel="noopener noreferrer" class="video-link-card">
-        <div class="card-left">
-          <div class="card-icon">&#9654;&#65039;</div>
-          <div class="card-info">
-            <h4>YouTube Top Results ({clean_topic})</h4>
-            <span>Full HD video lectures, top channels, and complete tutorials</span>
+      <div class="card-btn" onclick="openLink('{yt_url}')">
+        <div class="left-box">
+          <span class="icon">&#9654;&#65039;</span>
+          <div class="info">
+            <h4>YouTube Top Tutorials &amp; Playlists</h4>
+            <span>High-definition verified video courses, code-alongs and community favorites</span>
           </div>
         </div>
-        <div class="play-btn">&#9658; Watch on YouTube</div>
-      </a>
+        <div class="action-tag">&#9658; Watch on YouTube</div>
+      </div>
 
-      <a href="{fcc_url}" target="_blank" rel="noopener noreferrer" class="video-link-card">
-        <div class="card-left">
-          <div class="card-icon">&#128218;</div>
-          <div class="card-info">
-            <h4>freeCodeCamp / Complete Masterclass</h4>
-            <span>Comprehensive full courses with timestamps and practical code</span>
+      <div class="card-btn" onclick="openLink('{fcc_url}')">
+        <div class="left-box">
+          <span class="icon">&#128218;</span>
+          <div class="info">
+            <h4>freeCodeCamp Full Masterclasses</h4>
+            <span>Complete 5-10 hour end-to-end courses with hands-on projects</span>
           </div>
         </div>
-        <div class="play-btn">&#9658; Open Course</div>
-      </a>
+        <div class="action-tag">&#9658; Open Course</div>
+      </div>
 
-      <a href="{mit_url}" target="_blank" rel="noopener noreferrer" class="video-link-card">
-        <div class="card-left">
-          <div class="card-icon">&#127979;</div>
-          <div class="card-info">
-            <h4>MIT &amp; University Academic Lectures</h4>
-            <span>Deep computer science theory, architecture, and university slides</span>
+      <div class="card-btn" onclick="openLink('{mit_url}')">
+        <div class="left-box">
+          <span class="icon">&#127979;</span>
+          <div class="info">
+            <h4>MIT OpenCourseWare &amp; University Lectures</h4>
+            <span>In-depth computer science theory, professors' lectures &amp; slides</span>
           </div>
         </div>
-        <div class="play-btn">&#9658; Open Lectures</div>
-      </a>
+        <div class="action-tag">&#9658; Open Lecture</div>
+      </div>
 
-      <a href="{google_video_url}" target="_blank" rel="noopener noreferrer" class="video-link-card">
-        <div class="card-left">
-          <div class="card-icon">&#128269;</div>
-          <div class="card-info">
-            <h4>Google Multi-Platform Video Search</h4>
-            <span>All web videos across Coursera, YouTube, NPTEL and Vimeo</span>
+      <div class="card-btn" onclick="openLink('{google_url}')">
+        <div class="left-box">
+          <span class="icon">&#128269;</span>
+          <div class="info">
+            <h4>All Web Videos (Coursera, NPTEL &amp; YouTube)</h4>
+            <span>Multi-platform global search across all engineering platforms</span>
           </div>
         </div>
-        <div class="play-btn google">&#128279; View All Videos</div>
-      </a>
+        <div class="action-tag blue">&#128279; View All Videos</div>
+      </div>
     </div>
 
     <div class="chapters-section">
-      <div class="chap-title">&#128193; Syllabus Timeline &amp; Timestamp Navigation</div>
+      <div class="chap-title">&#128193; Recommended Timeline &amp; Core Syllabus</div>
       <div class="chap-list">
-        <div class="chap-pill">&#9201; 00:00 1. Introduction &amp; Setup</div>
-        <div class="chap-pill">&#9201; 02:30 2. Core Concepts &amp; Architecture</div>
-        <div class="chap-pill">&#9201; 06:15 3. Practical Code Implementation</div>
-        <div class="chap-pill">&#9201; 12:40 4. Advanced Topics &amp; Optimization</div>
+        <div class="chap-pill">&#9201; 00:00 1. Setup &amp; Foundations</div>
+        <div class="chap-pill">&#9201; 02:30 2. Syntax, Variables &amp; Logic</div>
+        <div class="chap-pill">&#9201; 06:15 3. Functions &amp; Data Structures</div>
+        <div class="chap-pill">&#9201; 12:40 4. Projects &amp; Best Practices</div>
       </div>
     </div>
   </div>
+
+  <script>
+    function openLink(url) {{
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }}
+  </script>
 </body>
 </html>"""
 
@@ -387,7 +396,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "DIAGRAM"
     elif any(k in prompt_lower for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर"]):
         intent = "IMAGE"
-    elif any(k in prompt_lower for k in ["video", "youtube", "subtitle", "transcribe video", "video summary", "scene", "masterclass player", "lecture video", "play a video", "videos", "video link"]):
+    elif any(k in prompt_lower for k in ["video", "youtube", "subtitle", "transcribe video", "video summary", "scene", "masterclass player", "lecture video", "play a video", "videos", "video link", "lecture"]):
         intent = "VIDEO"
     elif any(k in prompt_lower for k in ["audio", "transcribe", "voice transcript"]):
         intent = "AUDIO"
@@ -405,9 +414,9 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
         intent = "BUILDER"
 
     if intent == "VIDEO":
-        topic_name = re.sub(r'(video|player|lecture|tutorial|play|a|on|for|videos|links)\s+', ' ', user_prompt, flags=re.IGNORECASE).strip().title()
+        topic_name = re.sub(r'(video|player|lecture|tutorial|play|a|on|for|videos|links|show|me)\s+', ' ', user_prompt, flags=re.IGNORECASE).strip().title()
         if len(topic_name) < 3:
-            topic_name = "Programming & Technology Lectures"
+            topic_name = "Python Programming Masterclass"
         files_map["index.html"] = {
             "language": "html",
             "code": generate_video_hub_html(topic_name)
