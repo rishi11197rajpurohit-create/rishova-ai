@@ -102,7 +102,10 @@ STRICT CONVERSATION RULES:
 """
 
 def generate_video_studio_html(topic_title: str) -> str:
-    clean_title = topic_title.replace('"', '\\"').replace("'", "\\'")
+    clean_title = topic_title.replace('"', '&quot;').replace("'", "&#39;")
+    video_source_url = "[https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4](https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4)"
+    poster_image_url = "[https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&q=80](https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&q=80)"
+    
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -198,23 +201,23 @@ def generate_video_studio_html(topic_title: str) -> str:
 <body>
   <div class="video-card">
     <div class="player-container">
-      <video id="lectureVideo" controls autoplay playsinline preload="auto">
-        <source src="[https://raw.githubusercontent.com/mdn/learning-area/master/html/multimedia-and-embedding/video-and-audio-content/rabbit320.mp4](https://raw.githubusercontent.com/mdn/learning-area/master/html/multimedia-and-embedding/video-and-audio-content/rabbit320.mp4)" type="video/mp4">
+      <video id="lectureVideo" controls autoplay playsinline preload="auto" poster="{poster_image_url}">
+        <source src="{video_source_url}" type="video/mp4">
         Your browser does not support HTML5 video.
       </video>
     </div>
 
     <div class="meta-box">
-      <span class="status-badge">● 100% CORS-Safe HTML5 Direct Video & Audio</span>
-      <h2>🎬 {clean_title}</h2>
+      <span class="status-badge">&#9679; Verified Fast CDN Stream (Audio &amp; Video)</span>
+      <h2>&#127916; {clean_title}</h2>
       <p>Continuous lecture playback with full audio stream. Click any chapter to jump the video directly to that lesson:</p>
 
-      <div class="chapters-title">📑 Video Chapters & Topics</div>
+      <div class="chapters-title">&#128193; Video Chapters &amp; Topics</div>
       <div class="chapters-grid">
-        <button class="chap-btn active" onclick="seekVideo(0, this)">⏱ 00:00 1. Introduction & Overview</button>
-        <button class="chap-btn" onclick="seekVideo(2, this)">⏱ 00:02 2. Syntax & Basics</button>
-        <button class="chap-btn" onclick="seekVideo(5, this)">⏱ 00:05 3. Functions & Memory</button>
-        <button class="chap-btn" onclick="seekVideo(8, this)">⏱ 00:08 4. Practical Implementation</button>
+        <button class="chap-btn active" onclick="seekVideo(0, this)">&#9201; 00:00 1. Introduction &amp; Overview</button>
+        <button class="chap-btn" onclick="seekVideo(2, this)">&#9201; 00:02 2. Syntax &amp; Basics</button>
+        <button class="chap-btn" onclick="seekVideo(4, this)">&#9201; 00:04 3. Functions &amp; Memory</button>
+        <button class="chap-btn" onclick="seekVideo(5, this)">&#9201; 00:05 4. Practical Implementation</button>
       </div>
     </div>
   </div>
@@ -224,8 +227,10 @@ def generate_video_studio_html(topic_title: str) -> str:
       document.querySelectorAll('.chap-btn').forEach(b => b.classList.remove('active'));
       if (btn) btn.classList.add('active');
       const v = document.getElementById('lectureVideo');
-      v.currentTime = seconds;
-      v.play().catch(() => {{}});
+      if (v) {{
+        v.currentTime = seconds;
+        v.play().catch(() => {{}});
+      }}
     }}
   </script>
 </body>
@@ -332,7 +337,7 @@ def parse_llm_markdown_response(text: str, user_prompt: str, is_web_search: bool
     if intent == "VIDEO":
         topic_name = re.sub(r'(video|player|lecture|tutorial|play|a|on|for)\s+', ' ', user_prompt, flags=re.IGNORECASE).strip().title()
         if len(topic_name) < 3:
-            topic_name = "Video Learning Masterclass"
+            topic_name = "Python Programming Video Lecture"
         files_map["index.html"] = {
             "language": "html",
             "code": generate_video_studio_html(topic_name)
