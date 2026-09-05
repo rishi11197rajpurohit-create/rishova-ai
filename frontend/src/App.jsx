@@ -4,421 +4,254 @@ import "./App.css";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://rishova-ai-backend.onrender.com";
 
 export default function App() {
-  // 1. Crash-proof Sessions Initialization
   const [sessions, setSessions] = useState(() => {
     try {
-      const saved = localStorage.getItem("rishova_sessions");
+      const saved = localStorage.getItem("rishova_chat_sessions");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((s, idx) => ({
-            id: s?.id || String(idx + 1),
-            title: s?.title || "Project Session",
-            files: s?.files && typeof s.files === "object" ? s.files : { "index.html": { language: "html", code: "<h1>Rishova Studio Ready</h1>" } },
-            messages: Array.isArray(s?.messages) ? s.messages : []
-          }));
-        }
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (e) {
-      console.warn("Storage reset to safe state.");
-    }
-    return [{
-      id: "1",
-      title: "New Chat",
-      files: { "index.html": { language: "html", code: "<h1>Rishova Studio Ready</h1>" } },
-      messages: []
-    }];
+    } catch (e) {}
+    return [{ id: "1", title: "New Chat", messages: [] }];
   });
 
-  const [currentSessionId, setCurrentSessionId] = useState("1");
-  const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("llama-3.3-70b-versatile");
-  const [activeTab, setActiveTab] = useState("Preview");
-  const [selectedFile, setSelectedFile] = useState("index.html");
-  const [attachedFile, setAttachedFile] = useState(null);
+  const [currentId, setCurrentId] = useState(() => sessions[0]?.id || "1");
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [tokensUsed, setTokensUsed] = useState(1546);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  // 2. Safe Settings
-  const [userSettings, setUserSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem("rishova_settings");
-      return saved ? JSON.parse(saved) : { theme: "dark", autoSave: true };
-    } catch (e) {
-      return { theme: "dark", autoSave: true };
-    }
-  });
-
-  const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  // Safe fallback for current active session
-  const currentSession = sessions.find((s) => s.id === currentSessionId) || sessions[0] || {
-    id: "1",
-    title: "New Chat",
-    files: { "index.html": { language: "html", code: "<h1>Rishova Studio Ready</h1>" } },
-    messages: []
-  };
+  const currentSession = sessions.find((s) => s.id === currentId) || sessions[0];
 
-  // Safe Quota Storage
   useEffect(() => {
     try {
-      const light = sessions.map((s) => ({
-        id: s.id,
-        title: s.title,
-        files: s.files && typeof s.files === "object" ? s.files : {},
-        messages: (s.messages || []).slice(-8).map((m) => ({
-          role: m.role,
-          content: typeof m.content === "string" && m.content.length > 300 ? m.content.slice(0, 300) + "..." : m.content,
-          intent: m.intent || "CHAT",
-          attachedFileName: m.attachedFileName || ""
-        }))
-      }));
-      localStorage.setItem("rishova_sessions", JSON.stringify(light));
-    } catch (err) {
-      console.warn("Storage quota full, keeping in-memory.");
-    }
+      localStorage.setItem("rishova_chat_sessions", JSON.stringify(sessions));
+    } catch (e) {}
   }, [sessions]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem("rishova_settings", JSON.stringify(userSettings));
-    } catch (err) {}
-  }, [userSettings]);
-
-  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [currentSession?.messages]);
+  }, [currentSession?.messages, loading]);
 
   const handleNewChat = () => {
     const newId = String(Date.now());
-    const newSession = {
-      id: newId,
-      title: `Chat ${sessions.length + 1}`,
-      files: { "index.html": { language: "html", code: "<!-- Fresh Canvas -->" } },
-      messages: []
-    };
+    const newSession = { id: newId, title: "New Chat", messages: [] };
     setSessions((prev) => [newSession, ...prev]);
-    setCurrentSessionId(newId);
+    setCurrentId(newId);
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setAttachedFile(e.target.files[0]);
-    }
+  const handleClearAll = () => {
+    const initial = [{ id: "1", title: "New Chat", messages: [] }];
+    setSessions(initial);
+    setCurrentId("1");
+    localStorage.removeItem("rishova_chat_sessions");
   };
 
   const handleSend = async () => {
-    if (!prompt.trim() && !attachedFile) return;
+    const text = input.trim();
+    if (!text || loading) return;
 
-    const userMsg = {
-      role: "user",
-      content: prompt,
-      attachedFileName: attachedFile ? attachedFile.name : null
-    };
+    const userMsg = { role: "user", content: text };
+    const updatedMessages = [...currentSession.messages, userMsg];
 
-    const updatedMessages = [...(currentSession.messages || []), userMsg];
+    // Update title on first message
+    const isFirst = currentSession.messages.length === 0;
+    const newTitle = isFirst ? (text.slice(0, 24) + (text.length > 24 ? "..." : "")) : currentSession.title;
+
     setSessions((prev) =>
-      prev.map((s) => (s.id === currentSessionId ? { ...s, messages: updatedMessages } : s))
+      prev.map((s) => (s.id === currentId ? { ...s, title: newTitle, messages: updatedMessages } : s))
     );
-
-    const userPrompt = prompt;
-    const fileToSend = attachedFile;
-    setPrompt("");
-    setAttachedFile(null);
+    setInput("");
     setLoading(true);
 
     try {
-      let resData = null;
+      const res = await fetch(`${BACKEND_URL}/api/ai/universal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: text,
+          model: "llama-3.3-70b-versatile",
+          user_email: "Rishikesh"
+        })
+      });
 
-      if (fileToSend) {
-        const formData = new FormData();
-        formData.append("files", fileToSend);
-        formData.append("prompt", userPrompt || "Analyze this file");
-        formData.append("model", model);
-        formData.append("user_email", "Rishikesh");
+      const data = await res.json();
+      const reply = data?.data?.markdown_response || data?.detail || "Kuch dikkat aayi, kripya dobara try karein.";
 
-        const res = await fetch(`${BACKEND_URL}/api/ai/documents-multi`, {
-          method: "POST",
-          body: formData
-        });
-        resData = await res.json();
-      } else {
-        const res = await fetch(`${BACKEND_URL}/api/ai/universal`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt: userPrompt,
-            model: model,
-            user_email: "Rishikesh"
-          })
-        });
-        resData = await res.json();
-      }
-
-      if (resData && resData.data) {
-        const aiMsg = {
-          role: "assistant",
-          content: resData.data.markdown_response || "Done.",
-          intent: resData.intent || "CHAT",
-          code_snippet: resData.data.code_snippet || ""
-        };
-
-        const incomingFiles = resData.data.files && typeof resData.data.files === "object" ? resData.data.files : {};
-        const mergedFiles = { ...(currentSession.files || {}), ...incomingFiles };
-
-        setSessions((prev) =>
-          prev.map((s) =>
-            s.id === currentSessionId
-              ? {
-                  ...s,
-                  title: s.title === "New Chat" ? (userPrompt.slice(0, 20) || "Project") : s.title,
-                  files: mergedFiles,
-                  messages: [...updatedMessages, aiMsg]
-                }
-              : s
-          )
-        );
-
-        const fileKeys = Object.keys(mergedFiles || {});
-        if (fileKeys.length > 0 && !mergedFiles[selectedFile]) {
-          setSelectedFile(fileKeys[0]);
-        }
-
-        if (resData.intent === "IMAGE") {
-          setActiveTab("Preview");
-        }
-
-        setTokensUsed((prev) => prev + 420);
-      }
-    } catch (err) {
-      const errorMsg = {
-        role: "assistant",
-        content: `Error connecting to backend: ${err.message}`
-      };
+      const aiMsg = { role: "assistant", content: reply };
       setSessions((prev) =>
-        prev.map((s) => (s.id === currentSessionId ? { ...s, messages: [...updatedMessages, errorMsg] } : s))
+        prev.map((s) => (s.id === currentId ? { ...s, messages: [...updatedMessages, aiMsg] } : s))
+      );
+    } catch (err) {
+      const errReply = { role: "assistant", content: "Backend se connect nahi ho paya. Kripya Render status check karein." };
+      setSessions((prev) =>
+        prev.map((s) => (s.id === currentId ? { ...s, messages: [...updatedMessages, errReply] } : s))
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const safeFileKeys = Object.keys(currentSession?.files || {});
-  const activeFileContent = currentSession?.files?.[selectedFile]?.code || (currentSession?.files?.["index.html"]?.code || "<!-- Output Preview -->");
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#0b0f17", color: "#f1f5f9", fontFamily: "sans-serif" }}>
-      {/* Navbar */}
-      <div style={{ height: "52px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", background: "#0f172a" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span onClick={() => setSidebarOpen(!sidebarOpen)} style={{ fontSize: "1.2rem", cursor: "pointer", color: "#94a3b8" }}>☰</span>
-          <span style={{ fontWeight: 800, fontSize: "1.1rem", letterSpacing: "0.5px", color: "#38bdf8" }}>RISHOVA AI</span>
-          <span style={{ fontSize: "0.75rem", background: "#1e293b", color: "#94a3b8", padding: "3px 8px", borderRadius: "12px", border: "1px solid #334155" }}>Universal Studio</span>
-
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            style={{ background: "#1e293b", color: "#e2e8f0", border: "1px solid #334155", borderRadius: "6px", padding: "4px 8px", fontSize: "0.8rem", marginLeft: "8px" }}
+    <div style={{ display: "flex", height: "100vh", width: "100vw", background: "#212121", color: "#ececec", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+      {/* ChatGPT Style Sidebar */}
+      <div style={{ width: sidebarOpen ? "260px" : "0px", transition: "width 0.2s ease", background: "#171717", display: "flex", flexDirection: "column", overflow: "hidden", borderRight: sidebarOpen ? "1px solid #2f2f2f" : "none" }}>
+        <div style={{ padding: "12px", display: "flex", gap: "8px" }}>
+          <button
+            onClick={handleNewChat}
+            style={{ flex: 1, display: "flex", alignItems: "center", gap: "10px", background: "#212121", border: "1px solid #383838", color: "#fff", padding: "10px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "0.88rem", fontWeight: 500 }}
           >
-            <option value="llama-3.3-70b-versatile">⚡ Llama 3.3 70B (Complex Architect)</option>
-            <option value="llama-3.2-11b-vision-preview">📷 Llama 3.2 Vision (Image & Docs)</option>
-          </select>
+            <span style={{ fontSize: "1.1rem" }}>+</span> New chat
+          </button>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.8rem" }}>
-          <span style={{ background: "#1e293b", padding: "5px 10px", borderRadius: "6px", color: "#94a3b8", border: "1px solid #334155" }}>
-            {tokensUsed} / 50000 Tokens
-          </span>
-          <button style={{ background: "#1e293b", border: "1px solid #334155", color: "#cbd5e1", padding: "5px 10px", borderRadius: "6px", cursor: "pointer" }}>☁ Cloud Save</button>
-          <button style={{ background: "#1e293b", border: "1px solid #334155", color: "#cbd5e1", padding: "5px 10px", borderRadius: "6px", cursor: "pointer" }}>⚙ Settings</button>
-          <div style={{ background: "#7c3aed", color: "#fff", padding: "5px 12px", borderRadius: "20px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
-            <span>👤</span> Rishikesh
+        {/* Chat History List */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 10px", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ fontSize: "0.75rem", color: "#8e8e8e", padding: "8px 6px", fontWeight: 600 }}>Recent Chats</div>
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              onClick={() => setCurrentId(s.id)}
+              style={{
+                padding: "9px 12px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "0.86rem",
+                background: s.id === currentId ? "#2f2f2f" : "transparent",
+                color: s.id === currentId ? "#fff" : "#b4b4b4",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis"
+              }}
+            >
+              💬 {s.title}
+            </div>
+          ))}
+        </div>
+
+        {/* Sidebar Footer */}
+        <div style={{ padding: "14px", borderTop: "1px solid #2f2f2f", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", fontWeight: 600 }}>
+            <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#10a37f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>R</div>
+            <span>Rishikesh</span>
           </div>
+          <button onClick={handleClearAll} title="Clear all chats" style={{ background: "transparent", border: "none", color: "#8e8e8e", cursor: "pointer", fontSize: "0.75rem" }}>Clear</button>
         </div>
       </div>
 
-      {/* Main Studio Body */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Collapsible Sidebar for Chats */}
-        {sidebarOpen && (
-          <div style={{ width: "240px", borderRight: "1px solid #1e293b", background: "#0b101d", display: "flex", flexDirection: "column" }}>
-            <div style={{ padding: "12px", borderBottom: "1px solid #1e293b" }}>
-              <button
-                onClick={handleNewChat}
-                style={{ width: "100%", background: "#0284c7", color: "#fff", border: "none", padding: "8px", borderRadius: "6px", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer" }}
-              >
-                + New Chat
-              </button>
-            </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
-              {sessions.map((s) => (
-                <div
-                  key={s.id}
-                  onClick={() => setCurrentSessionId(s.id)}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "0.82rem",
-                    marginBottom: "4px",
-                    background: s.id === currentSessionId ? "#1e293b" : "transparent",
-                    color: s.id === currentSessionId ? "#38bdf8" : "#94a3b8",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis"
-                  }}
-                >
-                  💬 {s.title}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Chat Stream Panel */}
-        <div style={{ width: "420px", borderRight: "1px solid #1e293b", display: "flex", flexDirection: "column", background: "#090d16" }}>
-          <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
-            {(currentSession.messages || []).map((msg, i) => (
-              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
-                <div style={{ fontSize: "0.75rem", color: "#64748b", marginBottom: "3px" }}>
-                  {msg.role === "user" ? "You" : "Rishova AI"}
-                </div>
-                <div
-                  style={{
-                    background: msg.role === "user" ? "#0284c7" : "#1e293b",
-                    color: "#fff",
-                    padding: "10px 14px",
-                    borderRadius: "10px",
-                    maxWidth: "92%",
-                    fontSize: "0.88rem",
-                    lineHeight: "1.4"
-                  }}
-                >
-                  {msg.attachedFileName && (
-                    <div style={{ fontSize: "0.75rem", background: "rgba(0,0,0,0.25)", padding: "4px 8px", borderRadius: "4px", marginBottom: "6px" }}>
-                      📎 {msg.attachedFileName}
-                    </div>
-                  )}
-                  <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
-                </div>
-              </div>
-            ))}
-            {loading && (
-              <div style={{ color: "#38bdf8", fontSize: "0.85rem", fontStyle: "italic", padding: "8px" }}>
-                ⚡ Processing via Rishova AI Engine...
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Chat Input */}
-          <div style={{ padding: "12px", borderTop: "1px solid #1e293b", background: "#0f172a" }}>
-            {attachedFile && (
-              <div style={{ fontSize: "0.75rem", color: "#38bdf8", marginBottom: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>📎 {attachedFile.name}</span>
-                <span onClick={() => setAttachedFile(null)} style={{ cursor: "pointer", color: "#ef4444" }}>✕</span>
-              </div>
-            )}
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} accept="image/*,.pdf" />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                style={{ background: "#1e293b", border: "1px solid #334155", color: "#cbd5e1", padding: "8px 12px", borderRadius: "6px", cursor: "pointer" }}
-                title="Attach Photo or Document"
-              >
-                📎
-              </button>
-              <input
-                type="text"
-                placeholder="Type instructions, swap background, build..."
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", borderRadius: "6px", padding: "9px 12px", color: "#f8fafc", fontSize: "0.88rem", outline: "none" }}
-              />
-              <button
-                onClick={handleSend}
-                disabled={loading}
-                style={{ background: "#0284c7", border: "none", color: "#fff", padding: "9px 18px", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.88rem" }}
-              >
-                Send
-              </button>
-            </div>
+      {/* Main Chat Area */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
+        {/* Top Minimal Bar */}
+        <div style={{ height: "48px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", borderBottom: "1px solid #2f2f2f" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{ background: "transparent", border: "none", color: "#b4b4b4", fontSize: "1.2rem", cursor: "pointer" }}
+            >
+              ☰
+            </button>
+            <span style={{ fontWeight: 700, fontSize: "1.05rem", letterSpacing: "0.3px", color: "#fff" }}>Rishova AI</span>
+            <span style={{ fontSize: "0.72rem", background: "#2f2f2f", color: "#10a37f", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>Llama 3.3 70B</span>
           </div>
         </div>
 
-        {/* Right Pane: Preview & Code */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#030712" }}>
-          <div style={{ height: "42px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: "#0a0f1d" }}>
-            <div style={{ display: "flex", gap: "6px" }}>
-              {["Code", "Preview", "Canvas"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  style={{
-                    background: activeTab === tab ? "#1e293b" : "transparent",
-                    color: activeTab === tab ? "#38bdf8" : "#94a3b8",
-                    border: activeTab === tab ? "1px solid #334155" : "1px solid transparent",
-                    padding: "4px 14px",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "0.82rem",
-                    fontWeight: 600
-                  }}
-                >
-                  {tab === "Code" ? "💻 Code" : tab === "Preview" ? "👁 Preview" : "🎨 Canvas"}
-                </button>
-              ))}
+        {/* Chat Feed */}
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+          {currentSession.messages.length === 0 ? (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px", color: "#8e8e8e" }}>
+              <div style={{ width: "50px", height: "50px", borderRadius: "50%", background: "#10a37f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.5rem", fontWeight: 700 }}>
+                R
+              </div>
+              <h2 style={{ color: "#ececec", fontSize: "1.4rem", fontWeight: 600 }}>Rishova AI se aap kya poochna chahte hain?</h2>
+              <p style={{ fontSize: "0.9rem" }}>Code, writing, Hindi/Hinglish analysis, questions — kuch bhi likhein.</p>
             </div>
-
-            {activeTab === "Code" && (
-              <div style={{ display: "flex", gap: "6px" }}>
-                {safeFileKeys.map((fname) => (
-                  <button
-                    key={fname}
-                    onClick={() => setSelectedFile(fname)}
+          ) : (
+            <div style={{ maxWidth: "768px", width: "100%", margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: "22px" }}>
+              {currentSession.messages.map((m, idx) => (
+                <div key={idx} style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
+                  <div
                     style={{
-                      background: selectedFile === fname ? "#0284c7" : "#1e293b",
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      background: m.role === "user" ? "#5436DA" : "#10a37f",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                       color: "#fff",
-                      border: "none",
-                      padding: "3px 10px",
-                      borderRadius: "4px",
-                      fontSize: "0.75rem",
-                      cursor: "pointer"
+                      fontSize: "0.85rem",
+                      fontWeight: 700,
+                      flexShrink: 0
                     }}
                   >
-                    {fname}
-                  </button>
-                ))}
-              </div>
-            )}
+                    {m.role === "user" ? "U" : "R"}
+                  </div>
+                  <div style={{ flex: 1, fontSize: "0.95rem", lineHeight: "1.6", color: "#ececec", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+
+              {loading && (
+                <div style={{ display: "flex", gap: "14px", alignItems: "center", color: "#8e8e8e", fontSize: "0.9rem" }}>
+                  <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#10a37f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>R</div>
+                  <span>Thinking...</span>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Input Bar */}
+        <div style={{ padding: "16px", background: "transparent" }}>
+          <div style={{ maxWidth: "768px", margin: "0 auto", position: "relative", background: "#2f2f2f", borderRadius: "24px", border: "1px solid #3d3d3d", display: "flex", alignItems: "center", padding: "6px 14px" }}>
+            <textarea
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Message Rishova AI..."
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "#fff",
+                fontSize: "0.95rem",
+                padding: "8px 6px",
+                resize: "none",
+                fontFamily: "inherit"
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={loading || !input.trim()}
+              style={{
+                background: input.trim() && !loading ? "#fff" : "#424242",
+                color: input.trim() && !loading ? "#000" : "#8e8e8e",
+                border: "none",
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                cursor: input.trim() && !loading ? "pointer" : "default",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 700,
+                fontSize: "1.1rem"
+              }}
+            >
+              ↑
+            </button>
           </div>
-
-          <div style={{ flex: 1, position: "relative" }}>
-            {activeTab === "Preview" && (
-              <iframe
-                title="Studio Preview"
-                srcDoc={activeFileContent}
-                sandbox="allow-scripts allow-downloads allow-same-origin"
-                style={{ width: "100%", height: "100%", border: "none", background: "#09090b" }}
-              />
-            )}
-
-            {activeTab === "Code" && (
-              <textarea
-                readOnly
-                value={activeFileContent}
-                style={{ width: "100%", height: "100%", background: "#050811", color: "#38bdf8", border: "none", padding: "16px", fontFamily: "monospace", fontSize: "0.85rem", outline: "none", resize: "none" }}
-              />
-            )}
-
-            {activeTab === "Canvas" && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#64748b", fontSize: "0.95rem" }}>
-                🎨 Rishova Interactive Canvas Studio Ready
-              </div>
-            )}
+          <div style={{ textAlign: "center", fontSize: "0.72rem", color: "#777", marginTop: "8px" }}>
+            Rishova AI can make mistakes. Verify important information.
           </div>
         </div>
       </div>
