@@ -190,7 +190,7 @@ export default function App() {
                       <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
                     ) : (
                       <div className="markdown-content" style={{ textAlign: "left" }}>
-                        <ReactMarkdown remarkPlugins="{[remarkGfm]}">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {m.content}
                         </ReactMarkdown>
                       </div>
