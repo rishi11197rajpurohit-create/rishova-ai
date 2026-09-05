@@ -169,10 +169,24 @@ export default function App() {
   const fileInputRef = useRef(null);
   const exportDropdownRef = useRef(null);
 
-  useEffect(() => {
-    localStorage.setItem("rishova_sessions", JSON.stringify(sessions));
+ useEffect(() => {
+    try {
+      // Stripping heavy HTML preview payload to stay within browser 5MB limit
+      const lightSessions = sessions.map((s) => ({
+        id: s.id,
+        title: s.title,
+        messages: (s.messages || []).slice(-10).map((m) => ({
+          role: m.role,
+          content: typeof m.content === "string" && m.content.length > 500 ? m.content.slice(0, 500) + "..." : m.content,
+          intent: m.intent,
+          attachedFile: typeof m.attachedFile === "string" ? m.attachedFile : "file"
+        }))
+      }));
+      localStorage.setItem("rishova_sessions", JSON.stringify(lightSessions));
+    } catch (err) {
+      console.warn("Storage quota full, ignoring to prevent crash.");
+    }
   }, [sessions]);
-
   useEffect(() => {
     localStorage.setItem("rishova_settings", JSON.stringify(userSettings));
   }, [userSettings]);
