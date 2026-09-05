@@ -188,7 +188,11 @@ export default function App() {
     }
   }, [sessions]);
   useEffect(() => {
-    localStorage.setItem("rishova_settings", JSON.stringify(userSettings));
+    try {
+      localStorage.setItem("rishova_settings", JSON.stringify(userSettings));
+    } catch (err) {
+      console.warn("Settings storage skipped");
+    }
   }, [userSettings]);
 
   useEffect(() => {
