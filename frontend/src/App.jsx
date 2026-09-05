@@ -37,11 +37,6 @@ const PROMPT_TEMPLATES = [
     category: "🧠 DSA Algorithms",
     title: "Dynamic Programming: 0/1 Knapsack",
     prompt: "Write a complete Python implementation of 0/1 Knapsack Problem with both Top-Down Memoization and Bottom-Up Tabulation. Include time & space complexity analysis."
-  },
-  {
-    category: "📊 Data Analytics",
-    title: "Interactive Sales Dashboard",
-    prompt: "Create an interactive HTML and Chart.js analytics dashboard demonstrating quarterly sales performance, profit margins, and KPI metric cards with mock data."
   }
 ];
 
@@ -216,19 +211,6 @@ export default function App() {
   }, [sessions]);
 
   useEffect(() => {
-    const handleWindowMessages = (event) => {
-      if (!event.data) return;
-      if (event.data.type === "PREVIEW_CONSOLE_LOG") {
-        setConsoleLogs((prev) => [...prev, { level: event.data.level, message: event.data.message, time: new Date().toLocaleTimeString() }]);
-      } else if (event.data.type === "OPEN_EXTERNAL_URL" && event.data.url) {
-        window.open(event.data.url, "_blank", "noopener,noreferrer");
-      }
-    };
-    window.addEventListener("message", handleWindowMessages);
-    return () => window.removeEventListener("message", handleWindowMessages);
-  }, []);
-
-  useEffect(() => {
     let isMounted = true;
     const renderMermaidDiagram = async () => {
       if (activeTab === "canvas" && activeSession?.activeDiagram && diagramRef.current) {
@@ -252,11 +234,7 @@ export default function App() {
           }
         } catch {
           if (isMounted && diagramRef.current) {
-            diagramRef.current.innerHTML = `
-              <div style="color: #f87171; padding: 16px; background: #1f1215; border: 1px solid #7f1d1d; border-radius: 8px; font-family: monospace; font-size: 0.85rem;">
-                ⚠️ Diagram Rendering issue.
-              </div>
-            `;
+            diagramRef.current.innerHTML = `<div style="color: #f87171; padding: 16px;">⚠️ Diagram Rendering issue.</div>`;
           }
         }
       }
@@ -536,9 +514,9 @@ export default function App() {
 
     setLoading(true);
 
-    // 🎨 1. AI IMAGE GENERATION (Client-Side Instant Rendering - Zero Server 404)
+    // AI IMAGE GENERATION (Direct Client Instant Generation)
     const isImageQuery = /generate image|create image|draw|photo of|paint|image of|तस्वीर|फोटो/i.test(userText);
-    if (isImageQuery) {
+    if (isImageQuery && (!attachedFilesList || attachedFilesList.length === 0)) {
       const cleanPrompt = userText.replace(/generate image|create image|draw|photo of|paint|an image of|image of|तस्वीर|फोटो|बनाओ/gi, "").trim() || "Futuristic AI Studio";
       const encoded = encodeURIComponent(cleanPrompt);
       const seed = Math.floor(Math.random() * 99999);
@@ -591,7 +569,7 @@ export default function App() {
       return;
     }
 
-    // ⚡ 2. BACKEND API INFERENCE
+    // BACKEND API INFERENCE
     try {
       let res;
       if (attachedFilesList && attachedFilesList.length > 0) {
@@ -642,14 +620,10 @@ export default function App() {
         setActiveTab("canvas");
         setZoomLevel(1);
         setPanPosition({ x: 0, y: 0 });
-      } else if (Object.keys(returnedFiles).length > 0) {
+      } else if (data.intent === "IMAGE" || Object.keys(returnedFiles).length > 0) {
         newWorkspaceFiles = returnedFiles;
-        newSelectedFile = Object.keys(returnedFiles)[0];
-        if (data.intent === "CAREER" || data.intent === "LEARNING" || data.intent === "DATA" || data.intent === "VIDEO" || data.intent === "IMAGE") {
-          setActiveTab("preview");
-        } else {
-          setActiveTab("code");
-        }
+        newSelectedFile = Object.keys(returnedFiles)[0] || "index.html";
+        setActiveTab("preview");
       } else if (responseData.code_snippet) {
         newWorkspaceFiles = {
           "main.py": { language: responseData.language || "python", code: responseData.code_snippet }
@@ -704,25 +678,6 @@ export default function App() {
     if (fileInputRef.current) fileInputRef.current.value = "";
 
     await triggerPromptExecution(userText, filesToUpload);
-  };
-
-  const handleAIAction = (actionType) => {
-    const current = activeSession.workspaceFiles[activeSession.selectedFileName];
-    if (!current || !current.code) {
-      alert("No active code file to analyze!");
-      return;
-    }
-
-    let actionPrompt = "";
-    if (actionType === "explain") {
-      actionPrompt = `Explain this file '${activeSession.selectedFileName}' in detail:\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
-    } else if (actionType === "debug") {
-      actionPrompt = `Review and find potential bugs in '${activeSession.selectedFileName}':\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
-    } else if (actionType === "optimize") {
-      actionPrompt = `Refactor and optimize '${activeSession.selectedFileName}':\n\`\`\`${current.language}\n${current.code}\n\`\`\``;
-    }
-
-    triggerPromptExecution(actionPrompt, []);
   };
 
   const handleEditorCodeChange = (newCode) => {
@@ -783,142 +738,40 @@ export default function App() {
       zip.file(name, fData.code);
     });
 
-    if (activeSession.commands && activeSession.commands.length > 0) {
-      zip.file("setup_commands.sh", activeSession.commands.join("\n"));
-    }
-
     const content = await zip.generateAsync({ type: "blob" });
     saveAs(content, `${activeSession.title.replace(/[^a-zA-Z0-9_-]/g, "_")}.zip`);
     setShowExportMenu(false);
   };
 
-  const downloadMarkdownDoc = () => {
-    const lastAssistant = [...activeSession.messages].reverse().find((m) => m.role === "assistant");
-    if (!lastAssistant) return;
-    const blob = new Blob([lastAssistant.content], { type: "text/markdown;charset=utf-8" });
-    saveAs(blob, "documentation.md");
-    setShowExportMenu(false);
-  };
-
-  const downloadPlainText = () => {
-    const current = activeSession.workspaceFiles[activeSession.selectedFileName];
-    if (!current) return;
-    const blob = new Blob([current.code], { type: "text/plain;charset=utf-8" });
-    saveAs(blob, `${activeSession.selectedFileName}.txt`);
-    setShowExportMenu(false);
-  };
-
-  const downloadShellScript = () => {
-    if (!activeSession.commands || activeSession.commands.length === 0) {
-      alert("No shell commands available!");
-      return;
-    }
-    const scriptContent = "#!/usr/bin/env bash\n\n" + activeSession.commands.join("\n") + "\n";
-    const blob = new Blob([scriptContent], { type: "application/x-sh;charset=utf-8" });
-    saveAs(blob, "run_setup.sh");
-    setShowExportMenu(false);
-  };
-
-  const downloadSVG = () => {
-    if (!diagramRef.current) return;
-    const svgElement = diagramRef.current.querySelector("svg");
-    if (!svgElement) {
-      alert("No rendered diagram found!");
-      return;
-    }
-    const svgData = new XMLSerializer().serializeToString(svgElement);
-    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-    saveAs(blob, "architecture_diagram.svg");
-  };
-
   const getLivePreviewSource = () => {
     const files = activeSession.workspaceFiles || {};
     let htmlContent = "";
-    let cssContent = "";
-    let jsContent = "";
 
     Object.entries(files).forEach(([name, file]) => {
       const lower = name.toLowerCase();
       const code = file.code || "";
-
-      if (lower.endsWith(".html") || code.includes("<!DOCTYPE") || code.includes("<html") || code.includes("<header") || code.includes("hub-card")) {
+      if (lower.endsWith(".html") || code.includes("<!DOCTYPE") || code.includes("<html") || code.includes("<style")) {
         htmlContent = code;
-      } else if (lower.endsWith(".css") || file.language === "css" || code.includes(":root") || (code.includes("{") && code.includes("margin") && code.includes("color"))) {
-        cssContent += `\n<style>\n${code}\n</style>\n`;
-      } else if ((lower.endsWith(".js") || file.language === "javascript") && !lower.includes("server") && !lower.includes("node") && !code.includes("express()")) {
-        jsContent += `\n<script>\ntry {\n${code}\n} catch(err) { console.error('Preview JS Error:', err); }\n<\/script>\n`;
       }
     });
 
     if (!htmlContent) {
       const current = files[activeSession.selectedFileName];
-      if (current && (current.language === "html" || current.code.includes("<div") || current.code.includes("<button") || current.code.includes("hub-card"))) {
+      if (current && (current.language === "html" || current.code.includes("<div"))) {
         htmlContent = current.code;
       } else {
         htmlContent = `
           <div style="font-family: sans-serif; padding: 50px 20px; text-align: center; color: #a1a1aa; background: #0b0b0e; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;">
             <h2 style="color: #f4f4f5; margin-bottom: 10px;">⚡ Live Preview Sandbox</h2>
-            <p style="font-size: 0.95rem;">Ask Rishova to generate an interactive app, image, or diagram to preview here.</p>
+            <p style="font-size: 0.95rem;">Ask Rishova to generate an AI Image, interactive app, or diagram to preview here.</p>
           </div>
         `;
       }
     }
-
-    const consoleInterceptor = `
-      <script>
-        (function() {
-          const originalLog = console.log;
-          const originalError = console.error;
-          const originalWarn = console.warn;
-          function sendToParent(level, args) {
-            try {
-              const msg = Array.from(args).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
-              window.parent.postMessage({ type: 'PREVIEW_CONSOLE_LOG', level: level, message: msg }, '*');
-            } catch(e) {}
-          }
-          console.log = function() { sendToParent('info', arguments); originalLog.apply(console, arguments); };
-          console.error = function() { sendToParent('error', arguments); originalError.apply(console, arguments); };
-          console.warn = function() { sendToParent('warn', arguments); originalWarn.apply(console, arguments); };
-        })();
-      </script>
-    `;
-
-    if (cssContent && !htmlContent.includes(cssContent)) {
-      if (htmlContent.includes("</head>")) {
-        htmlContent = htmlContent.replace("</head>", `${cssContent}</head>`);
-      } else {
-        htmlContent = `${cssContent}\n${htmlContent}`;
-      }
-    }
-
-    if (jsContent && !htmlContent.includes(jsContent)) {
-      if (htmlContent.includes("</body>")) {
-        htmlContent = htmlContent.replace("</body>", `${consoleInterceptor}\n${jsContent}</body>`);
-      } else {
-        htmlContent = `${htmlContent}\n${consoleInterceptor}\n${jsContent}`;
-      }
-    } else {
-      htmlContent = `${consoleInterceptor}\n${htmlContent}`;
-    }
-
     return htmlContent;
   };
 
   const currentFile = activeSession?.workspaceFiles?.[activeSession?.selectedFileName] || null;
-
-  const getMonacoLang = (ext) => {
-    if (!ext) return "javascript";
-    const clean = ext.toLowerCase();
-    if (clean.endsWith(".js") || clean.endsWith(".jsx")) return "javascript";
-    if (clean.endsWith(".ts") || clean.endsWith(".tsx")) return "typescript";
-    if (clean.endsWith(".py")) return "python";
-    if (clean.endsWith(".json")) return "json";
-    if (clean.endsWith(".html")) return "html";
-    if (clean.endsWith(".css")) return "css";
-    if (clean.endsWith(".sql")) return "sql";
-    if (clean.endsWith(".sh")) return "shell";
-    return "javascript";
-  };
 
   const sortedAndFilteredSessions = [...sessions]
     .filter((s) => s.title.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -1045,7 +898,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Prompt Templates Modal */}
       {isTemplatesOpen && (
         <div className="settings-modal-overlay" onClick={() => setIsTemplatesOpen(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
@@ -1080,7 +932,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Keyboard Shortcuts Modal */}
       {isShortcutsOpen && (
         <div className="settings-modal-overlay" onClick={() => setIsShortcutsOpen(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
@@ -1104,7 +955,7 @@ export default function App() {
                 </tr>
                 <tr>
                   <td><kbd>🔊 Listen</kbd></td>
-                  <td>AI Text-to-Speech Output (Hear response aloud)</td>
+                  <td>AI Text-to-Speech Output</td>
                 </tr>
                 <tr>
                   <td><kbd>🎤 Mic</kbd></td>
@@ -1116,7 +967,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Settings Modal */}
       {isSettingsOpen && (
         <div className="settings-modal-overlay" onClick={() => setIsSettingsOpen(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
@@ -1149,42 +999,15 @@ export default function App() {
                   <option value="mwr">मारवाड़ी / राजस्थानी (Marwari)</option>
                   <option value="hi">हिंदी (Hindi)</option>
                   <option value="hinglish">Hinglish (हिंदी + English)</option>
-                  <option value="gu">ગુજરાતી (Gujarati)</option>
-                  <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
-                  <option value="bn">বাংলা (Bengali)</option>
-                  <option value="mr">मराठी (Marathi)</option>
-                  <option value="ta">தமிழ் (Tamil)</option>
-                  <option value="te">తెలుగు (Telugu)</option>
-                  <option value="ur">اردو (Urdu)</option>
                 </optgroup>
                 <optgroup label="Global World Languages">
                   <option value="en">English (US/UK)</option>
                   <option value="es">Español (Spanish)</option>
-                  <option value="fr">Français (French)</option>
-                  <option value="de">Deutsch (German)</option>
-                  <option value="ar">العربية (Arabic)</option>
-                  <option value="ru">Русский (Russian)</option>
-                  <option value="ja">日本語 (Japanese)</option>
-                  <option value="zh">中文 (Chinese)</option>
                 </optgroup>
               </select>
             </div>
 
-            <div className="settings-group">
-              <label>Editor Font Size:</label>
-              <select 
-                className="settings-input-control"
-                value={userSettings.fontSize}
-                onChange={(e) => setUserSettings({ ...userSettings, fontSize: e.target.value })}
-              >
-                <option value="12">12px (Compact)</option>
-                <option value="14">14px (Standard)</option>
-                <option value="16">16px (Large)</option>
-              </select>
-            </div>
-
             <div className="settings-danger-zone">
-              <label style={{ color: "#ef4444", fontWeight: 600, display: "block", marginBottom: "8px" }}>Storage & Cache Management:</label>
               <button 
                 className="clear-storage-btn"
                 onClick={() => {
@@ -1234,14 +1057,12 @@ export default function App() {
                     <button
                       className={`pin-session-btn ${s.pinned ? "pinned" : ""}`}
                       onClick={(e) => togglePinSession(s.id, e)}
-                      title={s.pinned ? "Unpin Project" : "Pin Project to Top"}
                     >
                       ★
                     </button>
                     <button
                       className="delete-session-btn"
                       onClick={(e) => deleteSession(s.id, e)}
-                      title="Delete Project"
                     >
                       ×
                     </button>
@@ -1265,7 +1086,6 @@ export default function App() {
                         <button 
                           className="tts-speaker-btn"
                           onClick={() => handleTextToSpeech(m.content, idx)}
-                          title="Read response aloud (Text-to-Speech)"
                         >
                           {speakingIndex === idx ? "⏹ Stop" : "🔊 Listen"}
                         </button>
@@ -1285,31 +1105,12 @@ export default function App() {
                         components={{
                           pre: ({ children }) => <>{children}</>,
                           code: StudioCodeBlock,
-                          a: ({ href, children }) => (
-                            <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: "#38bdf8", textDecoration: "underline" }}>
-                              {children}
-                            </a>
-                          )
                         }}
                       >
                         {m.content}
                       </ReactMarkdown>
                     )}
                   </div>
-
-                  {m.commands && m.commands.length > 0 && (
-                    <div className="cmd-box">
-                      <div className="cmd-header">
-                        <span>⚡ Quick Execution Terminal Commands</span>
-                        <button onClick={() => copyToClipboard(m.commands.join("\n"))}>📋 Copy All</button>
-                      </div>
-                      <div className="studio-code-card">
-                        <pre style={{ margin: 0, padding: "12px 14px", background: "#131316", color: "#4ade80", overflowX: "auto", fontFamily: "'Fira Code', monospace", fontSize: "0.85rem" }}>
-                          <code>{m.commands.join("\n")}</code>
-                        </pre>
-                      </div>
-                    </div>
-                  )}
                 </div>
               ))}
               {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating multimodal output...</div>}
@@ -1340,7 +1141,7 @@ export default function App() {
                 type="button"
                 className="attach-btn"
                 onClick={() => fileInputRef.current?.click()}
-                title="Upload Documents, Images, or Audio"
+                title="Upload Documents or Photos to Edit"
               >
                 📎
               </button>
@@ -1349,8 +1150,7 @@ export default function App() {
                 type="button"
                 className="attach-btn"
                 onClick={handleClearCurrentChat}
-                title="Clear Current Chat History"
-                style={{ fontSize: "0.9rem" }}
+                title="Clear Current Chat"
               >
                 🗑️
               </button>
@@ -1359,7 +1159,7 @@ export default function App() {
                 type="button"
                 className={`voice-btn ${isListening ? "listening" : ""}`}
                 onClick={handleToggleVoice}
-                title={isListening ? "Listening... Click to Stop" : "Voice Input (Speech-to-Text)"}
+                title="Voice Input"
               >
                 {isListening ? "🔴" : "🎤"}
               </button>
@@ -1368,10 +1168,10 @@ export default function App() {
                 type="text"
                 placeholder={
                   isListening
-                    ? "Listening to voice... Speak now..."
+                    ? "Listening... Speak now..."
                     : selectedFiles.length > 0
-                    ? `Ask anything about these ${selectedFiles.length} files...`
-                    : "Build software, architecture, generate image, or click '💡 Templates'..."
+                    ? `Describe how to edit this photo or ask about files...`
+                    : "Build software, architecture, generate/edit images, or click '💡 Templates'..."
                 }
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
@@ -1410,85 +1210,16 @@ export default function App() {
                     className="action-btn"
                     onClick={handleExecuteActiveCode}
                     disabled={isRunningCode}
-                    title="Run Active Code in Browser (Python/JS)"
                     style={{ background: "#16a34a", borderColor: "#22c55e", color: "#fff", fontWeight: "600" }}
                   >
                     {isRunningCode ? "⏳ Running..." : "▶ Run Code"}
                   </button>
-
-                  <div className="ai-actions-group">
-                    <button className="ai-action-btn" onClick={() => handleAIAction("explain")} title="Explain active code">
-                      ⚡ Explain
-                    </button>
-                    <button className="ai-action-btn" onClick={() => handleAIAction("debug")} title="Scan for bugs">
-                      🐛 Find Bugs
-                    </button>
-                    <button className="ai-action-btn" onClick={() => handleAIAction("optimize")} title="Refactor code">
-                      ✨ Optimize
-                    </button>
-                  </div>
-
-                  <span className="active-file-indicator">
-                    {getMonacoLang(activeSession.selectedFileName).toUpperCase()}
-                  </span>
                   <button className="action-btn" onClick={() => copyToClipboard(currentFile ? currentFile.code : "")}>
                     📋 Copy
                   </button>
-
-                  <div className="export-dropdown-wrapper" ref={exportDropdownRef}>
-                    <button 
-                      className="action-btn download-btn export-trigger-btn"
-                      onClick={() => setShowExportMenu(!showExportMenu)}
-                    >
-                      ⤓ Export ▾
-                    </button>
-                    {showExportMenu && (
-                      <div className="export-dropdown-menu">
-                        <div className="dropdown-label">Export Options</div>
-                        <button onClick={downloadProjectZip}>
-                          <span>📦 Complete ZIP Project</span>
-                          <small>All workspace files</small>
-                        </button>
-                        <button onClick={downloadActiveFile}>
-                          <span>📄 Active File ({activeSession.selectedFileName})</span>
-                          <small>Direct format</small>
-                        </button>
-                        <button onClick={downloadMarkdownDoc}>
-                          <span>📑 Documentation (.md)</span>
-                          <small>Markdown summary</small>
-                        </button>
-                        <button onClick={downloadPlainText}>
-                          <span>📋 Plain Text (.txt)</span>
-                          <small>Raw output</small>
-                        </button>
-                        {activeSession.commands && activeSession.commands.length > 0 && (
-                          <button onClick={downloadShellScript}>
-                            <span>⚡ Setup Script (.sh)</span>
-                            <small>run_setup.sh</small>
-                          </button>
-                        )}
-                        <hr style={{ borderColor: "#27272a", margin: "4px 0" }} />
-                        <button onClick={handleCloudSync}>
-                          <span>☁️ Sync to Cloud DB</span>
-                          <small>Backup projects</small>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "canvas" && activeSession.activeDiagram && (
-                <div className="canvas-controls">
-                  <button className="action-btn" onClick={() => setZoomLevel((z) => Math.max(0.3, z - 0.2))} title="Zoom Out">🔍 -</button>
-                  <span className="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
-                  <button className="action-btn" onClick={() => setZoomLevel((z) => Math.min(3.0, z + 0.2))} title="Zoom In">🔍 +</button>
-                  <button className="action-btn" onClick={() => { setZoomLevel(1); setPanPosition({ x: 0, y: 0 }); }} title="Reset View">↺ Reset</button>
-                  <button className="action-btn" onClick={() => setIsFullScreenCanvas(!isFullScreenCanvas)} title="Toggle Fullscreen">
-                    {isFullScreenCanvas ? "🗗 Exit" : "⛶ Fullscreen"}
+                  <button className="action-btn download-btn" onClick={downloadProjectZip}>
+                    📦 ZIP
                   </button>
-                  <button className="action-btn download-btn" onClick={downloadSVG}>⬇ SVG</button>
-                  <button className="action-btn" onClick={() => copyToClipboard(activeSession.activeDiagram)}>📋 Copy</button>
                 </div>
               )}
             </div>
@@ -1517,34 +1248,22 @@ export default function App() {
                       <div className="active-code-card" style={{ flex: isRunOutputVisible ? "0 0 65%" : "1" }}>
                         <Editor
                           height="100%"
-                          language={getMonacoLang(activeSession.selectedFileName)}
+                          language="javascript"
                           theme="vs-dark"
                           value={currentFile ? currentFile.code : ""}
                           onChange={handleEditorCodeChange}
                           options={{
-                            fontSize: parseInt(userSettings.fontSize || "14"),
+                            fontSize: 14,
                             fontFamily: "'Fira Code', 'Consolas', monospace",
-                            minimap: { enabled: true },
-                            scrollBeyondLastLine: false,
+                            minimap: { enabled: false },
                             automaticLayout: true,
-                            tabSize: 2,
-                            wordWrap: "on",
-                            formatOnPaste: true,
-                            formatOnType: true,
                           }}
                         />
                       </div>
 
                       {isRunOutputVisible && (
-                        <div style={{ flex: "0 0 35%", background: "#0a0a0c", borderTop: "1px solid #27272a", display: "flex", flexDirection: "column" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 14px", background: "#18181b", borderBottom: "1px solid #27272a" }}>
-                            <span style={{ fontSize: "0.78rem", fontWeight: "600", color: "#38bdf8" }}>💻 Terminal Execution Output</span>
-                            <div style={{ display: "flex", gap: "8px" }}>
-                              <button onClick={() => setRunOutput("")} style={{ background: "transparent", border: "none", color: "#a1a1aa", cursor: "pointer", fontSize: "0.75rem" }}>Clear</button>
-                              <button onClick={() => setIsRunOutputVisible(false)} style={{ background: "transparent", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "0.75rem" }}>✕ Close</button>
-                            </div>
-                          </div>
-                          <pre style={{ margin: 0, padding: "12px", flex: 1, overflowY: "auto", fontFamily: "'Fira Code', monospace", fontSize: "0.82rem", color: "#e4e4e7", whiteSpace: "pre-wrap" }}>
+                        <div style={{ flex: "0 0 35%", background: "#0a0a0c", borderTop: "1px solid #27272a", padding: "10px" }}>
+                          <pre style={{ margin: 0, color: "#e4e4e7", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
                             {runOutput}
                           </pre>
                         </div>
@@ -1553,81 +1272,39 @@ export default function App() {
                   ) : (
                     <div className="canvas-placeholder">
                       <p>💻 Monaco Code Workspace Ready</p>
-                      <span>Ask Rishova AI to build software or click '💡 Templates' at the top to load a project.</span>
+                      <span>Ask Rishova AI to build software or click '💡 Templates' above.</span>
                     </div>
                   )}
                 </div>
               )}
 
               {activeTab === "preview" && (
-                <div className="live-preview-container" style={{ position: "relative", display: "flex", flexDirection: "column", height: "100%" }}>
+                <div className="live-preview-container" style={{ width: "100%", height: "100%" }}>
                   <iframe
                     title="Live Web Sandbox"
                     srcDoc={getLivePreviewSource()}
                     sandbox="allow-scripts allow-modals allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
                     className="sandbox-iframe"
-                    style={{ flex: 1, border: "none" }}
+                    style={{ width: "100%", height: "100%", border: "none" }}
                   />
-
-                  <div className="console-toggle-bar">
-                    <button 
-                      className={`bottom-console-btn ${isConsoleOpen ? "open" : ""}`}
-                      onClick={() => setIsConsoleOpen(!isConsoleOpen)}
-                    >
-                      📟 {isConsoleOpen ? "Hide Console Logs" : `Show Console Logs (${consoleLogs.length})`}
-                    </button>
-                    {isConsoleOpen && (
-                      <button className="clear-console-btn" onClick={() => setConsoleLogs([])}>
-                        Clear Logs
-                      </button>
-                    )}
-                  </div>
-
-                  {isConsoleOpen && (
-                    <div className="sandbox-console-panel">
-                      <div className="console-logs-list">
-                        {consoleLogs.length === 0 ? (
-                          <div className="empty-console">No logs captured yet. Any console.log() or runtime errors will appear here.</div>
-                        ) : (
-                          consoleLogs.map((log, idx) => (
-                            <div key={idx} className={`console-log-row log-${log.level}`}>
-                              <span className="log-time">[{log.time}]</span>
-                              <span className="log-badge">{log.level.toUpperCase()}</span>
-                              <span className="log-text">{log.message}</span>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
               {activeTab === "canvas" && (
                 <div 
-                  className={`canvas-area ${isDragging ? "grabbing" : "grabbable"}`}
+                  className="canvas-area"
                   ref={canvasContainerRef}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
                 >
                   {activeSession.activeDiagram ? (
-                    <div
-                      ref={diagramRef}
-                      className="mermaid-wrapper smooth-canvas"
-                      style={{
-                        transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomLevel})`,
-                        transformOrigin: "center center",
-                        cursor: isDragging ? "grabbing" : "grab"
-                      }}
-                    />
+                    <div ref={diagramRef} className="mermaid-wrapper" />
                   ) : (
                     <div className="canvas-placeholder">
                       <p>🎨 Interactive Architecture Canvas Ready</p>
-                      <span>Ask Rishova to generate a system architecture, ERD database schema, or flowchart.</span>
+                      <span>Ask Rishova to generate a system architecture or flowchart.</span>
                     </div>
                   )}
                 </div>
