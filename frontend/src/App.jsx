@@ -70,7 +70,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: text,
-          model: "llama-3.3-70b-versatile",
+          model: "llama-3.1-70b-versatile",
           user_email: "Rishikesh"
         })
       });
