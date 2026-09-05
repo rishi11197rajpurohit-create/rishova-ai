@@ -645,7 +645,7 @@ export default function App() {
       } else if (Object.keys(returnedFiles).length > 0) {
         newWorkspaceFiles = returnedFiles;
         newSelectedFile = Object.keys(returnedFiles)[0];
-        if (data.intent === "CAREER" || data.intent === "LEARNING" || data.intent === "DATA" || data.intent === "VIDEO") {
+        if (data.intent === "CAREER" || data.intent === "LEARNING" || data.intent === "DATA" || data.intent === "VIDEO" || data.intent === "IMAGE") {
           setActiveTab("preview");
         } else {
           setActiveTab("code");

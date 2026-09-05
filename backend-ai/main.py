@@ -49,7 +49,6 @@ def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rishova AI Image Studio</title>
   <style>
     * {{ box-sizing: border-box; }}
@@ -70,9 +69,9 @@ def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str
       border: 1px solid #27272a;
       border-radius: 12px;
       padding: 20px;
-      max-width: 800px;
+      max-width: 840px;
       width: 100%;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
       text-align: center;
     }}
     .compare-container {{
@@ -102,7 +101,7 @@ def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str
 <body>
   <div class="image-card">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <span style="background: #3b82f6; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600;">✨ FLUX AI STUDIO</span>
+      <span style="background: #3b82f6; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600;">✨ FLUX AI IMAGE EDITOR</span>
       <span style="color: #a1a1aa; font-size: 0.8rem;">1024 x 1024 Ultra HD</span>
     </div>
     <div style="color: #cbd5e1; font-size: 0.9rem; margin-top: 10px; font-style: italic;">"{prompt_text}"</div>
@@ -110,52 +109,17 @@ def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str
     <div class="compare-container">
       {original_block}
       <div style="flex: 1; min-width: 280px; text-align: center;">
-        <span style="color: #38bdf8; font-size: 0.85rem; font-weight: 600;">🎨 AI GENERATED / EDITED</span>
+        <span style="color: #38bdf8; font-size: 0.85rem; font-weight: 600;">🎨 AI EDITED RESULT</span>
         <div style="margin-top: 8px; border-radius: 8px; overflow: hidden; border: 1px solid #38bdf8; background: #000;">
           <img src="{img_url}" style="width: 100%; height: auto; display: block;" />
         </div>
       </div>
     </div>
 
-    <a href="{img_url}" target="_blank" download="rishova_ai_image.jpg" class="action-btn">⬇ Download High-Res Image</a>
+    <a href="{img_url}" target="_blank" download="rishova_ai_edited.jpg" class="action-btn">⬇ Download High-Res Edited Image</a>
   </div>
 </body>
 </html>"""
-
-def handle_image_request(user_prompt: str, original_base64: str = None):
-    clean_img_prompt = re.sub(r'(generate|create|draw|paint|an|image|of|photo|picture|edit|तस्वीर|फोटो|बनाओ|करो)\s+', '', user_prompt, flags=re.IGNORECASE).strip()
-    if not clean_img_prompt:
-        clean_img_prompt = "Indian developer coding in a futuristic cyber studio at night"
-
-    encoded_prompt = urllib.parse.quote(clean_img_prompt)
-    seed = abs(hash(clean_img_prompt)) % 10000
-    generated_img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={seed}"
-
-    orig_url = f"data:image/jpeg;base64,{original_base64}" if original_base64 else None
-    
-    html_card = generate_image_studio_html(clean_img_prompt, generated_img_url, orig_url)
-    
-    edit_note = "✨ **Image Transformed:** I processed your instruction and generated the updated scene below." if original_base64 else "✨ **AI Image Generated Successfully:**"
-    markdown_output = f"{edit_note}\n\n![Generated Image]({generated_img_url})\n\n**Prompt:** *\"{clean_img_prompt}\"*\n\nSwitch to the **👁️ Preview** tab on the right to view and download it in Ultra HD."
-
-    return {
-        "intent": "IMAGE",
-        "title": "AI Image Generation",
-        "data": {
-            "mermaid": "",
-            "markdown_response": markdown_output,
-            "code_snippet": html_card,
-            "files": {
-                "index.html": {
-                    "language": "html",
-                    "code": html_card
-                }
-            },
-            "language": "html",
-            "commands": [],
-            "summary": "Image generated successfully"
-        }
-    }
 
 @app.get("/")
 def read_root():
@@ -179,15 +143,32 @@ async def handle_universal_prompt(req: UniversalRequest):
     try:
         user_prompt = req.prompt.strip()
 
-        # इमेज जेनरेशन डिटेक्शन
+        # Direct Image Generation
         if any(k in user_prompt.lower() for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर", "image of"]):
-            return handle_image_request(user_prompt)
+            clean_prompt = re.sub(r'(generate image|create image|draw|photo of|paint|an image of|image of|तस्वीर|फोटो|बनाओ)\s*', '', user_prompt, flags=re.IGNORECASE).strip() or "Futuristic AI Studio"
+            encoded = urllib.parse.quote(clean_prompt)
+            seed = abs(hash(clean_prompt)) % 100000
+            img_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed={seed}"
+            html_card = generate_image_studio_html(clean_prompt, img_url)
 
-        # सामान्य टेक्स्ट/कोड जेनरेशन
+            return {
+                "intent": "IMAGE",
+                "title": "AI Image Art",
+                "data": {
+                    "mermaid": "",
+                    "markdown_response": f"### ✨ AI Image Generated\n\n![Generated Art]({img_url})\n\n**Prompt:** *\"{clean_prompt}\"*\n\n👉 *Switch to **👁️ Preview** tab to view and download in Ultra HD.*",
+                    "code_snippet": html_card,
+                    "files": {"index.html": {"language": "html", "code": html_card}},
+                    "language": "html",
+                    "commands": []
+                }
+            }
+
+        # Code & Architecture Inference
         completion = client.chat.completions.create(
             model=req.model,
             messages=[
-                {"role": "system", "content": "You are RISHOVA AI Universal Studio. Provide concise, clean, modular solutions."},
+                {"role": "system", "content": "You are RISHOVA AI Universal Studio. Provide modular, clean solutions."},
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.3,
@@ -195,17 +176,15 @@ async def handle_universal_prompt(req: UniversalRequest):
         )
         response_text = completion.choices[0].message.content
 
-        # कोड ब्लॉक एक्सट्रैक्शन
         files_map = {}
         code_blocks = re.findall(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```", response_text)
-        
         idx = 1
         for lang, code in code_blocks:
-            lang_clean = (lang or "javascript").lower()
-            if lang_clean in ["mermaid", "bash", "sh"]:
+            l_clean = (lang or "javascript").lower()
+            if l_clean in ["mermaid", "bash", "sh"]:
                 continue
-            ext = "py" if lang_clean == "python" else ("html" if "html" in lang_clean else "js")
-            files_map[f"file_{idx}.{ext}"] = {"language": lang_clean, "code": code.strip()}
+            ext = "py" if l_clean == "python" else ("html" if "html" in l_clean else "js")
+            files_map[f"file_{idx}.{ext}"] = {"language": l_clean, "code": code.strip()}
             idx += 1
 
         mermaid_match = re.search(r"```(?:mermaid)?\s*\n?((?:graph|flowchart)[\s\S]*?)```", response_text)
@@ -213,15 +192,14 @@ async def handle_universal_prompt(req: UniversalRequest):
 
         return {
             "intent": "DIAGRAM" if mermaid_code else ("BUILDER" if files_map else "CHAT"),
-            "title": "Rishova AI Response",
+            "title": "Rishova AI Studio Response",
             "data": {
                 "mermaid": mermaid_code,
                 "markdown_response": response_text,
                 "code_snippet": list(files_map.values())[0]["code"] if files_map else "",
                 "files": files_map,
                 "language": "javascript",
-                "commands": [],
-                "summary": "Completed"
+                "commands": []
             }
         }
     except Exception as e:
@@ -252,16 +230,60 @@ async def handle_multi_document_prompt(
                     if t:
                         doc_texts.append(f"[Page {p_idx}] {t[:800]}")
 
-        # फोटो एडिट (Image-to-Image)
-        if has_image and any(k in prompt.lower() for k in ["edit", "change", "add", "remove", "background", "बदलो", "एडिट", "हटाओ", "लगाओ"]):
-            return handle_image_request(prompt, original_base64=image_base64)
+        # 🌟 AI IMAGE-TO-IMAGE EDITING (ChatGPT / Gemini Style)
+        if has_image and any(k in prompt.lower() for k in ["edit", "change", "add", "remove", "background", "बदलो", "एडिट", "हटाओ", "लगाओ", "कन्वर्ट", "make"]):
+            vision_messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text", 
+                            "text": f"You are an expert AI image art director. The user wants to edit this image with the following instruction: '{prompt}'. Describe the modified target scene in a highly detailed, cinematic text-to-image prompt (1-2 sentences). Preserve the person's pose and core identity while strictly applying the requested modifications. Do not write intros or explanations, output only the image prompt."
+                        },
+                        {
+                            "type": "image_url", 
+                            "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
+                        }
+                    ]
+                }
+            ]
+            
+            try:
+                vision_res = client.chat.completions.create(
+                    model="llama-3.2-11b-vision-preview",
+                    messages=vision_messages,
+                    temperature=0.3
+                )
+                refined_prompt = vision_res.choices[0].message.content.strip()
+            except Exception:
+                refined_prompt = prompt
 
-        # सामान्य सवाल
+            encoded_prompt = urllib.parse.quote(refined_prompt)
+            seed = abs(hash(refined_prompt)) % 100000
+            edited_img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={seed}"
+            original_url = f"data:image/jpeg;base64,{image_base64}"
+
+            html_card = generate_image_studio_html(prompt, edited_img_url, original_url)
+
+            return {
+                "intent": "IMAGE",
+                "title": "AI Image-to-Image Edit",
+                "data": {
+                    "mermaid": "",
+                    "markdown_response": f"### ✨ AI Image Edited Successfully\n\n**User Request:** *\"{prompt}\"*\n\n![Edited Image]({edited_img_url})\n\n👉 *Switch to the **👁️ Preview** tab to see the side-by-side comparison with your original photo and download in Ultra HD.*",
+                    "code_snippet": html_card,
+                    "files": {"index.html": {"language": "html", "code": html_card}},
+                    "language": "html",
+                    "commands": []
+                }
+            }
+
+        # Regular Multi-Doc / PDF Q&A
         context = "\n".join(doc_texts)
         completion = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": "You are RISHOVA AI. Answer user questions referencing page numbers if available."},
+                {"role": "system", "content": "You are RISHOVA AI. Answer user questions referencing specific page numbers like [Source: Page X]."},
                 {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {prompt}"}
             ],
             temperature=0.3
@@ -275,8 +297,7 @@ async def handle_multi_document_prompt(
                 "code_snippet": "",
                 "files": {},
                 "language": "text",
-                "commands": [],
-                "summary": "Completed"
+                "commands": []
             }
         }
     except Exception as e:
