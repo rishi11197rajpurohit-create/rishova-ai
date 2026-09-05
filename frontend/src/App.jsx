@@ -200,7 +200,13 @@ export default function App() {
       const email = encodeURIComponent(userName || "guest");
       const res = await fetch(`${AI_BACKEND}/api/usage/${email}`);
       if (res.ok) {
-        const data = await res.json();
+        let data;
+      try {
+        const rawText = await res.text();
+        data = JSON.parse(rawText);
+      } catch (err) {
+        throw new Error("Backend is updating or returned non-JSON response. Please retry in a few seconds.");
+      }
         setUsageData(data);
       }
     } catch (e) {}

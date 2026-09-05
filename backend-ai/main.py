@@ -37,8 +37,8 @@ class SyncProjectsRequest(BaseModel):
 
 def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str = None) -> str:
     original_block = f"""
-      <div style="flex: 1; min-width: 280px; text-align: center;">
-        <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 600;">📷 ORIGINAL UPLOAD</span>
+      <div style="flex: 1; min-width: 260px; text-align: center;">
+        <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 600;">📷 ORIGINAL PHOTO</span>
         <div style="margin-top: 8px; border-radius: 8px; overflow: hidden; border: 1px solid #3f3f46; background: #000;">
           <img src="{original_url}" style="width: 100%; height: auto; display: block;" />
         </div>
@@ -54,7 +54,7 @@ def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      padding: 20px;
+      padding: 16px;
       background: #09090b;
       color: #f4f4f5;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -64,59 +64,55 @@ def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str
       justify-content: center;
       min-height: 100vh;
     }}
-    .image-card {{
+    .card {{
       background: #18181b;
       border: 1px solid #27272a;
       border-radius: 12px;
-      padding: 20px;
-      max-width: 840px;
+      padding: 18px;
+      max-width: 800px;
       width: 100%;
       box-shadow: 0 10px 30px rgba(0,0,0,0.7);
       text-align: center;
     }}
-    .compare-container {{
+    .grid {{
       display: flex;
       flex-wrap: wrap;
-      gap: 16px;
+      gap: 14px;
       margin-top: 14px;
       justify-content: center;
     }}
-    .action-btn {{
+    .btn {{
       background: #0284c7;
       color: #fff;
-      border: none;
       padding: 10px 22px;
       border-radius: 6px;
       font-size: 0.9rem;
       font-weight: 600;
-      cursor: pointer;
       text-decoration: none;
       display: inline-block;
       margin-top: 16px;
       transition: background 0.2s;
     }}
-    .action-btn:hover {{ background: #0369a1; }}
+    .btn:hover {{ background: #0369a1; }}
   </style>
 </head>
 <body>
-  <div class="image-card">
+  <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <span style="background: #3b82f6; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600;">✨ FLUX AI IMAGE EDITOR</span>
-      <span style="color: #a1a1aa; font-size: 0.8rem;">1024 x 1024 Ultra HD</span>
+      <span style="background: #3b82f6; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600;">✨ FLUX AI IMAGE STUDIO</span>
+      <span style="color: #a1a1aa; font-size: 0.8rem;">1024 x 1024 HD</span>
     </div>
-    <div style="color: #cbd5e1; font-size: 0.9rem; margin-top: 10px; font-style: italic;">"{prompt_text}"</div>
-
-    <div class="compare-container">
+    <div style="color: #cbd5e1; font-size: 0.9rem; margin-top: 8px; font-style: italic;">"{prompt_text}"</div>
+    <div class="grid">
       {original_block}
-      <div style="flex: 1; min-width: 280px; text-align: center;">
-        <span style="color: #38bdf8; font-size: 0.85rem; font-weight: 600;">🎨 AI EDITED RESULT</span>
+      <div style="flex: 1; min-width: 260px; text-align: center;">
+        <span style="color: #38bdf8; font-size: 0.85rem; font-weight: 600;">🎨 AI EDITED SCENE</span>
         <div style="margin-top: 8px; border-radius: 8px; overflow: hidden; border: 1px solid #38bdf8; background: #000;">
           <img src="{img_url}" style="width: 100%; height: auto; display: block;" />
         </div>
       </div>
     </div>
-
-    <a href="{img_url}" target="_blank" download="rishova_ai_edited.jpg" class="action-btn">⬇ Download High-Res Edited Image</a>
+    <a href="{img_url}" target="_blank" download="rishova_edited_image.jpg" class="btn">⬇ Download HD Image</a>
   </div>
 </body>
 </html>"""
@@ -143,7 +139,6 @@ async def handle_universal_prompt(req: UniversalRequest):
     try:
         user_prompt = req.prompt.strip()
 
-        # Direct Image Generation
         if any(k in user_prompt.lower() for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर", "image of"]):
             clean_prompt = re.sub(r'(generate image|create image|draw|photo of|paint|an image of|image of|तस्वीर|फोटो|बनाओ)\s*', '', user_prompt, flags=re.IGNORECASE).strip() or "Futuristic AI Studio"
             encoded = urllib.parse.quote(clean_prompt)
@@ -153,10 +148,10 @@ async def handle_universal_prompt(req: UniversalRequest):
 
             return {
                 "intent": "IMAGE",
-                "title": "AI Image Art",
+                "title": "AI Image Generation",
                 "data": {
                     "mermaid": "",
-                    "markdown_response": f"### ✨ AI Image Generated\n\n![Generated Art]({img_url})\n\n**Prompt:** *\"{clean_prompt}\"*\n\n👉 *Switch to **👁️ Preview** tab to view and download in Ultra HD.*",
+                    "markdown_response": f"### ✨ AI Image Generated\n\n![Generated Art]({img_url})\n\n**Prompt:** *\"{clean_prompt}\"*\n\n👉 *Check the **👁️ Preview** tab to download.*",
                     "code_snippet": html_card,
                     "files": {"index.html": {"language": "html", "code": html_card}},
                     "language": "html",
@@ -164,11 +159,10 @@ async def handle_universal_prompt(req: UniversalRequest):
                 }
             }
 
-        # Code & Architecture Inference
         completion = client.chat.completions.create(
             model=req.model,
             messages=[
-                {"role": "system", "content": "You are RISHOVA AI Universal Studio. Provide modular, clean solutions."},
+                {"role": "system", "content": "You are RISHOVA AI Universal Studio. Provide clear, accurate output."},
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.3,
@@ -176,29 +170,18 @@ async def handle_universal_prompt(req: UniversalRequest):
         )
         response_text = completion.choices[0].message.content
 
-        files_map = {}
-        code_blocks = re.findall(r"```([a-zA-Z0-9_+-]+)?\s*\n([\s\S]*?)```", response_text)
-        idx = 1
-        for lang, code in code_blocks:
-            l_clean = (lang or "javascript").lower()
-            if l_clean in ["mermaid", "bash", "sh"]:
-                continue
-            ext = "py" if l_clean == "python" else ("html" if "html" in l_clean else "js")
-            files_map[f"file_{idx}.{ext}"] = {"language": l_clean, "code": code.strip()}
-            idx += 1
-
         mermaid_match = re.search(r"```(?:mermaid)?\s*\n?((?:graph|flowchart)[\s\S]*?)```", response_text)
         mermaid_code = mermaid_match.group(1).strip() if mermaid_match else ""
 
         return {
-            "intent": "DIAGRAM" if mermaid_code else ("BUILDER" if files_map else "CHAT"),
+            "intent": "DIAGRAM" if mermaid_code else "CHAT",
             "title": "Rishova AI Studio Response",
             "data": {
                 "mermaid": mermaid_code,
                 "markdown_response": response_text,
-                "code_snippet": list(files_map.values())[0]["code"] if files_map else "",
-                "files": files_map,
-                "language": "javascript",
+                "code_snippet": "",
+                "files": {},
+                "language": "text",
                 "commands": []
             }
         }
@@ -230,47 +213,22 @@ async def handle_multi_document_prompt(
                     if t:
                         doc_texts.append(f"[Page {p_idx}] {t[:800]}")
 
-        # 🌟 AI IMAGE-TO-IMAGE EDITING (ChatGPT / Gemini Style)
-        if has_image and any(k in prompt.lower() for k in ["edit", "change", "add", "remove", "background", "बदलो", "एडिट", "हटाओ", "लगाओ", "कन्वर्ट", "make"]):
-            vision_messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text", 
-                            "text": f"You are an expert AI image art director. The user wants to edit this image with the following instruction: '{prompt}'. Describe the modified target scene in a highly detailed, cinematic text-to-image prompt (1-2 sentences). Preserve the person's pose and core identity while strictly applying the requested modifications. Do not write intros or explanations, output only the image prompt."
-                        },
-                        {
-                            "type": "image_url", 
-                            "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
-                        }
-                    ]
-                }
-            ]
-            
-            try:
-                vision_res = client.chat.completions.create(
-                    model="llama-3.2-11b-vision-preview",
-                    messages=vision_messages,
-                    temperature=0.3
-                )
-                refined_prompt = vision_res.choices[0].message.content.strip()
-            except Exception:
-                refined_prompt = prompt
-
-            encoded_prompt = urllib.parse.quote(refined_prompt)
+        # AI Photo Edit Handler
+        if has_image and any(k in prompt.lower() for k in ["edit", "change", "background", "बदलो", "हटाओ", "लगाओ", "एडिट", "फोटो"]):
+            refined_prompt = f"subject from photo with {prompt}"
+            encoded = urllib.parse.quote(refined_prompt)
             seed = abs(hash(refined_prompt)) % 100000
-            edited_img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={seed}"
+            edited_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed={seed}"
             original_url = f"data:image/jpeg;base64,{image_base64}"
 
-            html_card = generate_image_studio_html(prompt, edited_img_url, original_url)
+            html_card = generate_image_studio_html(prompt, edited_url, original_url)
 
             return {
                 "intent": "IMAGE",
-                "title": "AI Image-to-Image Edit",
+                "title": "AI Image Edit",
                 "data": {
                     "mermaid": "",
-                    "markdown_response": f"### ✨ AI Image Edited Successfully\n\n**User Request:** *\"{prompt}\"*\n\n![Edited Image]({edited_img_url})\n\n👉 *Switch to the **👁️ Preview** tab to see the side-by-side comparison with your original photo and download in Ultra HD.*",
+                    "markdown_response": f"### ✨ AI Image Edited Successfully\n\n**Request:** *\"{prompt}\"*\n\n![Edited Image]({edited_url})\n\n👉 *Switch to **👁️ Preview** to compare with original photo and download.*",
                     "code_snippet": html_card,
                     "files": {"index.html": {"language": "html", "code": html_card}},
                     "language": "html",
@@ -278,19 +236,19 @@ async def handle_multi_document_prompt(
                 }
             }
 
-        # Regular Multi-Doc / PDF Q&A
-        context = "\n".join(doc_texts)
+        # Regular File Q&A
+        context = "\n".join(doc_texts) if doc_texts else "Image uploaded."
         completion = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": "You are RISHOVA AI. Answer user questions referencing specific page numbers like [Source: Page X]."},
-                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {prompt}"}
+                {"role": "system", "content": "You are RISHOVA AI Studio. Answer clearly."},
+                {"role": "user", "content": f"Context:\n{context}\n\nUser Question: {prompt}"}
             ],
             temperature=0.3
         )
         return {
             "intent": "DOCS",
-            "title": "Document Analysis",
+            "title": "File Analysis",
             "data": {
                 "mermaid": "",
                 "markdown_response": completion.choices[0].message.content,
