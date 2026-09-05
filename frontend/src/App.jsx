@@ -172,7 +172,7 @@ export default function App() {
  useEffect(() => {
     try {
       // Stripping heavy HTML preview payload to stay within browser 5MB limit
-      const lightSessions = sessions.map((s) => ({
+      const lightSessions = sessions.map((s) => ({ id: s.id, title: s.title, files: s.files || {},
         id: s.id,
         title: s.title,
         messages: (s.messages || []).slice(-10).map((m) => ({
