@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import "./App.css";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://rishova-ai-backend.onrender.com";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "[https://rishova-ai-backend.onrender.com](https://rishova-ai-backend.onrender.com)";
 
 export default function App() {
   const [sessions, setSessions] = useState(() => {
@@ -69,7 +71,6 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: text,
-          model: "gemma2-9b-it",
           user_email: "Rishikesh"
         })
       });
@@ -150,7 +151,7 @@ export default function App() {
               ☰
             </button>
             <span style={{ fontWeight: 700, fontSize: "1.05rem", letterSpacing: "0.3px", color: "#fff" }}>Rishova AI</span>
-            <span style={{ fontSize: "0.72rem", background: "#2f2f2f", color: "#10a37f", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>Gemma 2 9B (Ultra Fast)</span>
+            <span style={{ fontSize: "0.72rem", background: "#2f2f2f", color: "#10a37f", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>Llama 3.3 Engine</span>
           </div>
         </div>
 
@@ -165,34 +166,41 @@ export default function App() {
               <p style={{ fontSize: "0.9rem" }}>Code, writing, Hindi/Hinglish analysis, questions — kuch bhi likhein.</p>
             </div>
           ) : (
-            <div style={{ maxWidth: "768px", width: "100%", margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: "22px" }}>
+            <div style={{ maxWidth: "800px", width: "100%", margin: "0 auto", padding: "24px 20px", display: "flex", flexDirection: "column", gap: "28px" }}>
               {currentSession.messages.map((m, idx) => (
-                <div key={idx} style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
+                <div key={idx} style={{ display: "flex", gap: "16px", alignItems: "flex-start", width: "100%", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+                  {m.role === "assistant" && (
+                    <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#10a37f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "0.85rem", fontWeight: 700, flexShrink: 0 }}>
+                      R
+                    </div>
+                  )}
                   <div
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      background: m.role === "user" ? "#5436DA" : "#10a37f",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#fff",
-                      fontSize: "0.85rem",
-                      fontWeight: 700,
-                      flexShrink: 0
+                      maxWidth: m.role === "user" ? "75%" : "100%",
+                      background: m.role === "user" ? "#2f2f2f" : "transparent",
+                      padding: m.role === "user" ? "10px 16px" : "0",
+                      borderRadius: m.role === "user" ? "18px" : "0",
+                      fontSize: "0.95rem",
+                      lineHeight: "1.6",
+                      color: "#ececec",
+                      textAlign: "left"
                     }}
                   >
-                    {m.role === "user" ? "U" : "R"}
-                  </div>
-                  <div style={{ flex: 1, fontSize: "0.95rem", lineHeight: "1.6", color: "#ececec", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    {m.content}
+                    {m.role === "user" ? (
+                      <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
+                    ) : (
+                      <div className="markdown-content" style={{ textAlign: "left" }}>
+                        <ReactMarkdown remarkPlugins="{[remarkGfm]}">
+                          {m.content}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
 
               {loading && (
-                <div style={{ display: "flex", gap: "14px", alignItems: "center", color: "#8e8e8e", fontSize: "0.9rem" }}>
+                <div style={{ display: "flex", gap: "16px", alignItems: "center", color: "#8e8e8e", fontSize: "0.9rem" }}>
                   <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#10a37f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>R</div>
                   <span>Thinking...</span>
                 </div>
@@ -204,7 +212,7 @@ export default function App() {
 
         {/* Input Bar */}
         <div style={{ padding: "16px", background: "transparent" }}>
-          <div style={{ maxWidth: "768px", margin: "0 auto", position: "relative", background: "#2f2f2f", borderRadius: "24px", border: "1px solid #3d3d3d", display: "flex", alignItems: "center", padding: "6px 14px" }}>
+          <div style={{ maxWidth: "800px", margin: "0 auto", position: "relative", background: "#2f2f2f", borderRadius: "24px", border: "1px solid #3d3d3d", display: "flex", alignItems: "center", padding: "6px 14px" }}>
             <textarea
               rows={1}
               value={input}
