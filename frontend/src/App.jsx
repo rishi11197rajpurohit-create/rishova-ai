@@ -54,7 +54,6 @@ export default function App() {
     const userMsg = { role: "user", content: text };
     const updatedMessages = [...currentSession.messages, userMsg];
 
-    // Update title on first message
     const isFirst = currentSession.messages.length === 0;
     const newTitle = isFirst ? (text.slice(0, 24) + (text.length > 24 ? "..." : "")) : currentSession.title;
 
@@ -70,7 +69,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: text,
-          model: "llama3-8b-8192",
+          model: "gemma2-9b-it",
           user_email: "Rishikesh"
         })
       });
@@ -94,7 +93,7 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw", background: "#212121", color: "#ececec", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
-      {/* ChatGPT Style Sidebar */}
+      {/* Sidebar */}
       <div style={{ width: sidebarOpen ? "260px" : "0px", transition: "width 0.2s ease", background: "#171717", display: "flex", flexDirection: "column", overflow: "hidden", borderRight: sidebarOpen ? "1px solid #2f2f2f" : "none" }}>
         <div style={{ padding: "12px", display: "flex", gap: "8px" }}>
           <button
@@ -151,7 +150,7 @@ export default function App() {
               ☰
             </button>
             <span style={{ fontWeight: 700, fontSize: "1.05rem", letterSpacing: "0.3px", color: "#fff" }}>Rishova AI</span>
-            <span style={{ fontSize: "0.72rem", background: "#2f2f2f", color: "#10a37f", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>Llama 3.3 70B</span>
+            <span style={{ fontSize: "0.72rem", background: "#2f2f2f", color: "#10a37f", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>Gemma 2 9B (Ultra Fast)</span>
           </div>
         </div>
 
