@@ -213,9 +213,39 @@ async def handle_multi_document_prompt(
                     if t:
                         doc_texts.append(f"[Page {p_idx}] {t[:800]}")
 
-        # AI Photo Edit Handler
+        # AI Photo Edit Handler (Llama 3.2 Vision + Target Blending)
         if has_image and any(k in prompt.lower() for k in ["edit", "change", "background", "बदलो", "हटाओ", "लगाओ", "एडिट", "फोटो"]):
-            refined_prompt = f"subject from photo with {prompt}"
+            vision_prompt = (
+                "Describe the main subject(s) in this image in detail: "
+                "gender, clothing, pose, action, and key objects (e.g. car, bike, laptop). "
+                "Then, create a photorealistic image generation prompt placing THIS EXACT subject and object "
+                f"into a new scene according to user request: '{prompt}'. "
+                "Keep the face, clothing, and pose consistent. "
+                "Output ONLY the final image prompt, no preamble."
+            )
+            
+            try:
+                vision_res = client.chat.completions.create(
+                    model="llama-3.2-11b-vision-preview",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": vision_prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens=250,
+                    temperature=0.2
+                )
+                refined_prompt = vision_res.choices[0].message.content.strip()
+            except Exception:
+                refined_prompt = f"photorealistic scene with subjects from photo, {prompt}, 8k resolution cinematic lighting"
+
             encoded = urllib.parse.quote(refined_prompt)
             seed = abs(hash(refined_prompt)) % 100000
             edited_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed={seed}"
@@ -228,7 +258,12 @@ async def handle_multi_document_prompt(
                 "title": "AI Image Edit",
                 "data": {
                     "mermaid": "",
-                    "markdown_response": f"### ✨ AI Image Edited Successfully\n\n**Request:** *\"{prompt}\"*\n\n![Edited Image]({edited_url})\n\n👉 *Switch to **👁️ Preview** to compare with original photo and download.*",
+                    "markdown_response": (
+                        f"### ✨ AI Image Edited Successfully\n\n"
+                        f"**Vision Analysis:** *\"{refined_prompt}\"*\n\n"
+                        f"![Edited Image]({edited_url})\n\n"
+                        f"👉 *Switch to **👁️ Preview** to compare with your original photo and download.*"
+                    ),
                     "code_snippet": html_card,
                     "files": {"index.html": {"language": "html", "code": html_card}},
                     "language": "html",
