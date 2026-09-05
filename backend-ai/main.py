@@ -19,52 +19,59 @@ app.add_middleware(
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# List of models in order of priority
-CANDIDATE_MODELS = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "mixtral-8x7b-32768"
-]
-
 class UniversalRequest(BaseModel):
     prompt: str
-    model: str = "llama-3.3-70b-versatile"
+    model: str = ""
     user_email: str = "guest"
 
 @app.get("/")
 def read_root():
-    return {"status": "RISHOVA AI Studio is Live"}
+    try:
+        models = [m.id for m in client.models.list().data]
+        return {"status": "RISHOVA AI Studio is Live", "available_models": models}
+    except Exception as e:
+        return {"status": "Error fetching models", "error": str(e)}
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
     user_prompt = req.prompt.strip()
-    last_error = None
 
-    # Try models one by one so it never fails with decommissioned errors
-    for model_name in [req.model] + [m for m in CANDIDATE_MODELS if m != req.model]:
-        try:
-            completion = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are Rishova AI, a helpful, intelligent, and friendly AI assistant. Answer the user's questions clearly, naturally, and support Hindi, Hinglish, and English seamlessly."
-                    },
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.4,
-                max_tokens=2048,
-            )
-            response_text = completion.choices[0].message.content
-            return {
-                "intent": "CHAT",
-                "title": "Rishova AI",
-                "data": {
-                    "markdown_response": response_text
+    try:
+        # 1. Fetch exact currently active models dynamically from Groq
+        active_models = [m.id for m in client.models.list().data if "whisper" not in m.id]
+        
+        # Filter for top text chat models
+        preferred_order = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "llama3-70b-8192"]
+        sorted_models = [m for m in preferred_order if m in active_models] + [m for m in active_models if m not in preferred_order]
+
+        last_error = None
+        for model_name in sorted_models:
+            try:
+                completion = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are Rishova AI, a helpful, intelligent, and friendly AI assistant. Answer clearly, support Hindi, Hinglish, and English naturally, and provide well-formatted code blocks."
+                        },
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.4,
+                    max_tokens=2048,
+                )
+                return {
+                    "intent": "CHAT",
+                    "title": "Rishova AI",
+                    "data": {
+                        "markdown_response": completion.choices[0].message.content,
+                        "used_model": model_name
+                    }
                 }
-            }
-        except Exception as e:
-            last_error = e
-            continue
+            except Exception as err:
+                last_error = err
+                continue
 
-    raise HTTPException(status_code=500, detail=str(last_error))
+        raise HTTPException(status_code=500, detail=f"No models succeeded: {str(last_error)}")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
