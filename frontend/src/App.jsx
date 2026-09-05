@@ -19,227 +19,117 @@ mermaid.initialize({
 
 const PROMPT_TEMPLATES = [
   {
-    category: "🏗️ Architecture",
+    category: "🎨 AI Image Studio",
+    title: "Cyberpunk Developer Workspace",
+    prompt: "Generate image of an Indian developer coding in a futuristic cyber studio at night with neon lights and holographic screens."
+  },
+  {
+    category: "🏗️ System Architecture",
     title: "Microservices Flowchart",
     prompt: "Design a complete scalable Microservices Architecture for an E-Commerce application with API Gateway, Auth Service, Redis Cache, and Kafka message broker in ```mermaid graph TD."
   },
   {
-    category: "💻 Full-Stack App",
+    category: "💻 Full-Stack Web App",
     title: "Interactive Kanban Board",
     prompt: "Build a single-file interactive Kanban Task Management Board with HTML, CSS, and vanilla JavaScript. Include drag-and-drop support, local storage persistence, and modern dark styling."
   },
   {
-    category: "🎨 AI Image Art",
-    title: "Cyberpunk Developer Studio",
-    prompt: "Generate image of an Indian developer coding in a futuristic cyber studio at night with neon lights and holographic screens."
-  },
-  {
     category: "🧠 DSA Algorithms",
-    title: "Dynamic Programming: 0/1 Knapsack",
-    prompt: "Write a complete Python implementation of 0/1 Knapsack Problem with both Top-Down Memoization and Bottom-Up Tabulation. Include time & space complexity analysis."
+    title: "0/1 Knapsack Problem",
+    prompt: "Write a complete Python implementation of 0/1 Knapsack Problem with both Top-Down Memoization and Bottom-Up Tabulation."
   }
 ];
 
-const StudioCodeBlock = ({ inline, className, children, ...props }) => {
-  const [copied, setCopied] = useState(false);
-  const match = /language-(\w+)/.exec(className || "");
-  const lang = match ? match[1] : "";
-  const codeContent = String(children || "").replace(/\n$/, "");
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(codeContent);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleDownload = () => {
-    const extMap = { javascript: "js", python: "py", bash: "sh", json: "json", css: "css", html: "html", sql: "sql", srt: "srt" };
-    const blob = new Blob([codeContent], { type: "text/plain;charset=utf-8" });
-    saveAs(blob, `code_${Date.now()}.${extMap[lang] || "txt"}`);
-  };
-
-  if (inline || (!match && !codeContent.includes("\n") && codeContent.length < 40)) {
-    return <code className="inline-code-pill" {...props}>{children}</code>;
-  }
-
-  return (
-    <div className="studio-code-card">
-      <div className="studio-code-header">
-        <span className="studio-lang-title">{(lang || "CODE").toUpperCase()}</span>
-        <div className="studio-code-actions">
-          <button className="circle-action-btn" title="Download File" onClick={handleDownload}>⤓</button>
-          <button className="circle-action-btn" title="Copy Code" onClick={handleCopy}>{copied ? "✔" : "📋"}</button>
-        </div>
-      </div>
-      <div className="studio-code-body">
-        <pre style={{ margin: 0, padding: "14px 16px", background: "#131316", color: "#f4f4f5", overflowX: "auto", fontFamily: "'Fira Code', 'Consolas', monospace", fontSize: "0.88rem", lineHeight: "1.6" }}>
-          <code>{codeContent}</code>
-        </pre>
-      </div>
-    </div>
-  );
-};
-
 export default function App() {
-  const getCleanUserName = () => {
-    const raw = localStorage.getItem("rishova_user");
-    if (!raw) return "";
-    try {
-      const parsed = JSON.parse(raw);
-      return typeof parsed === "object" ? parsed.name || "User" : parsed;
-    } catch {
-      return raw;
-    }
-  };
-
   const [token, setToken] = useState(localStorage.getItem("rishova_token") || null);
-  const [userName, setUserName] = useState(getCleanUserName());
+  const [userName, setUserName] = useState(localStorage.getItem("rishova_user") || "User");
   const [isRegister, setIsRegister] = useState(false);
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authMsg, setAuthMsg] = useState("");
 
   const [selectedModel, setSelectedModel] = useState("llama-3.3-70b-versatile");
-  const [usageData, setUsageData] = useState({ tokens_used: 1546, daily_limit: 50000 });
-  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
-
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
-  const [userSettings, setUserSettings] = useState(() => {
-    const saved = localStorage.getItem("rishova_settings");
-    return saved ? JSON.parse(saved) : {
-      responseStyle: "detailed",
-      language: "mwr",
-      fontSize: "14",
-    };
-  });
 
   const [sessions, setSessions] = useState(() => {
     const saved = localStorage.getItem("rishova_sessions");
     return saved ? JSON.parse(saved) : [{
       id: "default-session",
-      title: "New Workspace Project",
-      pinned: false,
+      title: "New Project",
       messages: [{
         role: "assistant",
-        content: "राम राम सा! Welcome to **RISHOVA AI Universal Studio**.\nBuild software, diagrams, analyze files, or click '💡 Templates' above.",
+        content: "राम राम सा! Welcome to **RISHOVA AI Universal Studio**.\nBuild software, generate high-res AI images, or design system architectures.",
         intent: "CHAT"
       }],
       workspaceFiles: {},
       selectedFileName: "",
-      activeDiagram: "",
-      commands: []
+      activeDiagram: ""
     }];
   });
 
   const [activeSessionId, setActiveSessionId] = useState("default-session");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
 
   const [inputPrompt, setInputPrompt] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const [activeTab, setActiveTab] = useState("code");
-  const [showExportMenu, setShowExportMenu] = useState(false);
-
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef(null);
-
-  const [speakingIndex, setSpeakingIndex] = useState(null);
-
-  const [consoleLogs, setConsoleLogs] = useState([]);
-  const [isConsoleOpen, setIsConsoleOpen] = useState(false);
 
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [runOutput, setRunOutput] = useState("");
   const [isRunOutputVisible, setIsRunOutputVisible] = useState(false);
   const pyodideRef = useRef(null);
 
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [isFullScreenCanvas, setIsFullScreenCanvas] = useState(false);
-
   const diagramRef = useRef(null);
-  const canvasContainerRef = useRef(null);
   const chatBottomRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const exportDropdownRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem("rishova_sessions", JSON.stringify(sessions));
   }, [sessions]);
 
   useEffect(() => {
-    localStorage.setItem("rishova_settings", JSON.stringify(userSettings));
-  }, [userSettings]);
-
-  useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeSession?.messages, loading]);
 
-  const fetchUsage = async () => {
-    try {
-      const email = encodeURIComponent(userName || "guest");
-      const res = await fetch(`${AI_BACKEND}/api/usage/${email}`);
-      if (res.ok) {
-        const data = await res.json();
-        setUsageData(data);
-      }
-    } catch (e) {}
-  };
-
-  useEffect(() => {
-    fetchUsage();
-  }, [sessions]);
-
   useEffect(() => {
     let isMounted = true;
-    const renderMermaidDiagram = async () => {
+    const renderDiagram = async () => {
       if (activeTab === "canvas" && activeSession?.activeDiagram && diagramRef.current) {
         try {
-          let cleanSyntax = activeSession.activeDiagram.trim();
-          if (!cleanSyntax.startsWith("graph") && !cleanSyntax.startsWith("flowchart")) {
-            cleanSyntax = "graph TD\n" + cleanSyntax;
+          let code = activeSession.activeDiagram.trim();
+          if (!code.startsWith("graph") && !code.startsWith("flowchart")) {
+            code = "graph TD\n" + code;
           }
-          const uniqueId = `mermaid-svg-${Date.now()}`;
-          const { svg } = await mermaid.render(uniqueId, cleanSyntax);
+          const { svg } = await mermaid.render(`mermaid-${Date.now()}`, code);
           if (isMounted && diagramRef.current) diagramRef.current.innerHTML = svg;
         } catch {
           if (isMounted && diagramRef.current) {
-            diagramRef.current.innerHTML = `<div style="color:#f87171;padding:16px;">⚠️ Rendering diagram...</div>`;
+            diagramRef.current.innerHTML = `<div style="color:#f87171;padding:12px;">⚠️ Rendering Architecture Diagram...</div>`;
           }
         }
       }
     };
-    renderMermaidDiagram();
+    renderDiagram();
     return () => { isMounted = false; };
   }, [activeSession?.activeDiagram, activeTab]);
 
-  const handleExecuteActiveCode = async () => {
-    const current = activeSession.workspaceFiles[activeSession.selectedFileName];
-    if (!current || !current.code) {
-      alert("No active code to run!");
-      return;
-    }
+  const handleExecuteCode = async () => {
+    const file = activeSession.workspaceFiles[activeSession.selectedFileName];
+    if (!file || !file.code) return;
+
     setIsRunningCode(true);
     setIsRunOutputVisible(true);
-    setRunOutput("⏳ Running in browser...\n");
+    setRunOutput("⏳ Initializing environment...\n");
 
     const ext = (activeSession.selectedFileName || "").toLowerCase();
-    if (ext.endsWith(".py") || current.language === "python") {
+    if (ext.endsWith(".py") || file.language === "python") {
       try {
         if (!pyodideRef.current && window.loadPyodide) {
-          setRunOutput("📦 Initializing Python runtime...\n");
+          setRunOutput("📦 Loading WebAssembly Python...\n");
           pyodideRef.current = await window.loadPyodide();
         }
         pyodideRef.current.setStdout({ batched: (t) => setRunOutput((p) => p + t + "\n") });
-        await pyodideRef.current.runPythonAsync(current.code);
-        setRunOutput((p) => p + "\n✔ Finished.");
+        await pyodideRef.current.runPythonAsync(file.code);
+        setRunOutput((p) => p + "\n✔ Execution completed successfully.");
       } catch (err) {
         setRunOutput((p) => p + `\n❌ Python Error: ${err.message}`);
       } finally {
@@ -248,9 +138,9 @@ export default function App() {
     } else {
       try {
         let buff = "";
-        const fn = new Function("console", current.code);
+        const fn = new Function("console", file.code);
         fn({ log: (...a) => { buff += a.join(" ") + "\n"; } });
-        setRunOutput(buff || "Executed cleanly.");
+        setRunOutput(buff || "Execution completed (no console logs).\n");
       } catch (err) {
         setRunOutput(`❌ JS Error: ${err.message}`);
       } finally {
@@ -259,72 +149,50 @@ export default function App() {
     }
   };
 
-  const handleClearCurrentChat = () => {
-    if (window.confirm("Clear chat in this project?")) {
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === activeSessionId
-            ? {
-                ...s,
-                messages: [{ role: "assistant", content: "Chat cleared. What shall we create next?", intent: "CHAT" }],
-                workspaceFiles: {},
-                selectedFileName: "",
-                activeDiagram: "",
-                commands: []
-              }
-            : s
-        )
-      );
-    }
-  };
+  const triggerPrompt = async (promptText) => {
+    if (!promptText.trim()) return;
 
-  const triggerPromptExecution = async (textToSend, attachedFilesList = []) => {
-    if (!textToSend && (!attachedFilesList || attachedFilesList.length === 0)) return;
-
-    const userText = textToSend || "Process attached file";
-    const updatedMessages = [
-      ...activeSession.messages,
-      { role: "user", content: userText }
-    ];
+    const userMsg = { role: "user", content: promptText };
+    const updatedMsgs = [...activeSession.messages, userMsg];
 
     setSessions((prev) =>
-      prev.map((s) => s.id === activeSessionId ? { ...s, messages: updatedMessages } : s)
+      prev.map((s) => s.id === activeSessionId ? { ...s, messages: updatedMsgs } : s)
     );
-
     setLoading(true);
 
-    // 🎨 AI IMAGE GENERATION (Direct Client Execution - 100% Reliable)
-    const isImageGen = /generate image|create image|draw|photo of|paint|तस्वीर|फोटो/i.test(userText);
-    if (isImageGen) {
-      const cleanPrompt = userText.replace(/generate image|create image|draw|photo of|paint|an image of|तस्वीर|फोटो|बनाओ/gi, "").trim() || "Futuristic AI Studio";
+    // 🎨 1. AI IMAGE GENERATION (Client-Side Instant Rendering - Zero Server 404)
+    const isImageQuery = /generate image|create image|draw|photo of|paint|image of|तस्वीर|फोटो/i.test(promptText);
+    if (isImageQuery) {
+      const cleanPrompt = promptText.replace(/generate image|create image|draw|photo of|paint|an image of|image of|तस्वीर|फोटो|बनाओ/gi, "").trim() || "Futuristic AI Universe";
       const encoded = encodeURIComponent(cleanPrompt);
-      const imgUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 9999)}`;
+      const seed = Math.floor(Math.random() * 99999);
+      const imgUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=${seed}`;
 
-      const htmlCard = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <style>
-            body { margin:0; background:#09090b; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; font-family:sans-serif; padding:20px; }
-            .card { background:#18181b; border:1px solid #27272a; border-radius:12px; padding:16px; max-width:650px; width:100%; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.7); }
-            img { width:100%; border-radius:8px; display:block; margin:12px 0; border:1px solid #3f3f46; }
-            a { background:#0284c7; color:#fff; padding:10px 20px; border-radius:6px; text-decoration:none; font-weight:600; display:inline-block; }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <span style="background:#3b82f6;padding:4px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">✨ FLUX AI STUDIO</span>
-            <p style="color:#94a3b8;font-size:0.85rem;margin:8px 0;">"${cleanPrompt}"</p>
-            <img src="${imgUrl}" alt="${cleanPrompt}" />
-            <a href="${imgUrl}" target="_blank" download="rishova_art.jpg">⬇ Download Ultra HD</a>
-          </div>
-        </body>
-        </html>
-      `;
+      const previewHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { margin:0; background:#09090b; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; font-family:sans-serif; padding:16px; box-sizing:border-box; }
+    .card { background:#18181b; border:1px solid #27272a; border-radius:12px; padding:18px; max-width:640px; width:100%; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.8); }
+    img { width:100%; border-radius:8px; display:block; margin:14px 0; border:1px solid #3f3f46; }
+    .badge { background:#0284c7; color:#fff; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:600; text-transform:uppercase; }
+    .btn { background:#2563eb; color:#fff; padding:10px 20px; border-radius:6px; text-decoration:none; font-weight:600; display:inline-block; transition:0.2s; }
+    .btn:hover { background:#1d4ed8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="badge">✨ FLUX AI ULTRA HD</span>
+    <p style="color:#94a3b8; font-size:0.88rem; margin:10px 0;">"${cleanPrompt}"</p>
+    <img src="${imgUrl}" alt="${cleanPrompt}" />
+    <a href="${imgUrl}" target="_blank" download="rishova_ai_artwork.jpg" class="btn">⬇ Download Ultra HD Image</a>
+  </div>
+</body>
+</html>`;
 
       const assistantMsg = {
         role: "assistant",
-        content: `✨ **AI Image Generated Successfully:**\n\n![Generated Art](${imgUrl})\n\n**Prompt:** *"${cleanPrompt}"*\n\nSwitch to **👁️ Preview** on the right to download in Ultra HD.`,
+        content: `### ✨ AI Artwork Generated\n\n![Generated Art](${imgUrl})\n\n**Prompt:** *"${cleanPrompt}"*\n\n👉 *Switch to the **👁️ Preview** tab to inspect and download your image in Ultra HD.*`,
         intent: "IMAGE"
       };
 
@@ -333,8 +201,8 @@ export default function App() {
           s.id === activeSessionId
             ? {
                 ...s,
-                messages: [...updatedMessages, assistantMsg],
-                workspaceFiles: { "index.html": { language: "html", code: htmlCard } },
+                messages: [...updatedMsgs, assistantMsg],
+                workspaceFiles: { "index.html": { language: "html", code: previewHtml } },
                 selectedFileName: "index.html"
               }
             : s
@@ -345,31 +213,28 @@ export default function App() {
       return;
     }
 
-    // ⚡ BACKEND TEXT / CODING EXECUTION
+    // ⚡ 2. BACKEND API INFERENCE
     try {
       const res = await fetch(`${AI_BACKEND}/api/ai/universal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: userText,
+          prompt: promptText,
           model: selectedModel,
           user_email: userName || "guest"
         })
       });
 
-      const raw = await res.text();
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        throw new Error("Server warming up. Please try once again!");
+      if (!res.ok) {
+        throw new Error(`Server returned status ${res.status}. Please ensure backend is deployed.`);
       }
 
-      const responseData = data.data || {};
+      const raw = await res.json();
+      const responseData = raw.data || {};
       const assistantMsg = {
         role: "assistant",
-        content: responseData.markdown_response || data.markdown_response || "Completed",
-        intent: data.intent || "CHAT"
+        content: responseData.markdown_response || raw.markdown_response || "Completed",
+        intent: raw.intent || "CHAT"
       };
 
       setSessions((prev) =>
@@ -377,7 +242,7 @@ export default function App() {
           s.id === activeSessionId
             ? {
                 ...s,
-                messages: [...updatedMessages, assistantMsg],
+                messages: [...updatedMsgs, assistantMsg],
                 workspaceFiles: responseData.files || {},
                 selectedFileName: Object.keys(responseData.files || {})[0] || "",
                 activeDiagram: responseData.mermaid || ""
@@ -386,7 +251,7 @@ export default function App() {
         )
       );
 
-      if (data.intent === "DIAGRAM") setActiveTab("canvas");
+      if (raw.intent === "DIAGRAM") setActiveTab("canvas");
       else if (Object.keys(responseData.files || {}).length > 0) setActiveTab("code");
 
     } catch (err) {
@@ -395,7 +260,7 @@ export default function App() {
           s.id === activeSessionId
             ? {
                 ...s,
-                messages: [...updatedMessages, { role: "assistant", content: `❌ Notice: ${err.message}`, intent: "CHAT" }]
+                messages: [...updatedMsgs, { role: "assistant", content: `❌ Error: ${err.message}`, intent: "CHAT" }]
               }
             : s
         )
@@ -405,18 +270,17 @@ export default function App() {
     }
   };
 
-  const handleSendPrompt = async (e) => {
+  const handleSend = (e) => {
     e.preventDefault();
     if (!inputPrompt.trim() || loading) return;
-    const text = inputPrompt;
+    const p = inputPrompt;
     setInputPrompt("");
-    await triggerPromptExecution(text);
+    triggerPrompt(p);
   };
 
-  const getLivePreviewSource = () => {
+  const getPreviewContent = () => {
     const file = activeSession?.workspaceFiles?.[activeSession?.selectedFileName];
-    if (file && file.code) return file.code;
-    return `<div style="color:#a1a1aa;text-align:center;padding:50px;font-family:sans-serif;"><h3>⚡ Preview Sandbox</h3><p>Generate an image or app to preview here.</p></div>`;
+    return file?.code || `<div style="color:#71717a;text-align:center;padding:50px;font-family:sans-serif;"><h3>⚡ Live Sandbox</h3><p>Generated image cards or apps will render here.</p></div>`;
   };
 
   if (!token) {
@@ -427,22 +291,21 @@ export default function App() {
           {authMsg && <p className="auth-msg">{authMsg}</p>}
           <form onSubmit={async (e) => {
             e.preventDefault();
-            const endpoint = isRegister ? `${AUTH_API}/register` : `${AUTH_API}/login`;
-            const res = await fetch(endpoint, {
+            const res = await fetch(`${AUTH_API}/${isRegister ? "register" : "login"}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(authForm)
             });
             const d = await res.json();
             if (res.ok) {
-              if (isRegister) { setIsRegister(false); setAuthMsg("Registered! Please login."); }
+              if (isRegister) { setIsRegister(false); setAuthMsg("Account created! Please login."); }
               else {
                 localStorage.setItem("rishova_token", d.token);
                 localStorage.setItem("rishova_user", d.user?.name || "User");
                 setToken(d.token);
                 setUserName(d.user?.name || "User");
               }
-            } else setAuthMsg(d.message || "Error");
+            } else setAuthMsg(d.message || "Authentication error");
           }}>
             {isRegister && <input type="text" placeholder="Full Name" onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} required />}
             <input type="email" placeholder="Email" onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} required />
@@ -450,7 +313,7 @@ export default function App() {
             <button type="submit">{isRegister ? "Register" : "Login"}</button>
           </form>
           <button className="switch-btn" onClick={() => setIsRegister(!isRegister)}>
-            {isRegister ? "Already have account? Login" : "No account? Register"}
+            {isRegister ? "Already have an account? Login" : "Don't have an account? Register"}
           </button>
         </div>
       </div>
@@ -467,8 +330,8 @@ export default function App() {
             <span className="badge">Universal Studio</span>
           </div>
           <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="model-select-dropdown">
-            <option value="llama-3.3-70b-versatile">⚡ Llama 3.3 70B (Complex Architect)</option>
-            <option value="gemma2-9b-it">🚀 Gemma 2 9B (Super Fast)</option>
+            <option value="llama-3.3-70b-versatile">⚡ Llama 3.3 70B (Architect)</option>
+            <option value="gemma2-9b-it">🚀 Gemma 2 9B (Ultra Fast)</option>
           </select>
         </div>
         <div className="user-section" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -482,17 +345,17 @@ export default function App() {
 
       {isTemplatesOpen && (
         <div className="settings-modal-overlay" onClick={() => setIsTemplatesOpen(false)}>
-          <div className="settings-modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "550px" }}>
+          <div className="settings-modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "560px" }}>
             <div className="settings-modal-header">
-              <h3>💡 Prompt Templates</h3>
+              <h3>💡 Prompt Templates Library</h3>
               <button className="settings-close-btn" onClick={() => setIsTemplatesOpen(false)}>✕</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" }}>
-              {PROMPT_TEMPLATES.map((t, i) => (
-                <div key={i} style={{ background: "#27272a", padding: "12px", borderRadius: "8px", cursor: "pointer" }} onClick={() => { setInputPrompt(t.prompt); setIsTemplatesOpen(false); }}>
-                  <span style={{ color: "#38bdf8", fontSize: "0.75rem", fontWeight: 600 }}>{t.category}</span>
-                  <h4 style={{ margin: "4px 0", color: "#fff" }}>{t.title}</h4>
-                  <p style={{ margin: 0, color: "#a1a1aa", fontSize: "0.82rem" }}>{t.prompt.slice(0, 90)}...</p>
+              {PROMPT_TEMPLATES.map((tmpl, i) => (
+                <div key={i} style={{ background: "#27272a", border: "1px solid #3f3f46", padding: "12px", borderRadius: "8px", cursor: "pointer" }} onClick={() => { setInputPrompt(tmpl.prompt); setIsTemplatesOpen(false); }}>
+                  <span style={{ color: "#38bdf8", fontSize: "0.72rem", fontWeight: "600" }}>{tmpl.category}</span>
+                  <h4 style={{ margin: "4px 0", color: "#fff", fontSize: "0.95rem" }}>{tmpl.title}</h4>
+                  <p style={{ margin: 0, color: "#a1a1aa", fontSize: "0.82rem" }}>{tmpl.prompt.slice(0, 95)}...</p>
                 </div>
               ))}
             </div>
@@ -505,9 +368,9 @@ export default function App() {
           <aside className="sessions-sidebar">
             <div className="sidebar-header">
               <button className="new-project-btn" onClick={() => {
-                const nId = `session-${Date.now()}`;
-                setSessions([{ id: nId, title: "New Project", pinned: false, messages: [{ role: "assistant", content: "New workspace ready.", intent: "CHAT" }], workspaceFiles: {} }, ...sessions]);
-                setActiveSessionId(nId);
+                const newId = `session-${Date.now()}`;
+                setSessions([{ id: newId, title: "New Project", messages: [{ role: "assistant", content: "New workspace ready.", intent: "CHAT" }], workspaceFiles: {} }, ...sessions]);
+                setActiveSessionId(newId);
               }}>+ New Project</button>
             </div>
             <div className="sessions-list">
@@ -531,18 +394,20 @@ export default function App() {
                     {m.intent && <span className="intent-tag">{m.intent}</span>}
                   </div>
                   <div className="message-body markdown-content">
-                    <ReactMarkdown StudioCodeBlock code: components="{{" remarkPlugins="{[remarkGfm]}" }}>
+                    <ReactMarkdown remarkPlugins="{[remarkGfm]}">
                       {m.content}
                     </ReactMarkdown>
                   </div>
                 </div>
               ))}
-              {loading && <div className="chat-message assistant loading">⚡ Generating high-quality output...</div>}
+              {loading && <div className="chat-message assistant loading">⚡ Rishova Studio is generating output...</div>}
               <div ref={chatBottomRef} />
             </div>
 
-            <form className="chat-input-area" onSubmit={handleSendPrompt}>
-              <button type="button" className="attach-btn" onClick={handleClearCurrentChat} title="Clear Chat">🗑️</button>
+            <form className="chat-input-area" onSubmit={handleSend}>
+              <button type="button" className="attach-btn" onClick={() => {
+                setSessions((prev) => prev.map((s) => s.id === activeSessionId ? { ...s, messages: [{ role: "assistant", content: "Chat cleared.", intent: "CHAT" }], workspaceFiles: {} } : s));
+              }} title="Clear Project Messages">🗑️</button>
               <input
                 type="text"
                 placeholder="Build software, generate image, or ask any question..."
@@ -562,7 +427,7 @@ export default function App() {
                 <button className={`tab-btn ${activeTab === "canvas" ? "active" : ""}`} onClick={() => setActiveTab("canvas")}>🎨 Canvas</button>
               </div>
               {activeTab === "code" && Object.keys(activeSession.workspaceFiles).length > 0 && (
-                <button className="action-btn" onClick={handleExecuteActiveCode} style={{ background: "#16a34a", color: "#fff", fontWeight: 600 }}>
+                <button className="action-btn" onClick={handleExecuteCode} style={{ background: "#16a34a", color: "#fff", fontWeight: 600 }}>
                   ▶ Run Code
                 </button>
               )}
@@ -572,7 +437,7 @@ export default function App() {
               {activeTab === "code" && (
                 <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
                   {Object.keys(activeSession.workspaceFiles).length > 0 ? (
-                    <Editor ""} "'Fira 14, Code', enabled: false fontFamily: fontSize: height="100%" minimap: monospace", options="{{" theme="vs-dark" value="{activeSession.workspaceFiles[activeSession.selectedFileName]?.code" { || } }}/>
+                    <Editor ""} "'Fira 14, Code', enabled: false fontFamily: fontSize: height="100%" language="javascript" minimap: monospace", options="{{" theme="vs-dark" value="{activeSession.workspaceFiles[activeSession.selectedFileName]?.code" { || } }}/>
                   ) : (
                     <div className="canvas-placeholder">💻 Code workspace ready. Ask Rishova to code or generate software.</div>
                   )}
@@ -585,11 +450,11 @@ export default function App() {
               )}
 
               {activeTab === "preview" && (
-                <iframe title="Preview" srcDoc={getLivePreviewSource()} className="sandbox-iframe" style={{ width: "100%", height: "100%", border: "none" }} />
+                <iframe title="Preview" srcDoc={getPreviewContent()} className="sandbox-iframe" style={{ width: "100%", height: "100%", border: "none" }} />
               )}
 
               {activeTab === "canvas" && (
-                <div className="canvas-area" ref={canvasContainerRef}>
+                <div className="canvas-area">
                   <div ref={diagramRef} className="mermaid-wrapper" />
                 </div>
               )}
