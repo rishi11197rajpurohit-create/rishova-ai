@@ -92,8 +92,8 @@ export default function App() {
     }
   };
 
-  const [token, setToken] = useState(localStorage.getItem("rishova_token") || null);
-  const [userName, setUserName] = useState(getCleanUserName());
+  const [token, setToken] = useState(localStorage.getItem("rishova_token") || "dev_access_token");
+  const [userName, setUserName] = useState(getCleanUserName() || "Rishikesh");
   const [isRegister, setIsRegister] = useState(false);
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authMsg, setAuthMsg] = useState("");
