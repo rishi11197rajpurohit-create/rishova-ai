@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
 from pypdf import PdfReader
+from PIL import Image
 
 load_dotenv()
 
@@ -34,6 +35,16 @@ class UniversalRequest(BaseModel):
 class SyncProjectsRequest(BaseModel):
     user_email: str
     sessions: list
+
+def compress_and_encode_image(image_bytes: bytes) -> str:
+    """Resize and compress photo so Groq Vision never hits payload limits"""
+    img = Image.open(io.BytesIO(image_bytes))
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+    img.thumbnail((800, 800))
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=85)
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str = None) -> str:
     original_block = f"""
@@ -162,7 +173,7 @@ async def handle_universal_prompt(req: UniversalRequest):
         completion = client.chat.completions.create(
             model=req.model,
             messages=[
-                {"role": "system", "content": "You are RISHOVA AI Universal Studio. Provide clear, accurate output."},
+                {"role": "system", "content": "You are RISHOVA AI Universal Studio. Provide modular, clean solutions."},
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.3,
@@ -205,7 +216,7 @@ async def handle_multi_document_prompt(
             fname = f.filename.lower()
             if fname.endswith((".png", ".jpg", ".jpeg", ".webp")):
                 has_image = True
-                image_base64 = base64.b64encode(content).decode("utf-8")
+                image_base64 = compress_and_encode_image(content)
             elif fname.endswith(".pdf"):
                 reader = PdfReader(io.BytesIO(content))
                 for p_idx, page in enumerate(reader.pages[:10], start=1):
@@ -213,38 +224,36 @@ async def handle_multi_document_prompt(
                     if t:
                         doc_texts.append(f"[Page {p_idx}] {t[:800]}")
 
-        # AI Photo Edit Handler (Llama 3.2 Vision + Target Blending)
+        # TRUE VISION-BASED IMAGE EDITING
         if has_image and any(k in prompt.lower() for k in ["edit", "change", "background", "बदलो", "हटाओ", "लगाओ", "एडिट", "फोटो"]):
-            vision_prompt = (
-                "Describe the main subject(s) in this image in detail: "
-                "gender, clothing, pose, action, and key objects (e.g. car, bike, laptop). "
-                "Then, create a photorealistic image generation prompt placing THIS EXACT subject and object "
-                f"into a new scene according to user request: '{prompt}'. "
-                "Keep the face, clothing, and pose consistent. "
-                "Output ONLY the final image prompt, no preamble."
+            # Llama 3.2 Vision Analysis
+            vision_system = (
+                "You are an expert AI vision director. Look at the uploaded image carefully. "
+                "1. Identify the subject (e.g. young man, gender, hair, clothes like black jacket). "
+                "2. Identify any vehicle or main object (e.g. white sedan car, bike). "
+                f"3. Now create a photorealistic image generation prompt maintaining the exact same person and objects, but modifying the background according to: '{prompt}'. "
+                "If the user didn't specify a background, put them in a luxurious modern neon city street at night. "
+                "Output ONLY the final descriptive prompt (under 40 words), nothing else."
             )
-            
-            try:
-                vision_res = client.chat.completions.create(
-                    model="llama-3.2-11b-vision-preview",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": vision_prompt},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
-                                }
-                            ]
-                        }
-                    ],
-                    max_tokens=250,
-                    temperature=0.2
-                )
-                refined_prompt = vision_res.choices[0].message.content.strip()
-            except Exception:
-                refined_prompt = f"photorealistic scene with subjects from photo, {prompt}, 8k resolution cinematic lighting"
+
+            vision_res = client.chat.completions.create(
+                model="llama-3.2-11b-vision-preview",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": vision_system},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=150,
+                temperature=0.2
+            )
+            refined_prompt = vision_res.choices[0].message.content.strip()
 
             encoded = urllib.parse.quote(refined_prompt)
             seed = abs(hash(refined_prompt)) % 100000
@@ -262,7 +271,7 @@ async def handle_multi_document_prompt(
                         f"### ✨ AI Image Edited Successfully\n\n"
                         f"**Vision Analysis:** *\"{refined_prompt}\"*\n\n"
                         f"![Edited Image]({edited_url})\n\n"
-                        f"👉 *Switch to **👁️ Preview** to compare with your original photo and download.*"
+                        f"👉 *Check the **👁️ Preview** tab to see your original photo side-by-side with the edited result.*"
                     ),
                     "code_snippet": html_card,
                     "files": {"index.html": {"language": "html", "code": html_card}},
