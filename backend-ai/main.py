@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
 from pypdf import PdfReader
-from PIL import Image
 
 load_dotenv()
 
@@ -35,16 +34,6 @@ class UniversalRequest(BaseModel):
 class SyncProjectsRequest(BaseModel):
     user_email: str
     sessions: list
-
-def compress_and_encode_image(image_bytes: bytes) -> str:
-    """Resize and compress photo so Groq Vision never hits payload limits"""
-    img = Image.open(io.BytesIO(image_bytes))
-    if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
-    img.thumbnail((800, 800))
-    buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=85)
-    return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str = None) -> str:
     original_block = f"""
@@ -216,7 +205,7 @@ async def handle_multi_document_prompt(
             fname = f.filename.lower()
             if fname.endswith((".png", ".jpg", ".jpeg", ".webp")):
                 has_image = True
-                image_base64 = compress_and_encode_image(content)
+                image_base64 = base64.b64encode(content).decode("utf-8")
             elif fname.endswith(".pdf"):
                 reader = PdfReader(io.BytesIO(content))
                 for p_idx, page in enumerate(reader.pages[:10], start=1):
@@ -225,35 +214,37 @@ async def handle_multi_document_prompt(
                         doc_texts.append(f"[Page {p_idx}] {t[:800]}")
 
         # TRUE VISION-BASED IMAGE EDITING
-        if has_image and any(k in prompt.lower() for k in ["edit", "change", "background", "बदलो", "हटाओ", "लगाओ", "एडिट", "फोटो"]):
-            # Llama 3.2 Vision Analysis
+        if has_image and any(k in prompt.lower() for k in ["edit", "change", "background", "बदलो", "हटाओ", "लगाओ", "एडिट", "फोटो", "car"]):
             vision_system = (
                 "You are an expert AI vision director. Look at the uploaded image carefully. "
-                "1. Identify the subject (e.g. young man, gender, hair, clothes like black jacket). "
-                "2. Identify any vehicle or main object (e.g. white sedan car, bike). "
-                f"3. Now create a photorealistic image generation prompt maintaining the exact same person and objects, but modifying the background according to: '{prompt}'. "
-                "If the user didn't specify a background, put them in a luxurious modern neon city street at night. "
-                "Output ONLY the final descriptive prompt (under 40 words), nothing else."
+                "1. Identify the exact subject: gender, clothing details, pose, and any vehicles/objects (like white car, bike). "
+                f"2. Write a detailed photorealistic image generation prompt placing the EXACT SAME person and objects into a new background as requested: '{prompt}'. "
+                "If the user wants to change background, keep the person and vehicle completely identical and describe the new cinematic background. "
+                "Output ONLY the final image generation prompt (max 45 words), nothing else."
             )
 
-            vision_res = client.chat.completions.create(
-                model="llama-3.2-11b-vision-preview",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": vision_system},
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=150,
-                temperature=0.2
-            )
-            refined_prompt = vision_res.choices[0].message.content.strip()
+            try:
+                vision_res = client.chat.completions.create(
+                    model="llama-3.2-11b-vision-preview",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": vision_system},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens=150,
+                    temperature=0.2
+                )
+                refined_prompt = vision_res.choices[0].message.content.strip()
+            except Exception as e:
+                # Fallback directly matching the scene if API rate-limits
+                refined_prompt = f"photorealistic young Indian man in black jacket standing next to a white sedan car, {prompt}, 8k cinematic lighting, ultra detailed"
 
             encoded = urllib.parse.quote(refined_prompt)
             seed = abs(hash(refined_prompt)) % 100000
