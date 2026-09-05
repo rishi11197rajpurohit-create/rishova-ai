@@ -35,26 +35,15 @@ class SyncProjectsRequest(BaseModel):
     user_email: str
     sessions: list
 
-def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str = None) -> str:
-    original_block = f"""
-      <div style="flex: 1; min-width: 260px; text-align: center;">
-        <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 600;">📷 ORIGINAL PHOTO</span>
-        <div style="margin-top: 8px; border-radius: 8px; overflow: hidden; border: 1px solid #3f3f46; background: #000;">
-          <img src="{original_url}" style="width: 100%; height: auto; display: block;" />
-        </div>
-      </div>
-    """ if original_url else ""
-
+def generate_blended_studio_html(target_scene: str, original_base64: str, bg_url: str) -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Rishova AI Image Studio</title>
+  <title>Rishova AI Studio - Blended Photo</title>
   <style>
-    * {{ box-sizing: border-box; }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      margin: 0;
-      padding: 16px;
       background: #09090b;
       color: #f4f4f5;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -63,55 +52,114 @@ def generate_image_studio_html(prompt_text: str, img_url: str, original_url: str
       align-items: center;
       justify-content: center;
       min-height: 100vh;
+      padding: 16px;
     }}
-    .card {{
+    .studio-card {{
       background: #18181b;
       border: 1px solid #27272a;
-      border-radius: 12px;
-      padding: 18px;
+      border-radius: 14px;
+      padding: 20px;
       max-width: 800px;
       width: 100%;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
       text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
     }}
-    .grid {{
+    .badge {{
+      background: #10b981;
+      color: #fff;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: inline-block;
+      margin-bottom: 8px;
+    }}
+    .canvas-box {{
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 2px solid #27272a;
+      background: #000;
+      position: relative;
+      margin: 14px 0;
+    }}
+    .canvas-box img.bg {{
+      width: 100%;
+      display: block;
+    }}
+    .canvas-box .fg-wrap {{
+      position: absolute;
+      inset: 0;
       display: flex;
-      flex-wrap: wrap;
-      gap: 14px;
-      margin-top: 14px;
+      align-items: flex-end;
       justify-content: center;
+      pointer-events: none;
     }}
-    .btn {{
+    .canvas-box img.fg {{
+      width: 85%;
+      height: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 15px 25px rgba(0,0,0,0.85)) contrast(1.05);
+      mask-image: radial-gradient(ellipse 90% 85% at 50% 55%, black 70%, transparent 100%);
+      -webkit-mask-image: radial-gradient(ellipse 90% 85% at 50% 55%, black 70%, transparent 100%);
+    }}
+    .btn-download {{
       background: #0284c7;
       color: #fff;
-      padding: 10px 22px;
-      border-radius: 6px;
+      padding: 10px 24px;
+      border-radius: 8px;
       font-size: 0.9rem;
       font-weight: 600;
-      text-decoration: none;
-      display: inline-block;
-      margin-top: 16px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }}
+    .btn-download:hover {{ background: #0369a1; }}
   </style>
 </head>
 <body>
-  <div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <span style="background: #3b82f6; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600;">✨ FLUX AI IMAGE STUDIO</span>
-      <span style="color: #a1a1aa; font-size: 0.8rem;">1024 x 1024 HD</span>
-    </div>
-    <div style="color: #cbd5e1; font-size: 0.9rem; margin-top: 8px; font-style: italic;">"{prompt_text}"</div>
-    <div class="grid">
-      {original_block}
-      <div style="flex: 1; min-width: 260px; text-align: center;">
-        <span style="color: #38bdf8; font-size: 0.85rem; font-weight: 600;">🎨 AI EDITED SCENE</span>
-        <div style="margin-top: 8px; border-radius: 8px; overflow: hidden; border: 1px solid #38bdf8; background: #000;">
-          <img src="{img_url}" style="width: 100%; height: auto; display: block;" />
-        </div>
+  <div class="studio-card">
+    <span class="badge">✨ FINAL MERGED PHOTO</span>
+    <h3 style="font-size: 1.1rem; color: #f8fafc; margin-bottom: 4px;">Subject Locked AI Composition</h3>
+    <p style="color: #94a3b8; font-size: 0.8rem;">Background Transformed to: <b>"{target_scene}"</b></p>
+
+    <div class="canvas-box">
+      <img id="bgImg" class="bg" src="{bg_url}" crossorigin="anonymous" />
+      <div class="fg-wrap">
+        <img id="fgImg" class="fg" src="data:image/jpeg;base64,{original_base64}" />
       </div>
     </div>
-    <a href="{img_url}" target="_blank" download="rishova_edited_image.jpg" class="btn">⬇ Download HD Image</a>
+
+    <button class="btn-download" onclick="downloadMerged()">⬇ Download Final Merged Photo</button>
   </div>
+
+  <canvas id="mergeCanvas" style="display:none;"></canvas>
+
+  <script>
+    function downloadMerged() {{
+      const canvas = document.getElementById('mergeCanvas');
+      const ctx = canvas.getContext('2d');
+      const bg = document.getElementById('bgImg');
+      const fg = document.getElementById('fgImg');
+
+      canvas.width = 1024;
+      canvas.height = 1024;
+
+      ctx.drawImage(bg, 0, 0, 1024, 1024);
+      const fgW = 1024 * 0.85;
+      const fgH = (fg.naturalHeight / fg.naturalWidth) * fgW;
+      const fgX = (1024 - fgW) / 2;
+      const fgY = 1024 - fgH;
+      ctx.drawImage(fg, fgX, fgY, fgW, fgH);
+
+      const link = document.createElement('a');
+      link.download = 'rishova_merged_photo.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }}
+  </script>
 </body>
 </html>"""
 
@@ -137,30 +185,11 @@ async def handle_universal_prompt(req: UniversalRequest):
     try:
         user_prompt = req.prompt.strip()
 
-        if any(k in user_prompt.lower() for k in ["generate image", "create image", "draw", "photo of", "paint", "फोटो बनाओ", "तस्वीर", "image of"]):
-            clean_prompt = re.sub(r'(generate image|create image|draw|photo of|paint|an image of|image of|तस्वीर|फोटो|बनाओ)\s*', '', user_prompt, flags=re.IGNORECASE).strip() or "Futuristic AI Studio"
-            encoded = urllib.parse.quote(clean_prompt)
-            seed = abs(hash(clean_prompt)) % 100000
-            img_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed={seed}"
-            html_card = generate_image_studio_html(clean_prompt, img_url)
-
-            return {
-                "intent": "IMAGE",
-                "title": "AI Image Generation",
-                "data": {
-                    "mermaid": "",
-                    "markdown_response": f"### ✨ AI Image Generated\n\n![Generated Art]({img_url})\n\n**Prompt:** *\"{clean_prompt}\"*\n\n👉 *Check the **👁️ Preview** tab to download.*",
-                    "code_snippet": html_card,
-                    "files": {"index.html": {"language": "html", "code": html_card}},
-                    "language": "html",
-                    "commands": []
-                }
-            }
-
+        # Check intent using LLM if needed, or natural chat
         completion = client.chat.completions.create(
             model=req.model,
             messages=[
-                {"role": "system", "content": "You are RISHOVA AI Universal Studio. Provide modular, clean solutions."},
+                {"role": "system", "content": "You are RISHOVA AI, an intelligent developer and creative assistant. Understand Hindi, Hinglish, and English naturally and respond contextually."},
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.3,
@@ -173,7 +202,7 @@ async def handle_universal_prompt(req: UniversalRequest):
 
         return {
             "intent": "DIAGRAM" if mermaid_code else "CHAT",
-            "title": "Rishova AI Studio Response",
+            "title": "Rishova AI",
             "data": {
                 "mermaid": mermaid_code,
                 "markdown_response": response_text,
@@ -211,120 +240,56 @@ async def handle_multi_document_prompt(
                     if t:
                         doc_texts.append(f"[Page {p_idx}] {t[:800]}")
 
-        # TRUE BACKGROUND REPLACEMENT (Subject & Car Identity Locked)
-        if has_image and any(k in prompt.lower() for k in ["edit", "change", "background", "बदलो", "हटाओ", "लगाओ", "एडिट", "फोटो", "garden", "villa"]):
-            bg_query = prompt
-            for word in ["is photo me", "ko wahi rakho", "aur", "change", "kar do", "background", "photo", "edit", "ladke", "car"]:
-                bg_query = re.sub(word, "", bg_query, flags=re.IGNORECASE)
-            clean_bg = bg_query.strip() or "luxury villa garden with marble driveway, sunny day, cinematic 8k"
+        # AI-POWERED INTENT UNDERSTANDING (No manual regex rules!)
+        intent_ai = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an intent classifier for photo editing. The user gives an image and a prompt in Hindi, Hinglish, or English.\n"
+                        "Determine if the user wants to change, replace, remove, or swap the background.\n"
+                        "Output ONLY a JSON object with two fields:\n"
+                        "- 'is_bg_swap': boolean (true/false)\n"
+                        "- 'english_scene_description': a concise, photorealistic English description of the desired background (e.g. 'luxurious modern villa garden with driveway sunny day'). If the user didn't specify a place, create a stunning realistic scene that fits a car/person.\n"
+                        "Output pure JSON only, no markdown, no explanation."
+                    )
+                },
+                {"role": "user", "content": f"User Prompt: {prompt}"}
+            ],
+            temperature=0.1
+        )
 
-            encoded_bg = urllib.parse.quote(f"empty scenic background of {clean_bg}, wide angle architecture photography, photorealistic, no people, no cars")
+        intent_res = intent_ai.choices[0].message.content.strip()
+        bg_intent = False
+        clean_bg = "luxurious modern villa entrance sunny day"
+
+        try:
+            cleaned_json = re.search(r'\{[\s\S]*?\}', intent_res)
+            if cleaned_json:
+                data = json.loads(cleaned_json.group(0))
+                bg_intent = data.get("is_bg_swap", False)
+                clean_bg = data.get("english_scene_description", clean_bg)
+        except Exception:
+            bg_intent = any(k in prompt.lower() for k in ["background", "change", "बदलो", "हटाओ", "लगाओ", "एडिट", "garden", "villa"])
+
+        if has_image and bg_intent:
+            encoded_bg = urllib.parse.quote(f"photorealistic {clean_bg}, wide angle ground view, architecture outdoor photography, 8k, sunny morning, empty background no cars no humans")
             seed = abs(hash(clean_bg)) % 100000
             new_bg_url = f"https://image.pollinations.ai/prompt/{encoded_bg}?width=1024&height=1024&nologo=true&seed={seed}"
-            original_url = f"data:image/jpeg;base64,{image_base64}"
 
-            html_card = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Rishova AI Background Studio</title>
-  <style>
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
-      padding: 16px;
-      background: #09090b;
-      color: #f4f4f5;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-    }}
-    .card {{
-      background: #18181b;
-      border: 1px solid #27272a;
-      border-radius: 12px;
-      padding: 18px;
-      max-width: 860px;
-      width: 100%;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
-      text-align: center;
-    }}
-    .grid {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 14px;
-      margin-top: 14px;
-      justify-content: center;
-    }}
-    .box {{
-      flex: 1;
-      min-width: 280px;
-      text-align: center;
-    }}
-    .img-wrap {{
-      margin-top: 8px;
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid #3f3f46;
-      background: #000;
-    }}
-    .img-wrap img {{
-      width: 100%;
-      height: auto;
-      display: block;
-    }}
-    .btn {{
-      background: #0284c7;
-      color: #fff;
-      padding: 10px 22px;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      text-decoration: none;
-      display: inline-block;
-      margin-top: 16px;
-    }}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <span style="background: #10b981; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600;">✨ SUBJECT LOCKED BACKGROUND SWAP</span>
-      <span style="color: #a1a1aa; font-size: 0.8rem;">100% Identity Preserved</span>
-    </div>
-    <div style="color: #cbd5e1; font-size: 0.9rem; margin-top: 8px; font-style: italic;">"{prompt}"</div>
-    <div class="grid">
-      <div class="box">
-        <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 600;">📷 ORIGINAL PHOTO (Subject & Car Locked)</span>
-        <div class="img-wrap">
-          <img src="{original_url}" alt="Original" />
-        </div>
-      </div>
-      <div class="box">
-        <span style="color: #38bdf8; font-size: 0.85rem; font-weight: 600;">🏡 GENERATED SCENE ({clean_bg})</span>
-        <div class="img-wrap" style="border-color: #38bdf8;">
-          <img src="{new_bg_url}" alt="Target Scene" />
-        </div>
-      </div>
-    </div>
-    <a href="{new_bg_url}" target="_blank" download="scenic_background.jpg" class="btn">⬇ Download High-Res Scene</a>
-  </div>
-</body>
-</html>"""
+            html_card = generate_blended_studio_html(clean_bg, image_base64, new_bg_url)
 
             return {
                 "intent": "IMAGE",
-                "title": "AI Background Swap Studio",
+                "title": "AI Background Swap",
                 "data": {
                     "mermaid": "",
                     "markdown_response": (
-                        f"### ✨ Subject Locked Background Generation\n\n"
-                        f"**Target Scene:** *\"{clean_bg}\"*\n\n"
-                        f"![Generated Background]({new_bg_url})\n\n"
-                        f"👉 *Switch to **👁️ Preview** tab to inspect original subject preservation alongside the generated background scene.*"
+                        f"### ✨ Background Transformed\n\n"
+                        f"AI ने आपकी भाषा समझकर यह बैकग्राउंड तैयार किया है:\n"
+                        f"**Scene:** *\"{clean_bg}\"*\n\n"
+                        f"👉 दाएँ हाथ पर **👁️ Preview** टैब में देखें—कार और लड़का नई जगह सेट हो चुके हैं। आप इसे डाउनलोड भी कर सकते हैं।"
                     ),
                     "code_snippet": html_card,
                     "files": {"index.html": {"language": "html", "code": html_card}},
@@ -333,12 +298,12 @@ async def handle_multi_document_prompt(
                 }
             }
 
-        # Regular File Q&A
+        # Regular File Question & Answering
         context = "\n".join(doc_texts) if doc_texts else "Image uploaded."
         completion = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": "You are RISHOVA AI Studio. Answer clearly."},
+                {"role": "system", "content": "You are RISHOVA AI Studio. Understand the user's intent clearly and answer like a top AI assistant."},
                 {"role": "user", "content": f"Context:\n{context}\n\nUser Question: {prompt}"}
             ],
             temperature=0.3
