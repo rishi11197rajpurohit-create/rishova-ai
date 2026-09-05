@@ -28,7 +28,7 @@ client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 class UniversalRequest(BaseModel):
     prompt: str
-    model: str = "llama-3.1-8b-instant"
+    model: str = "llama3-8b-8192"
     user_email: str = "guest"
 
 class SyncProjectsRequest(BaseModel):
@@ -219,7 +219,7 @@ async def handle_universal_prompt(req: UniversalRequest):
 async def handle_multi_document_prompt(
     files: List[UploadFile] = File(...),
     prompt: str = Form("Analyze these files"),
-    model: str = Form("llama-3.1-8b-instant"),
+    model: str = Form("llama3-8b-8192"),
     user_email: str = Form("guest")
 ):
     try:
@@ -242,7 +242,7 @@ async def handle_multi_document_prompt(
 
         # AI-POWERED INTENT UNDERSTANDING (No manual regex rules!)
         intent_ai = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama3-8b-8192",
             messages=[
                 {
                     "role": "system",
