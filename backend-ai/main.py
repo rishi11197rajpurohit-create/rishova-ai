@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
@@ -19,7 +20,6 @@ app.add_middleware(
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# Your exact active chat models from Groq
 SUPPORTED_MODELS = [
     "qwen/qwen3.8-27b",
     "qwen/qwen3.6-27b",
@@ -38,32 +38,28 @@ def read_root():
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
     user_prompt = req.prompt.strip()
-    last_error = None
 
-    for model_name in SUPPORTED_MODELS:
+    def generate():
+        chosen_model = SUPPORTED_MODELS[0]
         try:
-            completion = client.chat.completions.create(
-                model=model_name,
+            stream = client.chat.completions.create(
+                model=chosen_model,
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are Rishova AI, a helpful, brilliant, and friendly AI assistant. Provide detailed, well-structured answers with clear Markdown formatting and code snippets. Support Hindi, Hinglish, and English naturally."
+                        "content": "You are Rishova AI, an intelligent, helpful AI assistant built just like ChatGPT. Format responses cleanly with Markdown, use inline code with single backticks, and multi-line code blocks with language tags. Support Hindi, Hinglish, and English naturally."
                     },
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.4,
                 max_tokens=2048,
+                stream=True
             )
-            return {
-                "intent": "CHAT",
-                "title": "Rishova AI",
-                "data": {
-                    "markdown_response": completion.choices[0].message.content,
-                    "model_used": model_name
-                }
-            }
+            for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
         except Exception as e:
-            last_error = e
-            continue
+            yield f"\n[Error: {str(e)}]"
 
-    raise HTTPException(status_code=500, detail=str(last_error))
+    return StreamingResponse(generate(), media_type="text/plain")

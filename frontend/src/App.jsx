@@ -23,10 +23,11 @@ export default function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [copiedIndex, setCopiedIndex] = useState(null);
+  const [copiedKey, setCopiedKey] = useState(null);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   const currentSession = sessions.find((s) => s.id === currentId) || sessions[0];
 
@@ -40,7 +41,6 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentSession?.messages, loading]);
 
-  // Auto resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -49,6 +49,9 @@ export default function App() {
   }, [input]);
 
   const handleNewChat = () => {
+    if (loading && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
     const newId = String(Date.now());
     const newSession = { id: newId, title: "New chat", messages: [] };
     setSessions((prev) => [newSession, ...prev]);
@@ -68,12 +71,20 @@ export default function App() {
     }
   };
 
+  const stopGenerating = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setLoading(false);
+    }
+  };
+
   const handleSend = async (overrideText = null) => {
     const text = (overrideText || input).trim();
     if (!text || loading) return;
 
     const userMsg = { role: "user", content: text };
-    const updatedMessages = [...currentSession.messages, userMsg];
+    const initialAiMsg = { role: "assistant", content: "" };
+    const updatedMessages = [...currentSession.messages, userMsg, initialAiMsg];
 
     const isFirst = currentSession.messages.length === 0;
     const newTitle = isFirst ? (text.slice(0, 26) + (text.length > 26 ? "..." : "")) : currentSession.title;
@@ -86,30 +97,48 @@ export default function App() {
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setLoading(true);
 
+    abortControllerRef.current = new AbortController();
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/ai/universal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: text,
-          user_email: "Rishikesh"
-        })
+        body: JSON.stringify({ prompt: text, user_email: "Rishikesh" }),
+        signal: abortControllerRef.current.signal
       });
 
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-      const data = await res.json();
-      const reply = data?.data?.markdown_response || data?.detail || "Kuch dikkat aayi, kripya dobara try karein.";
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let streamedText = "";
 
-      const aiMsg = { role: "assistant", content: reply };
-      setSessions((prev) =>
-        prev.map((s) => (s.id === currentId ? { ...s, messages: [...updatedMessages, aiMsg] } : s))
-      );
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        streamedText += chunk;
+
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (s.id !== currentId) return s;
+            const msgs = [...s.messages];
+            msgs[msgs.length - 1] = { role: "assistant", content: streamedText };
+            return { ...s, messages: msgs };
+          })
+        );
+      }
     } catch (err) {
-      const errReply = { role: "assistant", content: "Backend se connect nahi ho paya. Kripya Render status check karein." };
-      setSessions((prev) =>
-        prev.map((s) => (s.id === currentId ? { ...s, messages: [...updatedMessages, errReply] } : s))
-      );
+      if (err.name !== "AbortError") {
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (s.id !== currentId) return s;
+            const msgs = [...s.messages];
+            msgs[msgs.length - 1] = { role: "assistant", content: "Backend se connect nahi ho paya. Kripya Render status check karein." };
+            return { ...s, messages: msgs };
+          })
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -117,8 +146,8 @@ export default function App() {
 
   const copyToClipboard = (text, key) => {
     navigator.clipboard.writeText(text);
-    setCopiedIndex(key);
-    setTimeout(() => setCopiedIndex(null), 2000);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
   };
 
   return (
@@ -159,7 +188,7 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Main Content Area */}
+      {/* Main Area */}
       <main className="main-area">
         <header className="topbar">
           <div className="topbar-left">
@@ -199,75 +228,59 @@ export default function App() {
                       <div className="user-text">{m.content}</div>
                     ) : (
                       <div className="markdown-body">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            code({ node, inline, className, children, ...props }) {
-                              const match = /language-(\w+)/.exec(className || "");
-                              const codeString = String(children).replace(/\n$/, "");
-                              const blockKey = `${idx}-${codeString.slice(0, 10)}`;
+                        {m.content === "" && loading ? (
+                          <div className="typing-dots">Thinking...</div>
+                        ) : (
+                          <ReactMarkdown ""); ( (isBlock) ...props 8)}`; <div String(children).includes("\n"); blockKey="`code-${idx}-${codeString.slice(0," children, className="code-block-wrapper" className, code({ codeString="String(children).replace(/\n$/," components="{{" const if inline, isBlock="match" match="/language-(\w+)/.exec(className" node, remarkPlugins="{[remarkGfm]}" return { || })>
+                                      <div className="code-header">
+                                        <span>{match ? match[1] : "code"}</span>
+                                        <button
+                                          className="copy-btn"
+                                          onClick={() => copyToClipboard(codeString, blockKey)}
+                                        >
+                                          {copiedKey === blockKey ? "✓ Copied!" : "📋 Copy code"}
+                                        </button>
+                                      </div>
+                                      <SyntaxHighlighter "#0d0d0d", "0.88rem" "12px "text"} 0, 16px", : ? PreTag="div" background: customStyle="{{" fontSize: language="{match" margin: match[1] padding: style="{vscDarkPlus}" {...props} }}>
+                                        {codeString}
+                                      </SyntaxHighlighter>
+                                    </div>
+                                  );
+                                }
 
-                              return !inline ? (
-                                <div className="code-block-wrapper">
-                                  <div className="code-header">
-                                    <span>{match ? match[1] : "code"}</span>
-                                    <button
-                                      className="copy-btn"
-                                      onClick={() => copyToClipboard(codeString, blockKey)}
-                                    >
-                                      {copiedIndex === blockKey ? "✓ Copied!" : "📋 Copy code"}
-                                    </button>
-                                  </div>
-                                  <SyntaxHighlighter
-                                    style={vscDarkPlus}
-                                    language={match ? match[1] : "text"}
-                                    PreTag="div"
-                                    customStyle={{ margin: 0, padding: "12px 16px", background: "#0d0d0d", fontSize: "0.88rem" }}
-                                    {...props}
-                                  >
-                                    {codeString}
-                                  </SyntaxHighlighter>
-                                </div>
-                              ) : (
-                                <code className="inline-code" {...props}>
-                                  {children}
-                                </code>
-                              );
-                            }
-                          }}
-                        >
-                          {m.content}
-                        </ReactMarkdown>
-
-                        {/* Copy entire assistant message */}
-                        <div className="message-actions">
-                          <button
-                            className="msg-action-btn"
-                            onClick={() => copyToClipboard(m.content, `msg-${idx}`)}
+                                return (
+                                  <code className="inline-code" {...props}>
+                                    {children}
+                                  </code>
+                                );
+                              }
+                            }}
                           >
-                            {copiedIndex === `msg-${idx}` ? "✓ Copied response" : "📋 Copy"}
-                          </button>
-                        </div>
+                            {m.content}
+                          </ReactMarkdown>
+                        )}
+
+                        {m.role === "assistant" && m.content && (
+                          <div className="message-actions">
+                            <button
+                              className="msg-action-btn"
+                              onClick={() => copyToClipboard(m.content, `msg-${idx}`)}
+                            >
+                              {copiedKey === `msg-${idx}` ? "✓ Copied" : "📋 Copy"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 </div>
               ))}
-
-              {loading && (
-                <div className="message-row assistant">
-                  <div className="avatar assistant-avatar">R</div>
-                  <div className="bubble">
-                    <div className="typing-dots">Thinking...</div>
-                  </div>
-                </div>
-              )}
               <div ref={messagesEndRef} />
             </div>
           )}
         </div>
 
-        {/* Floating Input Dock */}
+        {/* Floating Input Dock with Stop Button */}
         <div className="input-dock-container">
           <div className="input-dock">
             <textarea
@@ -283,13 +296,19 @@ export default function App() {
               }}
               placeholder="Message Rishova AI..."
             />
-            <button
-              className="send-btn"
-              onClick={() => handleSend()}
-              disabled={loading || !input.trim()}
-            >
-              ↑
-            </button>
+            {loading ? (
+              <button className="stop-btn" onClick={stopGenerating} title="Stop generating">
+                ■
+              </button>
+            ) : (
+              <button
+                className="send-btn"
+                onClick={() => handleSend()}
+                disabled={!input.trim()}
+              >
+                ↑
+              </button>
+            )}
           </div>
           <div className="disclaimer">
             Rishova AI can make mistakes. Verify important information.
