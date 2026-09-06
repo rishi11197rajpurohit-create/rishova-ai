@@ -31,8 +31,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedModel, setSelectedModel] = useState("qwen/qwen3.6-27b");
   const [copiedKey, setCopiedKey] = useState(null);
-  
-  // Voice & Edit states
+
   const [isListening, setIsListening] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editText, setEditText] = useState("");
@@ -41,6 +40,7 @@ export default function App() {
   const textareaRef = useRef(null);
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
+  const baseInputRef = useRef("");
 
   const currentSession = sessions.find((s) => s.id === currentId) || sessions[0];
 
@@ -61,15 +61,13 @@ export default function App() {
     }
   }, [input]);
 
-  // Real-time Voice Typing (Live Streaming)
-  const baseInputRef = useRef(""); // पिछला टाइप किया हुआ टेक्स्ट याद रखने के लिए
-
+  // Real-time voice typing
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recog = new SpeechRecognition();
-      recog.continuous = true;       // जब तक खुद बंद न करें, सुनता रहेगा
-      recog.interimResults = true;    // बोलते ही तुरंत शब्द स्क्रीन पर दिखाएगा
+      recog.continuous = true;
+      recog.interimResults = true;
       recog.lang = "hi-IN";
 
       recog.onresult = (event) => {
@@ -77,8 +75,6 @@ export default function App() {
         for (let i = event.resultIndex; i < event.results.length; i++) {
           liveTranscript += event.results[i][0].transcript;
         }
-        
-        // पुराने टेक्स्ट के आगे बोलते हुए शब्द लाइव जोड़ना
         const prefix = baseInputRef.current ? baseInputRef.current + " " : "";
         setInput(prefix + liveTranscript);
       };
@@ -91,28 +87,14 @@ export default function App() {
 
   const toggleVoiceInput = () => {
     if (!recognitionRef.current) {
-      alert("Aapke browser me speech recognition support nahi hai. Chrome ya Edge use karein.");
+      alert("Aapke browser me voice input support nahi hai. Chrome ya Edge use karein.");
       return;
     }
     if (isListening) {
       recognitionRef.current.stop();
       setIsListening(false);
     } else {
-      baseInputRef.current = input; // बोलने से पहले का टेक्स्ट सेव करें
-      recognitionRef.current.start();
-      setIsListening(true);
-    }
-  };
-
-  const toggleVoiceInput = () => {
-    if (!recognitionRef.current) {
-      alert("Aapke browser me speech recognition support nahi hai. Chrome ya Edge use karein.");
-      return;
-    }
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
+      baseInputRef.current = input;
       recognitionRef.current.start();
       setIsListening(true);
     }
@@ -167,12 +149,18 @@ export default function App() {
     const text = (overrideText || input).trim();
     if (!text || loading) return;
 
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+
     const userMsg = { role: "user", content: text };
     const initialAiMsg = { role: "assistant", content: "" };
 
+    // Only include valid non-empty messages in history payload
     const baseHistory = customHistory !== null 
-      ? customHistory 
-      : currentSession.messages.filter((m) => m.content.trim() !== "");
+      ? customHistory.filter((m) => m.content && m.content.trim() !== "")
+      : currentSession.messages.filter((m) => m.content && m.content.trim() !== "");
 
     const conversationPayload = [...baseHistory, userMsg];
     const updatedMessages = [...baseHistory, userMsg, initialAiMsg];
@@ -203,7 +191,10 @@ export default function App() {
         signal: abortControllerRef.current.signal
       });
 
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `Server error: ${res.status}`);
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -224,13 +215,25 @@ export default function App() {
           })
         );
       }
+
+      // If stream ended completely blank, show fallback
+      if (!streamedText.trim()) {
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (s.id !== currentId) return s;
+            const msgs = [...s.messages];
+            msgs[msgs.length - 1] = { role: "assistant", content: "Kripya dobara message bhejein." };
+            return { ...s, messages: msgs };
+          })
+        );
+      }
     } catch (err) {
       if (err.name !== "AbortError") {
         setSessions((prev) =>
           prev.map((s) => {
             if (s.id !== currentId) return s;
             const msgs = [...s.messages];
-            msgs[msgs.length - 1] = { role: "assistant", content: "Kuch dikkat aayi. Kripya dobara try karein." };
+            msgs[msgs.length - 1] = { role: "assistant", content: "Backend se connect karne me dikkat aayi. Kripya 5 second baad dobara try karein." };
             return { ...s, messages: msgs };
           })
         );
@@ -240,7 +243,6 @@ export default function App() {
     }
   };
 
-  // Edit Message trigger
   const triggerEdit = (idx, currentMsg) => {
     setEditingIndex(idx);
     setEditText(currentMsg);
@@ -306,7 +308,6 @@ export default function App() {
             </button>
             <span className="brand-name">Rishova AI</span>
             
-            {/* Model Switcher Dropdown */}
             <select
               className="model-select-dropdown"
               value={selectedModel}
@@ -381,7 +382,7 @@ export default function App() {
                     ) : (
                       <div className="markdown-body">
                         {m.content === "" && loading ? (
-                          <div style={{ color: "#777", fontSize: "0.9rem" }}>Thinking...</div>
+                          <div style={{ color: "#888", fontSize: "0.9rem" }}>Thinking...</div>
                         ) : (
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
@@ -466,7 +467,6 @@ export default function App() {
               placeholder="Message Rishova AI..."
             />
 
-            {/* Voice Input Button */}
             <button
               className={`mic-btn ${isListening ? "listening" : ""}`}
               onClick={toggleVoiceInput}
