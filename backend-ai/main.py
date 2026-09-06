@@ -11,7 +11,7 @@ from pypdf import PdfReader
 
 load_dotenv()
 
-app = FastAPI(title="Rishova AI")
+app = FastAPI(title="Rishova AI Universal Engine")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,107 +30,116 @@ class MessageItem(BaseModel):
 class UniversalRequest(BaseModel):
     prompt: str
     messages: Optional[List[MessageItem]] = None
-    model: Optional[str] = None
     user_email: str = "Rishikesh"
 
-@app.get("/api/models")
-def get_active_models():
-    try:
-        models_data = client.models.list()
-        # Filter purely stable chat-completion models, avoid compound or guard endpoints
-        banned = ["whisper", "guard", "compound", "safeguard", "embed"]
-        active_list = [
-            {"id": m.id, "name": m.id}
-            for m in models_data.data
-            if not any(b in m.id for b in banned)
-        ]
-        return {"models": active_list}
-    except Exception as e:
-        return {"models": [], "error": str(e)}
+@app.get("/")
+def read_root():
+    return {"status": "Rishova AI Universal Backend Live"}
 
 @app.post("/api/upload")
-async def extract_file_content(file: UploadFile = File(...)):
-    """Extract text from uploaded PDF or TXT documents safely without overflow"""
-    try:
-        content_bytes = await file.read()
-        extracted_text = ""
+async def extract_multiple_files(files: List[UploadFile] = File(...)):
+    """Process single or multiple PDFs safely without crashing or overflow"""
+    results = []
+    for file in files:
+        try:
+            content_bytes = await file.read()
+            extracted_text = ""
 
-        if file.filename.endswith(".pdf"):
-            pdf_file = io.BytesIO(content_bytes)
-            reader = PdfReader(pdf_file)
-            for page in reader.pages[:10]:
-                text = page.extract_text()
-                if text:
-                    extracted_text += text + "\n"
-        else:
-            extracted_text = content_bytes.decode("utf-8", errors="ignore")
+            if file.filename.lower().endswith(".pdf"):
+                pdf_file = io.BytesIO(content_bytes)
+                reader = PdfReader(pdf_file)
+                for page in reader.pages[:8]:
+                    text = page.extract_text()
+                    if text:
+                        extracted_text += text + "\n"
+            else:
+                extracted_text = content_bytes.decode("utf-8", errors="ignore")
 
-        if not extracted_text.strip():
-            raise HTTPException(status_code=400, detail="File is empty or contains no readable text.")
+            clean_text = extracted_text.strip()
+            if not clean_text:
+                continue
 
-        # Cap text at 4,500 characters (~900 tokens) to guarantee zero 'Request Too Large' errors
-        trimmed = extracted_text.strip()
-        if len(trimmed) > 4500:
-            trimmed = trimmed[:4500] + "\n\n[... Remaining content truncated for optimal processing ...]"
+            # Safe slice per document
+            if len(clean_text) > 3500:
+                clean_text = clean_text[:3500] + "\n[... Document truncated for inference ...]"
 
-        return {
-            "filename": file.filename,
-            "text": trimmed
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File parse error: {str(e)}")
+            results.append({
+                "filename": file.filename,
+                "text": clean_text
+            })
+        except Exception:
+            continue
+
+    if not results:
+        raise HTTPException(status_code=400, detail="No readable text found in uploaded files.")
+
+    return {"files": results}
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, a brilliant, professional, and helpful AI assistant created for Rishikesh. "
-            "Jump straight to the final answer. Never produce thoughts, drafts, or <think> tags. "
-            "Respond naturally in Hindi, Hinglish, or English based on user's query. "
-            "Carefully analyze any attached documents and provide clear answers."
+            "You are Rishova AI, an elite ChatGPT-level intelligence created for Rishikesh. "
+            "Give direct, highly accurate, and structured answers. Never output thinking tags or drafts. "
+            "Support Hindi, Hinglish, and English naturally matching user queries. "
+            "Seamlessly answer across multiple attached documents and keep conversational context intact."
         )
     }
 
     groq_messages = [system_message]
 
-    # Clean history and limit message length
+    # Smart sliding context window to allow UNLIMITED chat length without token errors
     if req.messages and len(req.messages) > 0:
-        for m in req.messages[-4:]:
+        clean_history = []
+        for m in req.messages:
             text = m.content.strip()
             if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code"]):
                 role = "assistant" if m.role == "assistant" else "user"
-                # Keep individual history messages under 1500 chars
-                groq_messages.append({"role": role, "content": text[:1500]})
+                clean_history.append({"role": role, "content": text[:2000]})
+        
+        # Take the most recent 8 messages for context
+        groq_messages.extend(clean_history[-8:])
     else:
         groq_messages.append({"role": "user", "content": req.prompt.strip()[:3500]})
 
-    # Pick model
-    chosen_model = req.model
-    banned = ["whisper", "guard", "compound", "safeguard", "embed"]
-    
-    if not chosen_model or any(b in chosen_model for b in banned):
-        try:
-            available = client.models.list().data
-            valid = [m.id for m in available if not any(b in m.id for b in banned)]
-            chosen_model = valid[0] if valid else "openai/gpt-oss-20b"
-        except Exception:
-            chosen_model = "openai/gpt-oss-20b"
+    # Dynamic Auto-Model Selection from user's live enabled models
+    try:
+        available_models = [
+            m.id for m in client.models.list().data 
+            if not any(b in m.id for b in ["whisper", "guard", "compound", "safeguard", "embed"])
+        ]
+    except Exception:
+        available_models = ["openai/gpt-oss-20b"]
 
     def generate():
+        stream = None
+        error_log = ""
+
+        for model_id in available_models:
+            try:
+                stream = client.chat.completions.create(
+                    model=model_id,
+                    messages=groq_messages,
+                    temperature=0.3,
+                    max_tokens=1500,
+                    stream=True
+                )
+                break
+            except Exception as e:
+                error_log = str(e)
+                continue
+
+        if not stream:
+            yield f"Service busy. Details: {error_log[:100]}"
+            return
+
         try:
-            stream = client.chat.completions.create(
-                model=chosen_model,
-                messages=groq_messages,
-                temperature=0.3,
-                max_tokens=1200,
-                stream=True
-            )
             for chunk in stream:
                 token = chunk.choices[0].delta.content or ""
                 if token:
                     yield token
         except Exception as e:
-            yield f"API Error ({chosen_model}): {str(e)}"
+            yield f"\n[Stream interrupted: {str(e)}]"
 
     return StreamingResponse(generate(), media_type="text/plain")
