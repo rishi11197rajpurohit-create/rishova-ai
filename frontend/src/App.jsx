@@ -109,21 +109,35 @@ export default function App() {
 
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let streamedText = "";
+      // If streaming response
+      if (res.body && res.body.getReader) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let streamedText = "";
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        streamedText += chunk;
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          streamedText += chunk;
 
+          setSessions((prev) =>
+            prev.map((s) => {
+              if (s.id !== currentId) return s;
+              const msgs = [...s.messages];
+              msgs[msgs.length - 1] = { role: "assistant", content: streamedText };
+              return { ...s, messages: msgs };
+            })
+          );
+        }
+      } else {
+        const data = await res.json();
+        const reply = data?.data?.markdown_response || data?.detail || "Kripya dobara try karein.";
         setSessions((prev) =>
           prev.map((s) => {
             if (s.id !== currentId) return s;
             const msgs = [...s.messages];
-            msgs[msgs.length - 1] = { role: "assistant", content: streamedText };
+            msgs[msgs.length - 1] = { role: "assistant", content: reply };
             return { ...s, messages: msgs };
           })
         );
@@ -134,7 +148,7 @@ export default function App() {
           prev.map((s) => {
             if (s.id !== currentId) return s;
             const msgs = [...s.messages];
-            msgs[msgs.length - 1] = { role: "assistant", content: "Backend se connect nahi ho paya. Kripya Render status check karein." };
+            msgs[msgs.length - 1] = { role: "assistant", content: "Backend abhi awake ho raha hai. Kripya 10 second baad dobara message bhejein." };
             return { ...s, messages: msgs };
           })
         );
@@ -196,7 +210,7 @@ export default function App() {
               ☰
             </button>
             <span className="brand-name">Rishova AI</span>
-            <span className="model-badge">Qwen 3 (27B)</span>
+            <span className="model-badge">Qwen 3 (27B Engine)</span>
           </div>
         </header>
 
@@ -229,9 +243,20 @@ export default function App() {
                     ) : (
                       <div className="markdown-body">
                         {m.content === "" && loading ? (
-                          <div className="typing-dots">Thinking...</div>
+                          <div style={{ color: "#777", fontSize: "0.9rem" }}>Thinking...</div>
                         ) : (
-                          <ReactMarkdown ""); ( (isBlock) ...props 8)}`; <div String(children).includes("\n"); blockKey="`code-${idx}-${codeString.slice(0," children, className="code-block-wrapper" className, code({ codeString="String(children).replace(/\n$/," components="{{" const if inline, isBlock="match" match="/language-(\w+)/.exec(className" node, remarkPlugins="{[remarkGfm]}" return { || })>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code({ node, inline, className, children, ...props }) {
+                                const match = /language-(\w+)/.exec(className || "");
+                                const codeString = String(children).replace(/\n$/, "");
+                                const isMultiLine = codeString.includes("\n");
+                                const blockKey = `code-${idx}-${codeString.slice(0, 8)}`;
+
+                                if (match || isMultiLine) {
+                                  return (
+                                    <div className="code-block-wrapper">
                                       <div className="code-header">
                                         <span>{match ? match[1] : "code"}</span>
                                         <button
@@ -241,7 +266,13 @@ export default function App() {
                                           {copiedKey === blockKey ? "✓ Copied!" : "📋 Copy code"}
                                         </button>
                                       </div>
-                                      <SyntaxHighlighter "#0d0d0d", "0.88rem" "12px "text"} 0, 16px", : ? PreTag="div" background: customStyle="{{" fontSize: language="{match" margin: match[1] padding: style="{vscDarkPlus}" {...props} }}>
+                                      <SyntaxHighlighter
+                                        style={vscDarkPlus}
+                                        language={match ? match[1] : "text"}
+                                        PreTag="div"
+                                        customStyle={{ margin: 0, padding: "14px 18px", background: "#1e1e1e", fontSize: "0.88rem" }}
+                                        {...props}
+                                      >
                                         {codeString}
                                       </SyntaxHighlighter>
                                     </div>
@@ -266,7 +297,7 @@ export default function App() {
                               className="msg-action-btn"
                               onClick={() => copyToClipboard(m.content, `msg-${idx}`)}
                             >
-                              {copiedKey === `msg-${idx}` ? "✓ Copied" : "📋 Copy"}
+                              {copiedKey === `msg-${idx}` ? "✓ Copied" : "📋 Copy response"}
                             </button>
                           </div>
                         )}
@@ -280,7 +311,7 @@ export default function App() {
           )}
         </div>
 
-        {/* Floating Input Dock with Stop Button */}
+        {/* Input Dock */}
         <div className="input-dock-container">
           <div className="input-dock">
             <textarea
