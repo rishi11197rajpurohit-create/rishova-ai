@@ -37,10 +37,12 @@ class UniversalRequest(BaseModel):
 def get_active_models():
     try:
         models_data = client.models.list()
+        # Filter purely stable chat-completion models, avoid compound or guard endpoints
+        banned = ["whisper", "guard", "compound", "safeguard", "embed"]
         active_list = [
             {"id": m.id, "name": m.id}
             for m in models_data.data
-            if "whisper" not in m.id and "guard" not in m.id
+            if not any(b in m.id for b in banned)
         ]
         return {"models": active_list}
     except Exception as e:
@@ -48,7 +50,7 @@ def get_active_models():
 
 @app.post("/api/upload")
 async def extract_file_content(file: UploadFile = File(...)):
-    """Extract text from uploaded PDF or TXT documents"""
+    """Extract text from uploaded PDF or TXT documents safely without overflow"""
     try:
         content_bytes = await file.read()
         extracted_text = ""
@@ -56,7 +58,7 @@ async def extract_file_content(file: UploadFile = File(...)):
         if file.filename.endswith(".pdf"):
             pdf_file = io.BytesIO(content_bytes)
             reader = PdfReader(pdf_file)
-            for page in reader.pages[:15]:  # read up to first 15 pages
+            for page in reader.pages[:10]:
                 text = page.extract_text()
                 if text:
                     extracted_text += text + "\n"
@@ -66,10 +68,14 @@ async def extract_file_content(file: UploadFile = File(...)):
         if not extracted_text.strip():
             raise HTTPException(status_code=400, detail="File is empty or contains no readable text.")
 
-        # Limit to 12,000 characters to keep within fast inference limits
+        # Cap text at 4,500 characters (~900 tokens) to guarantee zero 'Request Too Large' errors
+        trimmed = extracted_text.strip()
+        if len(trimmed) > 4500:
+            trimmed = trimmed[:4500] + "\n\n[... Remaining content truncated for optimal processing ...]"
+
         return {
             "filename": file.filename,
-            "text": extracted_text[:12000].strip()
+            "text": trimmed
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File parse error: {str(e)}")
@@ -82,27 +88,32 @@ async def handle_universal_prompt(req: UniversalRequest):
             "You are Rishova AI, a brilliant, professional, and helpful AI assistant created for Rishikesh. "
             "Jump straight to the final answer. Never produce thoughts, drafts, or <think> tags. "
             "Respond naturally in Hindi, Hinglish, or English based on user's query. "
-            "Maintain conversation context and carefully analyze any attached documents."
+            "Carefully analyze any attached documents and provide clear answers."
         )
     }
 
     groq_messages = [system_message]
 
+    # Clean history and limit message length
     if req.messages and len(req.messages) > 0:
-        for m in req.messages[-6:]:
+        for m in req.messages[-4:]:
             text = m.content.strip()
             if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code"]):
                 role = "assistant" if m.role == "assistant" else "user"
-                groq_messages.append({"role": role, "content": text})
+                # Keep individual history messages under 1500 chars
+                groq_messages.append({"role": role, "content": text[:1500]})
     else:
-        groq_messages.append({"role": "user", "content": req.prompt.strip()})
+        groq_messages.append({"role": "user", "content": req.prompt.strip()[:3500]})
 
+    # Pick model
     chosen_model = req.model
-    if not chosen_model:
+    banned = ["whisper", "guard", "compound", "safeguard", "embed"]
+    
+    if not chosen_model or any(b in chosen_model for b in banned):
         try:
             available = client.models.list().data
-            chat_models = [m.id for m in available if "whisper" not in m.id and "guard" not in m.id]
-            chosen_model = chat_models[0] if chat_models else "openai/gpt-oss-20b"
+            valid = [m.id for m in available if not any(b in m.id for b in banned)]
+            chosen_model = valid[0] if valid else "openai/gpt-oss-20b"
         except Exception:
             chosen_model = "openai/gpt-oss-20b"
 
@@ -111,8 +122,8 @@ async def handle_universal_prompt(req: UniversalRequest):
             stream = client.chat.completions.create(
                 model=chosen_model,
                 messages=groq_messages,
-                temperature=0.4,
-                max_tokens=1500,
+                temperature=0.3,
+                max_tokens=1200,
                 stream=True
             )
             for chunk in stream:
