@@ -1,11 +1,13 @@
 import os
+import io
 from typing import List, Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
+from pypdf import PdfReader
 
 load_dotenv()
 
@@ -33,10 +35,8 @@ class UniversalRequest(BaseModel):
 
 @app.get("/api/models")
 def get_active_models():
-    """Dynamically fetch all working models enabled for this exact API Key"""
     try:
         models_data = client.models.list()
-        # Filter chat-supported active models
         active_list = [
             {"id": m.id, "name": m.id}
             for m in models_data.data
@@ -44,16 +44,45 @@ def get_active_models():
         ]
         return {"models": active_list}
     except Exception as e:
-        return {"models": [{"id": "gemma2-9b-it", "name": "Gemma 2 (9B)"}], "error": str(e)}
+        return {"models": [], "error": str(e)}
+
+@app.post("/api/upload")
+async def extract_file_content(file: UploadFile = File(...)):
+    """Extract text from uploaded PDF or TXT documents"""
+    try:
+        content_bytes = await file.read()
+        extracted_text = ""
+
+        if file.filename.endswith(".pdf"):
+            pdf_file = io.BytesIO(content_bytes)
+            reader = PdfReader(pdf_file)
+            for page in reader.pages[:15]:  # read up to first 15 pages
+                text = page.extract_text()
+                if text:
+                    extracted_text += text + "\n"
+        else:
+            extracted_text = content_bytes.decode("utf-8", errors="ignore")
+
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="File is empty or contains no readable text.")
+
+        # Limit to 12,000 characters to keep within fast inference limits
+        return {
+            "filename": file.filename,
+            "text": extracted_text[:12000].strip()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File parse error: {str(e)}")
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, an intelligent, helpful AI assistant built for Rishikesh. "
-            "Jump straight to the final answer without any planning, thoughts, or <think> tags. "
-            "Respond naturally in Hindi, Hinglish, or English. Remember the context of prior messages."
+            "You are Rishova AI, a brilliant, professional, and helpful AI assistant created for Rishikesh. "
+            "Jump straight to the final answer. Never produce thoughts, drafts, or <think> tags. "
+            "Respond naturally in Hindi, Hinglish, or English based on user's query. "
+            "Maintain conversation context and carefully analyze any attached documents."
         )
     }
 
@@ -68,15 +97,14 @@ async def handle_universal_prompt(req: UniversalRequest):
     else:
         groq_messages.append({"role": "user", "content": req.prompt.strip()})
 
-    # Pick the model: user selection -> or auto-detect from active account models
     chosen_model = req.model
     if not chosen_model:
         try:
             available = client.models.list().data
             chat_models = [m.id for m in available if "whisper" not in m.id and "guard" not in m.id]
-            chosen_model = chat_models[0] if chat_models else "gemma2-9b-it"
+            chosen_model = chat_models[0] if chat_models else "openai/gpt-oss-20b"
         except Exception:
-            chosen_model = "gemma2-9b-it"
+            chosen_model = "openai/gpt-oss-20b"
 
     def generate():
         try:

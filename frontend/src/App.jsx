@@ -26,13 +26,19 @@ export default function App() {
   const [modelsList, setModelsList] = useState([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [copiedKey, setCopiedKey] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("rishova_theme") === "dark");
 
+  // Advanced features state
+  const [attachedFile, setAttachedFile] = useState(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [speakingIndex, setSpeakingIndex] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editText, setEditText] = useState("");
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
   const recognitionRef = useRef(null);
   const baseInputRef = useRef("");
@@ -45,7 +51,15 @@ export default function App() {
     } catch (e) {}
   }, [sessions]);
 
-  // Fetch verified models from API key on load
+  useEffect(() => {
+    localStorage.setItem("rishova_theme", darkMode ? "dark" : "light");
+    if (darkMode) {
+      document.body.classList.add("dark-theme");
+    } else {
+      document.body.classList.remove("dark-theme");
+    }
+  }, [darkMode]);
+
   useEffect(() => {
     fetch(`${BACKEND_URL}/api/models`)
       .then((r) => r.json())
@@ -69,7 +83,7 @@ export default function App() {
     }
   }, [input]);
 
-  // Live real-time voice typing
+  // Voice recognition
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -95,7 +109,7 @@ export default function App() {
 
   const toggleVoiceInput = () => {
     if (!recognitionRef.current) {
-      alert("Aapke browser me speech recognition support nahi hai. Chrome ya Edge use karein.");
+      alert("Aapke browser me speech recognition support nahi hai.");
       return;
     }
     if (isListening) {
@@ -108,8 +122,62 @@ export default function App() {
     }
   };
 
+  // Read Aloud feature
+  const toggleSpeak = (text, idx) => {
+    if (!window.speechSynthesis) {
+      alert("Speech synthesis supported nahi hai.");
+      return;
+    }
+
+    if (speakingIndex === idx) {
+      window.speechSynthesis.cancel();
+      setSpeakingIndex(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    // Strip markdown formatting for speech
+    const cleanSpeech = text.replace(/[*#`_~\[\]]/g, "");
+    const utterance = new SpeechSynthesisUtterance(cleanSpeech);
+    utterance.lang = "hi-IN";
+    utterance.rate = 1.0;
+    utterance.onend = () => setSpeakingIndex(null);
+    utterance.onerror = () => setSpeakingIndex(null);
+
+    setSpeakingIndex(idx);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/upload`, {
+        method: "POST",
+        body: formData
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setAttachedFile(data);
+    } catch (err) {
+      alert("File upload karne me dikkat aayi: " + err.message);
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const handleNewChat = () => {
     if (loading && abortControllerRef.current) abortControllerRef.current.abort();
+    window.speechSynthesis?.cancel();
+    setSpeakingIndex(null);
+    setAttachedFile(null);
     const newId = String(Date.now());
     const newSession = { id: newId, title: "New chat", messages: [] };
     setSessions((prev) => [newSession, ...prev]);
@@ -154,26 +222,36 @@ export default function App() {
   };
 
   const handleSend = async (overrideText = null, customHistory = null) => {
-    const text = (overrideText || input).trim();
-    if (!text || loading) return;
+    const rawText = (overrideText || input).trim();
+    if ((!rawText && !attachedFile) || loading) return;
 
     if (isListening && recognitionRef.current) {
       recognitionRef.current.stop();
       setIsListening(false);
     }
 
-    const userMsg = { role: "user", content: text };
+    let fullPrompt = rawText;
+    let displayPrompt = rawText;
+
+    if (attachedFile) {
+      fullPrompt = `[Attached Document: "${attachedFile.filename}"]\n\`\`\`\n${attachedFile.text}\n\`\`\`\n\nUser Question: ${rawText || "Please summarize and explain this document."}`;
+      displayPrompt = `📎 [Document: ${attachedFile.filename}]\n\n${rawText || "Is document ko summarize aur explain karo."}`;
+      setAttachedFile(null);
+    }
+
+    const userMsg = { role: "user", content: fullPrompt, display: displayPrompt };
     const initialAiMsg = { role: "assistant", content: "" };
 
     const baseHistory = customHistory !== null 
       ? customHistory.filter((m) => m.content && m.content.trim() !== "")
       : currentSession.messages.filter((m) => m.content && m.content.trim() !== "");
 
-    const conversationPayload = [...baseHistory, userMsg];
+    const conversationPayload = [...baseHistory, { role: "user", content: fullPrompt }];
     const updatedMessages = [...baseHistory, userMsg, initialAiMsg];
 
     const isFirst = baseHistory.length === 0;
-    const newTitle = isFirst ? (text.slice(0, 26) + (text.length > 26 ? "..." : "")) : currentSession.title;
+    const titleSeed = displayPrompt.replace(/\[Attached.*?\]/g, "").trim() || "Document chat";
+    const newTitle = isFirst ? (titleSeed.slice(0, 26) + (titleSeed.length > 26 ? "..." : "")) : currentSession.title;
 
     setSessions((prev) =>
       prev.map((s) => (s.id === currentId ? { ...s, title: newTitle, messages: updatedMessages } : s))
@@ -190,7 +268,7 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: text,
+          prompt: fullPrompt,
           messages: conversationPayload,
           model: selectedModel || undefined,
           user_email: "Rishikesh"
@@ -198,10 +276,7 @@ export default function App() {
         signal: abortControllerRef.current.signal
       });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || `Server error: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -257,7 +332,7 @@ export default function App() {
   };
 
   return (
-    <div className="chatgpt-container">
+    <div className={`chatgpt-container ${darkMode ? "dark" : ""}`}>
       <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="sidebar-header">
           <button className="new-chat-btn" onClick={handleNewChat}>
@@ -286,6 +361,9 @@ export default function App() {
         </div>
 
         <div className="sidebar-footer">
+          <button className="theme-toggle-btn" onClick={() => setDarkMode(!darkMode)}>
+            {darkMode ? "☀️ Light Mode" : "🌙 Dark Mode"}
+          </button>
           <div className="user-profile">
             <div className="avatar user-avatar">R</div>
             <span>Rishikesh</span>
@@ -364,7 +442,7 @@ export default function App() {
                         </div>
                       ) : (
                         <div className="user-text-container">
-                          <div className="user-text">{m.content}</div>
+                          <div className="user-text">{m.display || m.content}</div>
                           <button
                             className="edit-trigger-btn"
                             title="Edit message"
@@ -433,6 +511,13 @@ export default function App() {
                             >
                               {copiedKey === `msg-${idx}` ? "✓ Copied" : "📋 Copy response"}
                             </button>
+                            <button
+                              className="msg-action-btn"
+                              onClick={() => toggleSpeak(m.content, idx)}
+                              title="Read response aloud"
+                            >
+                              {speakingIndex === idx ? "⏹ Stop" : "🔊 Read Aloud"}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -445,8 +530,36 @@ export default function App() {
           )}
         </div>
 
+        {/* Input Dock */}
         <div className="input-dock-container">
+          {/* File upload banner */}
+          {attachedFile && (
+            <div className="file-preview-banner">
+              <span>📄 {attachedFile.filename}</span>
+              <button onClick={() => setAttachedFile(null)}>✕</button>
+            </div>
+          )}
+
           <div className="input-dock">
+            {/* Hidden file input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: "none" }}
+              accept=".pdf,.txt,.py,.js,.html,.json,.md"
+              onChange={handleFileUpload}
+            />
+
+            {/* Paperclip attachment button */}
+            <button
+              className="attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload PDF or Text File"
+              disabled={uploadingFile}
+            >
+              {uploadingFile ? "⏳" : "📎"}
+            </button>
+
             <textarea
               ref={textareaRef}
               rows={1}
@@ -458,7 +571,7 @@ export default function App() {
                   handleSend();
                 }
               }}
-              placeholder="Message Rishova AI..."
+              placeholder={attachedFile ? "Ask about this document..." : "Message Rishova AI..."}
             />
 
             <button
@@ -477,7 +590,7 @@ export default function App() {
               <button
                 className="send-btn"
                 onClick={() => handleSend()}
-                disabled={!input.trim()}
+                disabled={!input.trim() && !attachedFile}
               >
                 ↑
               </button>
