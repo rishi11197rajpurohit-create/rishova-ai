@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -20,7 +20,6 @@ app.add_middleware(
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# Prioritize models with reasonable limits
 CANDIDATE_MODELS = [
     "qwen/qwen3.6-27b",
     "qwen/qwen3.8-27b",
@@ -49,12 +48,19 @@ async def handle_universal_prompt(req: UniversalRequest):
                     messages=[
                         {
                             "role": "system",
-                            "content": "You are Rishova AI, a helpful, precise AI assistant. Provide concise explanations and clean code blocks. Support Hindi, Hinglish, and English naturally."
+                            "content": (
+                                "You are Rishova AI, a brilliant assistant identical to ChatGPT. "
+                                "CRITICAL INSTRUCTIONS:\n"
+                                "- Jump directly into the final helpful response.\n"
+                                "- NEVER output your internal thoughts, outlines, planning steps, or 'Draft:' notes.\n"
+                                "- Provide clean, properly indented multi-line code blocks.\n"
+                                "- Answer in the user's preferred language (Hindi, Hinglish, or English) naturally."
+                            )
                         },
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.3,
-                    max_tokens=800,  # Kept strictly under the 1000 OTPM rate limit
+                    temperature=0.2,
+                    max_tokens=800,
                     stream=True
                 )
                 break
@@ -62,7 +68,7 @@ async def handle_universal_prompt(req: UniversalRequest):
                 continue
 
         if not stream:
-            yield "Service is currently busy. Please try again in a few seconds."
+            yield "Service is currently busy. Please try again in a moment."
             return
 
         try:

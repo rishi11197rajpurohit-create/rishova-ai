@@ -489,4 +489,18 @@ body, html {
   font-size: 0.74rem;
   color: #888888;
   margin-top: 10px;
+}/* Multi-line syntax highlighting fix */
+.code-block-wrapper pre {
+  margin: 0 !important;
+  border-radius: 0 0 10px 10px !important;
+  font-family: 'Fira Code', Consolas, Monaco, monospace !important;
+  font-size: 0.88rem !important;
+  line-height: 1.5 !important;
+  white-space: pre !important;
+  overflow-x: auto !important;
+}
+
+.code-block-wrapper code {
+  white-space: pre !important;
+  display: block !important;
 }
