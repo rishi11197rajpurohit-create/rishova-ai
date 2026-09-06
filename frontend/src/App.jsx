@@ -61,19 +61,26 @@ export default function App() {
     }
   }, [input]);
 
-  // Speech to text setup
+  // Real-time Voice Typing (Live Streaming)
+  const baseInputRef = useRef(""); // पिछला टाइप किया हुआ टेक्स्ट याद रखने के लिए
+
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recog = new SpeechRecognition();
-      recog.continuous = false;
-      recog.interimResults = false;
+      recog.continuous = true;       // जब तक खुद बंद न करें, सुनता रहेगा
+      recog.interimResults = true;    // बोलते ही तुरंत शब्द स्क्रीन पर दिखाएगा
       recog.lang = "hi-IN";
 
       recog.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setInput((prev) => (prev ? prev + " " + transcript : transcript));
-        setIsListening(false);
+        let liveTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          liveTranscript += event.results[i][0].transcript;
+        }
+        
+        // पुराने टेक्स्ट के आगे बोलते हुए शब्द लाइव जोड़ना
+        const prefix = baseInputRef.current ? baseInputRef.current + " " : "";
+        setInput(prefix + liveTranscript);
       };
 
       recog.onerror = () => setIsListening(false);
@@ -81,6 +88,21 @@ export default function App() {
       recognitionRef.current = recog;
     }
   }, []);
+
+  const toggleVoiceInput = () => {
+    if (!recognitionRef.current) {
+      alert("Aapke browser me speech recognition support nahi hai. Chrome ya Edge use karein.");
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      baseInputRef.current = input; // बोलने से पहले का टेक्स्ट सेव करें
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
 
   const toggleVoiceInput = () => {
     if (!recognitionRef.current) {
