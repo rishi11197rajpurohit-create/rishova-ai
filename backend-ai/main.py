@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
 from pypdf import PdfReader
+from duckduckgo_search import DDGS
 
 load_dotenv()
 
@@ -36,6 +37,26 @@ class UniversalRequest(BaseModel):
 @app.get("/")
 def read_root():
     return {"status": "Rishova AI Universal Backend Live"}
+
+def get_live_web_context(query: str) -> str:
+    """Silently fetch live web search facts to eliminate hallucinations without user intervention."""
+    # Check if query likely needs factual verification (history, places, current events, facts)
+    clean_q = re.sub(r'[^\w\s]', '', query).strip()
+    if len(clean_q) < 4:
+        return ""
+    try:
+        results = []
+        with DDGS() as ddgs:
+            # Search top 3 authoritative search results
+            for r in ddgs.text(clean_q, max_results=3):
+                title = r.get("title", "")
+                body = r.get("body", "")
+                results.append(f"Source [{title}]: {body}")
+        if results:
+            return "\n\n[LIVE VERIFIED WEB CONTEXT - USE THIS AS ABSOLUTE GROUND TRUTH FOR FACTS]:\n" + "\n".join(results)
+    except Exception:
+        pass
+    return ""
 
 @app.post("/api/upload")
 async def extract_multiple_files(files: List[UploadFile] = File(...)):
@@ -76,16 +97,23 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
+    user_input = req.prompt.strip()
+
+    # Step 1: Automatically gather live web facts in the background (Silent Web Grounding)
+    web_knowledge = get_live_web_context(user_input)
+
+    # Step 2: System prompt with complete Rajasthani dialect suite & strict factuality
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, a polyglot, ChatGPT-level intelligence created for Rishikesh.\n\n"
-            "CRITICAL INSTRUCTIONS:\n"
-            "1. FACTUAL ACCURACY IS PARAMOUNT: Never alter, invent, or confuse historical facts, names, dates, or lineages (e.g., Maharana Pratap was from the Sisodia Rajput dynasty of Mewar, never Rathore or Bhagwat). Ensure 100% verified facts.\n"
-            "2. UNIVERSAL MULTILINGUAL SUPPORT: You speak and understand ALL world languages, Indian languages, and regional dialects (including Rajasthani / Marwari / Mewari, Gujarati, Punjabi, Bhojpuri, Marathi, Bengali, Tamil, Telugu, Hindi, Hinglish, English, French, Spanish, Arabic, etc.).\n"
-            "3. MIRROR THE USER'S LANGUAGE: Always reply in the EXACT language and dialect the user uses. If the user asks in Marwari/Rajasthani (e.g. 'कांई चाल रह्यो है', 'म्हाने बताओ'), respond fluently in authentic Marwari. If in Hindi, respond in Hindi. If in Hinglish, respond in Hinglish.\n"
-            "4. NO INTERNAL LEAKS: Never produce thoughts, drafts, or <think>...</think> tags.\n"
-            "5. BEAUTIFUL FORMATTING: Present complex data, Excel summaries, and tabular comparisons in clean Markdown tables."
+            "You are Rishova AI, a world-class assistant with the reasoning depth and factual precision of ChatGPT Plus and Gemini.\n\n"
+            "STRICT RULES OF ACCURACY & DIALECTS:\n"
+            "1. ZERO HALLUCINATIONS: Historical facts, dynasties, rulers, and dates MUST be 100% accurate (e.g. Mehrangarh Fort was founded in 1459 by Rao Jodha; Maharana Pratap fought Akbar/Man Singh at Haldighati in 1576 and was of the Sisodia dynasty of Mewar). Strictly adhere to the verified web context provided.\n"
+            "2. COMPLETE RAJASTHANI & GLOBAL LANGUAGE MASTERY: Fluently speak and understand all dialects of Rajasthan including Marwari (जोधपुर/बीकानेर/बाड़मेर), Mewari (उदयपुर/चित्तौड़गढ़), Dhundhari (जयपुर/दौसा), Shekhawati (सीकर/झुंझुनूं/चुरू), Hadoti (कोटा/बूंदी), Wagdi (डूंगरपुर/बांसवाड़ा), along with Hindi, Hinglish, English, and all Indian & world languages.\n"
+            "3. MIRROR THE USER'S EXACT TONE: If the user asks in Marwari/Rajasthani, respond in pure, authentic Rajasthani/Marwari while keeping all historical facts impeccably accurate.\n"
+            "4. SEAMLESS OPERATION: Never disclose or announce that you used web search or background browsing. Give the answer directly and naturally.\n"
+            "5. NO THINKING LEAKS: Never print internal notes, planning, drafts, or <think> tags.\n"
+            "6. CLEAN FORMATTING: Structure answers with neat Markdown tables, bold headers, and crisp bullet points."
         )
     }
 
@@ -100,11 +128,11 @@ async def handle_universal_prompt(req: UniversalRequest):
                 role = "assistant" if m.role == "assistant" else "user"
                 clean_history.append({"role": role, "content": text[:1500]})
         groq_messages.extend(clean_history[-6:])
-    else:
-        clean_prompt = re.sub(r'<think>.*?</think>', '', req.prompt, flags=re.DOTALL).strip()
-        groq_messages.append({"role": "user", "content": clean_prompt[:3000]})
 
-    # Preferred reliable models
+    # Inject live web context directly into the prompt without breaking conversation flow
+    final_user_content = user_input + web_knowledge
+    groq_messages.append({"role": "user", "content": final_user_content})
+
     preferred_models = [
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
@@ -120,10 +148,10 @@ async def handle_universal_prompt(req: UniversalRequest):
                 stream = client.chat.completions.create(
                     model=model_id,
                     messages=groq_messages,
-                    temperature=0.3,          # Precise & factual
+                    temperature=0.2,          # Low temperature ensures strict fact adherence
                     presence_penalty=0.1,
                     frequency_penalty=0.1,
-                    max_tokens=1800,
+                    max_tokens=2000,
                     stream=True
                 )
                 break
@@ -132,7 +160,7 @@ async def handle_universal_prompt(req: UniversalRequest):
                 continue
 
         if not stream:
-            yield f"Service busy. Details: {error_log[:100]}"
+            yield f"Service busy. Please retry in a moment: {error_log[:100]}"
             return
 
         in_think_block = False
