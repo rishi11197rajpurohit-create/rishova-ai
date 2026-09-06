@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import "./App.css";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "[https://rishova-ai-backend.onrender.com](https://rishova-ai-backend.onrender.com)";
+const BACKEND_URL = "https://rishova-ai-backend.onrender.com";
 
 export default function App() {
   const [sessions, setSessions] = useState(() => {
@@ -75,6 +75,10 @@ export default function App() {
         })
       });
 
+      if (!res.ok) {
+        throw new Error(`Server status ${res.status}`);
+      }
+
       const data = await res.json();
       const reply = data?.data?.markdown_response || data?.detail || "Kuch dikkat aayi, kripya dobara try karein.";
 
@@ -105,7 +109,7 @@ export default function App() {
           </button>
         </div>
 
-        {/* Chat History List */}
+        {/* Chat History */}
         <div style={{ flex: 1, overflowY: "auto", padding: "0 10px", display: "flex", flexDirection: "column", gap: "4px" }}>
           <div style={{ fontSize: "0.75rem", color: "#8e8e8e", padding: "8px 6px", fontWeight: 600 }}>Recent Chats</div>
           {sessions.map((s) => (
@@ -151,7 +155,7 @@ export default function App() {
               ☰
             </button>
             <span style={{ fontWeight: 700, fontSize: "1.05rem", letterSpacing: "0.3px", color: "#fff" }}>Rishova AI</span>
-            <span style={{ fontSize: "0.72rem", background: "#2f2f2f", color: "#10a37f", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>Llama 3.3 Engine</span>
+            <span style={{ fontSize: "0.72rem", background: "#2f2f2f", color: "#10a37f", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>Qwen 3 (27B Engine)</span>
           </div>
         </div>
 
