@@ -21,7 +21,6 @@ app.add_middleware(
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# Ultra-stable models with 6,000 - 20,000+ TPM limits
 AVAILABLE_MODELS = [
     {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 (70B) - Ultra Smart"},
     {"id": "llama-3.1-8b-instant", "name": "Llama 3.1 (8B) - Super Fast"}
@@ -46,19 +45,21 @@ async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, a helpful, intelligent assistant. "
-            "Jump straight to the final answer. Support Hindi, Hinglish, and English naturally. "
-            "Be context-aware and reference previous messages in this conversation."
+            "You are Rishova AI, an intelligent assistant created for Rishikesh. "
+            "Deliver direct, helpful responses in Hindi, Hinglish, or English. "
+            "Be context-aware and reference earlier messages in this conversation."
         )
     }
 
     groq_messages = [system_message]
 
-    # Sanitize and keep last 6 turns
-    if req.messages:
+    # Clean history: omit system errors and empty strings
+    if req.messages and len(req.messages) > 0:
         for m in req.messages[-6:]:
-            if m.content and not m.content.startswith("Service busy") and not m.content.startswith("Kripya"):
-                groq_messages.append({"role": m.role, "content": m.content.strip()})
+            text = m.content.strip()
+            if text and not text.startswith("Service") and not text.startswith("Kripya") and not text.startswith("Error"):
+                role = "assistant" if m.role == "assistant" else "user"
+                groq_messages.append({"role": role, "content": text})
     else:
         groq_messages.append({"role": "user", "content": req.prompt.strip()})
 
@@ -66,26 +67,25 @@ async def handle_universal_prompt(req: UniversalRequest):
 
     def generate():
         stream = None
-        # Fallback between the two rock-solid Llama models only
-        candidate_models = [target_model, "llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
-        seen = set()
-        models_to_try = [x for x in candidate_models if not (x in seen or seen.add(x))]
+        attempt_models = [target_model, "llama-3.1-8b-instant"] if target_model != "llama-3.1-8b-instant" else ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
+        last_error = ""
 
-        for m_name in models_to_try:
+        for m_name in attempt_models:
             try:
                 stream = client.chat.completions.create(
                     model=m_name,
                     messages=groq_messages,
-                    temperature=0.3,
-                    max_tokens=1200,
+                    temperature=0.4,
+                    max_tokens=1000,
                     stream=True
                 )
                 break
-            except Exception:
+            except Exception as e:
+                last_error = str(e)
                 continue
 
         if not stream:
-            yield "Service is currently busy. Please try again in a few seconds."
+            yield f"API Error: {last_error}"
             return
 
         try:
