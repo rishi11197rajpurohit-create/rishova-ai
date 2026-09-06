@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import "./App.css";
 
 const BACKEND_URL = "https://rishova-ai-backend.onrender.com";
@@ -14,14 +16,17 @@ export default function App() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
-    return [{ id: "1", title: "New Chat", messages: [] }];
+    return [{ id: "1", title: "New chat", messages: [] }];
   });
 
   const [currentId, setCurrentId] = useState(() => sessions[0]?.id || "1");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [copiedIndex, setCopiedIndex] = useState(null);
+
   const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const currentSession = sessions.find((s) => s.id === currentId) || sessions[0];
 
@@ -35,34 +40,50 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentSession?.messages, loading]);
 
+  // Auto resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
+    }
+  }, [input]);
+
   const handleNewChat = () => {
     const newId = String(Date.now());
-    const newSession = { id: newId, title: "New Chat", messages: [] };
+    const newSession = { id: newId, title: "New chat", messages: [] };
     setSessions((prev) => [newSession, ...prev]);
     setCurrentId(newId);
   };
 
-  const handleClearAll = () => {
-    const initial = [{ id: "1", title: "New Chat", messages: [] }];
-    setSessions(initial);
-    setCurrentId("1");
-    localStorage.removeItem("rishova_chat_sessions");
+  const handleDeleteSession = (id, e) => {
+    e.stopPropagation();
+    const remaining = sessions.filter((s) => s.id !== id);
+    if (remaining.length === 0) {
+      const fresh = [{ id: String(Date.now()), title: "New chat", messages: [] }];
+      setSessions(fresh);
+      setCurrentId(fresh[0].id);
+    } else {
+      setSessions(remaining);
+      if (currentId === id) setCurrentId(remaining[0].id);
+    }
   };
 
-  const handleSend = async () => {
-    const text = input.trim();
+  const handleSend = async (overrideText = null) => {
+    const text = (overrideText || input).trim();
     if (!text || loading) return;
 
     const userMsg = { role: "user", content: text };
     const updatedMessages = [...currentSession.messages, userMsg];
 
     const isFirst = currentSession.messages.length === 0;
-    const newTitle = isFirst ? (text.slice(0, 24) + (text.length > 24 ? "..." : "")) : currentSession.title;
+    const newTitle = isFirst ? (text.slice(0, 26) + (text.length > 26 ? "..." : "")) : currentSession.title;
 
     setSessions((prev) =>
       prev.map((s) => (s.id === currentId ? { ...s, title: newTitle, messages: updatedMessages } : s))
     );
+
     setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
     setLoading(true);
 
     try {
@@ -75,9 +96,7 @@ export default function App() {
         })
       });
 
-      if (!res.ok) {
-        throw new Error(`Server status ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
       const data = await res.json();
       const reply = data?.data?.markdown_response || data?.detail || "Kuch dikkat aayi, kripya dobara try karein.";
@@ -96,107 +115,139 @@ export default function App() {
     }
   };
 
+  const copyToClipboard = (text, key) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(key);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
   return (
-    <div style={{ display: "flex", height: "100vh", width: "100vw", background: "#212121", color: "#ececec", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+    <div className="chatgpt-container">
       {/* Sidebar */}
-      <div style={{ width: sidebarOpen ? "260px" : "0px", transition: "width 0.2s ease", background: "#171717", display: "flex", flexDirection: "column", overflow: "hidden", borderRight: sidebarOpen ? "1px solid #2f2f2f" : "none" }}>
-        <div style={{ padding: "12px", display: "flex", gap: "8px" }}>
-          <button
-            onClick={handleNewChat}
-            style={{ flex: 1, display: "flex", alignItems: "center", gap: "10px", background: "#212121", border: "1px solid #383838", color: "#fff", padding: "10px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "0.88rem", fontWeight: 500 }}
-          >
-            <span style={{ fontSize: "1.1rem" }}>+</span> New chat
+      <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
+        <div className="sidebar-header">
+          <button className="new-chat-btn" onClick={handleNewChat}>
+            <span>+</span> New chat
           </button>
         </div>
 
-        {/* Chat History */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 10px", display: "flex", flexDirection: "column", gap: "4px" }}>
-          <div style={{ fontSize: "0.75rem", color: "#8e8e8e", padding: "8px 6px", fontWeight: 600 }}>Recent Chats</div>
+        <div className="history-list">
+          <div className="history-label">Recent chats</div>
           {sessions.map((s) => (
             <div
               key={s.id}
+              className={`history-item ${s.id === currentId ? "active" : ""}`}
               onClick={() => setCurrentId(s.id)}
-              style={{
-                padding: "9px 12px",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontSize: "0.86rem",
-                background: s.id === currentId ? "#2f2f2f" : "transparent",
-                color: s.id === currentId ? "#fff" : "#b4b4b4",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis"
-              }}
             >
-              💬 {s.title}
+              <span className="history-title">💬 {s.title}</span>
+              <button
+                className="delete-chat-btn"
+                title="Delete chat"
+                onClick={(e) => handleDeleteSession(s.id, e)}
+              >
+                🗑
+              </button>
             </div>
           ))}
         </div>
 
-        {/* Sidebar Footer */}
-        <div style={{ padding: "14px", borderTop: "1px solid #2f2f2f", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", fontWeight: 600 }}>
-            <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#10a37f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>R</div>
+        <div className="sidebar-footer">
+          <div className="user-profile">
+            <div className="avatar user-avatar">R</div>
             <span>Rishikesh</span>
           </div>
-          <button onClick={handleClearAll} title="Clear all chats" style={{ background: "transparent", border: "none", color: "#8e8e8e", cursor: "pointer", fontSize: "0.75rem" }}>Clear</button>
         </div>
-      </div>
+      </aside>
 
-      {/* Main Chat Area */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
-        {/* Top Minimal Bar */}
-        <div style={{ height: "48px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", borderBottom: "1px solid #2f2f2f" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              style={{ background: "transparent", border: "none", color: "#b4b4b4", fontSize: "1.2rem", cursor: "pointer" }}
-            >
+      {/* Main Content Area */}
+      <main className="main-area">
+        <header className="topbar">
+          <div className="topbar-left">
+            <button className="icon-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
               ☰
             </button>
-            <span style={{ fontWeight: 700, fontSize: "1.05rem", letterSpacing: "0.3px", color: "#fff" }}>Rishova AI</span>
-            <span style={{ fontSize: "0.72rem", background: "#2f2f2f", color: "#10a37f", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>Qwen 3 (27B Engine)</span>
+            <span className="brand-name">Rishova AI</span>
+            <span className="model-badge">Qwen 3 (27B)</span>
           </div>
-        </div>
+        </header>
 
-        {/* Chat Feed */}
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        <div className="chat-viewport">
           {currentSession.messages.length === 0 ? (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px", color: "#8e8e8e" }}>
-              <div style={{ width: "50px", height: "50px", borderRadius: "50%", background: "#10a37f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.5rem", fontWeight: 700 }}>
-                R
+            <div className="empty-state">
+              <div className="empty-logo">R</div>
+              <h2>Rishova AI se aap kya poochna chahte hain?</h2>
+              <div className="preset-grid">
+                <button onClick={() => handleSend("Python me quick sort algorithm samjhao code ke sath")}>
+                  💡 Python me quick sort algorithm
+                </button>
+                <button onClick={() => handleSend("Ek professional leave application email likho")}>
+                  ✍️ Professional leave email
+                </button>
+                <button onClick={() => handleSend("Rishova AI kya kya kar sakta hai?")}>
+                  ⚡ Rishova AI ke capabilities
+                </button>
               </div>
-              <h2 style={{ color: "#ececec", fontSize: "1.4rem", fontWeight: 600 }}>Rishova AI se aap kya poochna chahte hain?</h2>
-              <p style={{ fontSize: "0.9rem" }}>Code, writing, Hindi/Hinglish analysis, questions — kuch bhi likhein.</p>
             </div>
           ) : (
-            <div style={{ maxWidth: "800px", width: "100%", margin: "0 auto", padding: "24px 20px", display: "flex", flexDirection: "column", gap: "28px" }}>
+            <div className="messages-flow">
               {currentSession.messages.map((m, idx) => (
-                <div key={idx} style={{ display: "flex", gap: "16px", alignItems: "flex-start", width: "100%", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                  {m.role === "assistant" && (
-                    <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#10a37f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "0.85rem", fontWeight: 700, flexShrink: 0 }}>
-                      R
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      maxWidth: m.role === "user" ? "75%" : "100%",
-                      background: m.role === "user" ? "#2f2f2f" : "transparent",
-                      padding: m.role === "user" ? "10px 16px" : "0",
-                      borderRadius: m.role === "user" ? "18px" : "0",
-                      fontSize: "0.95rem",
-                      lineHeight: "1.6",
-                      color: "#ececec",
-                      textAlign: "left"
-                    }}
-                  >
+                <div key={idx} className={`message-row ${m.role}`}>
+                  {m.role === "assistant" && <div className="avatar assistant-avatar">R</div>}
+
+                  <div className="bubble">
                     {m.role === "user" ? (
-                      <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
+                      <div className="user-text">{m.content}</div>
                     ) : (
-                      <div className="markdown-content" style={{ textAlign: "left" }}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <div className="markdown-body">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            code({ node, inline, className, children, ...props }) {
+                              const match = /language-(\w+)/.exec(className || "");
+                              const codeString = String(children).replace(/\n$/, "");
+                              const blockKey = `${idx}-${codeString.slice(0, 10)}`;
+
+                              return !inline ? (
+                                <div className="code-block-wrapper">
+                                  <div className="code-header">
+                                    <span>{match ? match[1] : "code"}</span>
+                                    <button
+                                      className="copy-btn"
+                                      onClick={() => copyToClipboard(codeString, blockKey)}
+                                    >
+                                      {copiedIndex === blockKey ? "✓ Copied!" : "📋 Copy code"}
+                                    </button>
+                                  </div>
+                                  <SyntaxHighlighter
+                                    style={vscDarkPlus}
+                                    language={match ? match[1] : "text"}
+                                    PreTag="div"
+                                    customStyle={{ margin: 0, padding: "12px 16px", background: "#0d0d0d", fontSize: "0.88rem" }}
+                                    {...props}
+                                  >
+                                    {codeString}
+                                  </SyntaxHighlighter>
+                                </div>
+                              ) : (
+                                <code className="inline-code" {...props}>
+                                  {children}
+                                </code>
+                              );
+                            }
+                          }}
+                        >
                           {m.content}
                         </ReactMarkdown>
+
+                        {/* Copy entire assistant message */}
+                        <div className="message-actions">
+                          <button
+                            className="msg-action-btn"
+                            onClick={() => copyToClipboard(m.content, `msg-${idx}`)}
+                          >
+                            {copiedIndex === `msg-${idx}` ? "✓ Copied response" : "📋 Copy"}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -204,9 +255,11 @@ export default function App() {
               ))}
 
               {loading && (
-                <div style={{ display: "flex", gap: "16px", alignItems: "center", color: "#8e8e8e", fontSize: "0.9rem" }}>
-                  <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#10a37f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>R</div>
-                  <span>Thinking...</span>
+                <div className="message-row assistant">
+                  <div className="avatar assistant-avatar">R</div>
+                  <div className="bubble">
+                    <div className="typing-dots">Thinking...</div>
+                  </div>
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -214,10 +267,11 @@ export default function App() {
           )}
         </div>
 
-        {/* Input Bar */}
-        <div style={{ padding: "16px", background: "transparent" }}>
-          <div style={{ maxWidth: "800px", margin: "0 auto", position: "relative", background: "#2f2f2f", borderRadius: "24px", border: "1px solid #3d3d3d", display: "flex", alignItems: "center", padding: "6px 14px" }}>
+        {/* Floating Input Dock */}
+        <div className="input-dock-container">
+          <div className="input-dock">
             <textarea
+              ref={textareaRef}
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -228,44 +282,20 @@ export default function App() {
                 }
               }}
               placeholder="Message Rishova AI..."
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                color: "#fff",
-                fontSize: "0.95rem",
-                padding: "8px 6px",
-                resize: "none",
-                fontFamily: "inherit"
-              }}
             />
             <button
-              onClick={handleSend}
+              className="send-btn"
+              onClick={() => handleSend()}
               disabled={loading || !input.trim()}
-              style={{
-                background: input.trim() && !loading ? "#fff" : "#424242",
-                color: input.trim() && !loading ? "#000" : "#8e8e8e",
-                border: "none",
-                width: "34px",
-                height: "34px",
-                borderRadius: "50%",
-                cursor: input.trim() && !loading ? "pointer" : "default",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 700,
-                fontSize: "1.1rem"
-              }}
             >
               ↑
             </button>
           </div>
-          <div style={{ textAlign: "center", fontSize: "0.72rem", color: "#777", marginTop: "8px" }}>
+          <div className="disclaimer">
             Rishova AI can make mistakes. Verify important information.
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
