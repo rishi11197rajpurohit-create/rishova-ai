@@ -22,8 +22,9 @@ app.add_middleware(
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 AVAILABLE_MODELS = [
-    {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 (70B) - Ultra Smart"},
-    {"id": "llama-3.1-8b-instant", "name": "Llama 3.1 (8B) - Super Fast"}
+    {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 (70B Smart)"},
+    {"id": "llama3-70b-8192", "name": "Llama 3 (70B Deep)"},
+    {"id": "llama3-8b-8192", "name": "Llama 3 (8B Fast)"}
 ]
 
 class MessageItem(BaseModel):
@@ -57,17 +58,18 @@ async def handle_universal_prompt(req: UniversalRequest):
     if req.messages and len(req.messages) > 0:
         for m in req.messages[-6:]:
             text = m.content.strip()
-            if text and not text.startswith("Service") and not text.startswith("Kripya") and not text.startswith("Error"):
+            if text and not text.startswith("Service") and not text.startswith("Kripya") and not text.startswith("API Error"):
                 role = "assistant" if m.role == "assistant" else "user"
                 groq_messages.append({"role": role, "content": text})
     else:
         groq_messages.append({"role": "user", "content": req.prompt.strip()})
 
-    target_model = req.model if req.model in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"] else "llama-3.3-70b-versatile"
+    valid_ids = [m["id"] for m in AVAILABLE_MODELS]
+    target_model = req.model if req.model in valid_ids else "llama-3.3-70b-versatile"
 
     def generate():
         stream = None
-        attempt_models = [target_model, "llama-3.1-8b-instant"] if target_model != "llama-3.1-8b-instant" else ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
+        attempt_models = [target_model] + [m["id"] for m in AVAILABLE_MODELS if m["id"] != target_model]
         last_error = ""
 
         for m_name in attempt_models:
