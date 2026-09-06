@@ -84,10 +84,13 @@ export default function App() {
 
     const userMsg = { role: "user", content: text };
     const initialAiMsg = { role: "assistant", content: "" };
-    const historyBeforeThis = [...currentSession.messages];
-    const updatedMessages = [...historyBeforeThis, userMsg, initialAiMsg];
 
-    const isFirst = currentSession.messages.length === 0;
+    // Build the full context including previous messages
+    const previousHistory = currentSession.messages.filter(m => m.content.trim() !== "");
+    const conversationPayload = [...previousHistory, userMsg];
+    const updatedMessages = [...previousHistory, userMsg, initialAiMsg];
+
+    const isFirst = previousHistory.length === 0;
     const newTitle = isFirst ? (text.slice(0, 26) + (text.length > 26 ? "..." : "")) : currentSession.title;
 
     setSessions((prev) =>
@@ -101,9 +104,6 @@ export default function App() {
     abortControllerRef.current = new AbortController();
 
     try {
-      // Send conversation history so Rishova remembers previous queries
-      const conversationPayload = [...historyBeforeThis, userMsg];
-
       const res = await fetch(`${BACKEND_URL}/api/ai/universal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -117,34 +117,21 @@ export default function App() {
 
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-      if (res.body && res.body.getReader) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let streamedText = "";
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let streamedText = "";
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          streamedText += chunk;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        streamedText += chunk;
 
-          setSessions((prev) =>
-            prev.map((s) => {
-              if (s.id !== currentId) return s;
-              const msgs = [...s.messages];
-              msgs[msgs.length - 1] = { role: "assistant", content: streamedText };
-              return { ...s, messages: msgs };
-            })
-          );
-        }
-      } else {
-        const data = await res.json();
-        const reply = data?.data?.markdown_response || data?.detail || "Kripya dobara try karein.";
         setSessions((prev) =>
           prev.map((s) => {
             if (s.id !== currentId) return s;
             const msgs = [...s.messages];
-            msgs[msgs.length - 1] = { role: "assistant", content: reply };
+            msgs[msgs.length - 1] = { role: "assistant", content: streamedText };
             return { ...s, messages: msgs };
           })
         );
@@ -155,7 +142,7 @@ export default function App() {
           prev.map((s) => {
             if (s.id !== currentId) return s;
             const msgs = [...s.messages];
-            msgs[msgs.length - 1] = { role: "assistant", content: "Backend se connect nahi ho paya. Kripya dobara try karein." };
+            msgs[msgs.length - 1] = { role: "assistant", content: "Kuch dikkat aayi. Kripya dobara try karein." };
             return { ...s, messages: msgs };
           })
         );

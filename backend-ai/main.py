@@ -1,5 +1,6 @@
 import os
-from typing import List, Dict
+import re
+from typing import List, Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -33,7 +34,7 @@ class MessageItem(BaseModel):
 
 class UniversalRequest(BaseModel):
     prompt: str
-    messages: List[MessageItem] = []
+    messages: Optional[List[MessageItem]] = None
     model: str = "qwen/qwen3.6-27b"
     user_email: str = "Rishikesh"
 
@@ -46,22 +47,24 @@ async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, an advanced, highly intelligent AI assistant identical to ChatGPT. "
-            "STRICT RULES:\n"
-            "1. Jump straight into the helpful answer without showing draft notes, internal reasoning, or thinking outlines.\n"
-            "2. For code, provide clean, indented multi-line code blocks with language identifiers.\n"
-            "3. Seamlessly support English, Hindi, and Hinglish based on how the user writes.\n"
-            "4. Be context-aware and reference previous messages in this conversation naturally."
+            "You are Rishova AI, a brilliant, professional, and helpful AI assistant created for Rishikesh. "
+            "CRITICAL OPERATIONAL RULES:\n"
+            "1. NEVER output <think> tags, chain-of-thought, draft outlines, or planning steps. Always jump straight into the direct answer.\n"
+            "2. Seamlessly remember and reference previous turns of the ongoing conversation.\n"
+            "3. Provide clean markdown with proper syntax highlighting for code blocks.\n"
+            "4. Respond naturally in Hindi, Hinglish, or English based on the user's language."
         )
     }
 
-    # Build conversation context (keep last 8 turns to stay safe within token limits)
     groq_messages = [system_message]
-    if req.messages:
-        recent_history = req.messages[-8:]
-        for m in recent_history:
-            if m.content.strip():
-                groq_messages.append({"role": m.role, "content": m.content})
+
+    # Clean and append conversation history
+    if req.messages and len(req.messages) > 0:
+        for m in req.messages[-10:]:
+            # Filter out empty or thinking tokens from history
+            clean_content = re.sub(r"<think>[\s\S]*?</think>", "", m.content).strip()
+            if clean_content:
+                groq_messages.append({"role": m.role, "content": clean_content})
     else:
         groq_messages.append({"role": "user", "content": req.prompt.strip()})
 
@@ -69,10 +72,7 @@ async def handle_universal_prompt(req: UniversalRequest):
 
     def generate():
         stream = None
-        # Try requested model first, fallback to candidates
-        try_models = [chosen_model] + [m for m in CANDIDATE_MODELS if m != chosen_model]
-        
-        for m_name in try_models:
+        for m_name in [chosen_model] + [m for m in CANDIDATE_MODELS if m != chosen_model]:
             try:
                 stream = client.chat.completions.create(
                     model=m_name,
@@ -86,14 +86,41 @@ async def handle_universal_prompt(req: UniversalRequest):
                 continue
 
         if not stream:
-            yield "Service is currently busy. Please try again in a moment."
+            yield "Service is currently busy. Please try again in a few seconds."
             return
+
+        in_think_block = False
+        buffer = ""
 
         try:
             for chunk in stream:
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield content
+                token = chunk.choices[0].delta.content or ""
+                if not token:
+                    continue
+
+                buffer += token
+
+                # If <think> tag starts, suppress it
+                if "<think>" in buffer:
+                    in_think_block = True
+                
+                if in_think_block:
+                    if "</think>" in buffer:
+                        # Extract everything after </think>
+                        parts = buffer.split("</think>", 1)
+                        clean_part = parts[1].lstrip()
+                        in_think_block = False
+                        buffer = ""
+                        if clean_part:
+                            yield clean_part
+                    continue
+                else:
+                    yield buffer
+                    buffer = ""
+                    
+            if buffer and not in_think_block:
+                yield buffer
+
         except Exception as e:
             yield f"\n[Stream interrupted: {str(e)}]"
 
