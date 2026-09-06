@@ -7,10 +7,6 @@ import "./App.css";
 
 const BACKEND_URL = "https://rishova-ai-backend.onrender.com";
 
-const AVAILABLE_MODELS = [
-  { id: "llama-3.3-70b-versatile", label: "Llama 3.3 (70B Versatile)" }
-];
-
 export default function App() {
   const [sessions, setSessions] = useState(() => {
     try {
@@ -27,7 +23,8 @@ export default function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
- const [selectedModel, setSelectedModel] = useState("llama-3.3-70b-versatile");
+  const [modelsList, setModelsList] = useState([]);
+  const [selectedModel, setSelectedModel] = useState("");
   const [copiedKey, setCopiedKey] = useState(null);
 
   const [isListening, setIsListening] = useState(false);
@@ -48,6 +45,19 @@ export default function App() {
     } catch (e) {}
   }, [sessions]);
 
+  // Fetch verified models from API key on load
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/models`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.models && data.models.length > 0) {
+          setModelsList(data.models);
+          setSelectedModel(data.models[0].id);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentSession?.messages, loading]);
@@ -59,7 +69,7 @@ export default function App() {
     }
   }, [input]);
 
-  // Real-time voice typing
+  // Live real-time voice typing
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -85,7 +95,7 @@ export default function App() {
 
   const toggleVoiceInput = () => {
     if (!recognitionRef.current) {
-      alert("Aapke browser me voice input support nahi hai. Chrome ya Edge use karein.");
+      alert("Aapke browser me speech recognition support nahi hai. Chrome ya Edge use karein.");
       return;
     }
     if (isListening) {
@@ -155,7 +165,6 @@ export default function App() {
     const userMsg = { role: "user", content: text };
     const initialAiMsg = { role: "assistant", content: "" };
 
-    // Only include valid non-empty messages in history payload
     const baseHistory = customHistory !== null 
       ? customHistory.filter((m) => m.content && m.content.trim() !== "")
       : currentSession.messages.filter((m) => m.content && m.content.trim() !== "");
@@ -183,7 +192,7 @@ export default function App() {
         body: JSON.stringify({
           prompt: text,
           messages: conversationPayload,
-          model: selectedModel,
+          model: selectedModel || undefined,
           user_email: "Rishikesh"
         }),
         signal: abortControllerRef.current.signal
@@ -213,25 +222,13 @@ export default function App() {
           })
         );
       }
-
-      // If stream ended completely blank, show fallback
-      if (!streamedText.trim()) {
-        setSessions((prev) =>
-          prev.map((s) => {
-            if (s.id !== currentId) return s;
-            const msgs = [...s.messages];
-            msgs[msgs.length - 1] = { role: "assistant", content: "Kripya dobara message bhejein." };
-            return { ...s, messages: msgs };
-          })
-        );
-      }
     } catch (err) {
       if (err.name !== "AbortError") {
         setSessions((prev) =>
           prev.map((s) => {
             if (s.id !== currentId) return s;
             const msgs = [...s.messages];
-            msgs[msgs.length - 1] = { role: "assistant", content: "Backend se connect karne me dikkat aayi. Kripya 5 second baad dobara try karein." };
+            msgs[msgs.length - 1] = { role: "assistant", content: "Connection issue. Please retry in a few seconds." };
             return { ...s, messages: msgs };
           })
         );
@@ -261,7 +258,6 @@ export default function App() {
 
   return (
     <div className="chatgpt-container">
-      {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="sidebar-header">
           <button className="new-chat-btn" onClick={handleNewChat}>
@@ -297,7 +293,6 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Main Area */}
       <main className="main-area">
         <header className="topbar">
           <div className="topbar-left">
@@ -306,17 +301,19 @@ export default function App() {
             </button>
             <span className="brand-name">Rishova AI</span>
             
-            <select
-              className="model-select-dropdown"
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-            >
-              {AVAILABLE_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            {modelsList.length > 0 && (
+              <select
+                className="model-select-dropdown"
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+              >
+                {modelsList.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="topbar-right">
@@ -448,7 +445,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Input Dock */}
         <div className="input-dock-container">
           <div className="input-dock">
             <textarea
