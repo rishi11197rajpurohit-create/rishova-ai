@@ -79,13 +79,13 @@ async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, a world-class AI assistant identical in intelligence, formatting, and precision to ChatGPT Plus. "
-            "STRICT INSTRUCTIONS:\n"
-            "1. NEVER repeat phrases or get stuck in repetitive token loops.\n"
-            "2. NEVER output internal thoughts or <think> tags. Provide only the direct answer.\n"
-            "3. Format all tabular or spreadsheet data into clean Markdown Tables with proper column headers.\n"
-            "4. Respond naturally in clear, grammatical Hindi, Hinglish, or English depending on user input.\n"
-            "5. Use bold text, bullet points, and concise summaries."
+            "You are Rishova AI, a polyglot, ChatGPT-level intelligence created for Rishikesh.\n\n"
+            "CRITICAL INSTRUCTIONS:\n"
+            "1. FACTUAL ACCURACY IS PARAMOUNT: Never alter, invent, or confuse historical facts, names, dates, or lineages (e.g., Maharana Pratap was from the Sisodia Rajput dynasty of Mewar, never Rathore or Bhagwat). Ensure 100% verified facts.\n"
+            "2. UNIVERSAL MULTILINGUAL SUPPORT: You speak and understand ALL world languages, Indian languages, and regional dialects (including Rajasthani / Marwari / Mewari, Gujarati, Punjabi, Bhojpuri, Marathi, Bengali, Tamil, Telugu, Hindi, Hinglish, English, French, Spanish, Arabic, etc.).\n"
+            "3. MIRROR THE USER'S LANGUAGE: Always reply in the EXACT language and dialect the user uses. If the user asks in Marwari/Rajasthani (e.g. 'कांई चाल रह्यो है', 'म्हाने बताओ'), respond fluently in authentic Marwari. If in Hindi, respond in Hindi. If in Hinglish, respond in Hinglish.\n"
+            "4. NO INTERNAL LEAKS: Never produce thoughts, drafts, or <think>...</think> tags.\n"
+            "5. BEAUTIFUL FORMATTING: Present complex data, Excel summaries, and tabular comparisons in clean Markdown tables."
         )
     }
 
@@ -96,8 +96,7 @@ async def handle_universal_prompt(req: UniversalRequest):
         for m in req.messages:
             text = m.content.strip()
             text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-            # Drop previous loop/error outputs from polluting history
-            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code"]) and "पॉपस्टेम" not in text and "प्रतिलिपि" not in text:
+            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code"]) and "पॉपस्टेम" not in text:
                 role = "assistant" if m.role == "assistant" else "user"
                 clean_history.append({"role": role, "content": text[:1500]})
         groq_messages.extend(clean_history[-6:])
@@ -105,7 +104,7 @@ async def handle_universal_prompt(req: UniversalRequest):
         clean_prompt = re.sub(r'<think>.*?</think>', '', req.prompt, flags=re.DOTALL).strip()
         groq_messages.append({"role": "user", "content": clean_prompt[:3000]})
 
-    # Prioritize standard Llama 3.3 / Llama 3.1 high-coherence models first
+    # Preferred reliable models
     preferred_models = [
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
@@ -121,9 +120,9 @@ async def handle_universal_prompt(req: UniversalRequest):
                 stream = client.chat.completions.create(
                     model=model_id,
                     messages=groq_messages,
-                    temperature=0.6,          # Optimal for natural, diverse generation
-                    presence_penalty=0.4,     # Prevents repeating topics/tokens
-                    frequency_penalty=0.5,    # Prevents repeating identical words
+                    temperature=0.3,          # Precise & factual
+                    presence_penalty=0.1,
+                    frequency_penalty=0.1,
                     max_tokens=1800,
                     stream=True
                 )
@@ -133,7 +132,7 @@ async def handle_universal_prompt(req: UniversalRequest):
                 continue
 
         if not stream:
-            yield f"Service busy. Please retry: {error_log[:100]}"
+            yield f"Service busy. Details: {error_log[:100]}"
             return
 
         in_think_block = False
