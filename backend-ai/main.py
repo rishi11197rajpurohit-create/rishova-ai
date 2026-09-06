@@ -21,10 +21,10 @@ app.add_middleware(
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
+# Official active, non-decommissioned Groq production models
 AVAILABLE_MODELS = [
-    {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 (70B Smart)"},
-    {"id": "llama3-70b-8192", "name": "Llama 3 (70B Deep)"},
-    {"id": "llama3-8b-8192", "name": "Llama 3 (8B Fast)"}
+    {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 (70B Versatile)"},
+    {"id": "mixtral-8x7b-32768", "name": "Mixtral 8x7B (Ultra Fast)"}
 ]
 
 class MessageItem(BaseModel):
@@ -46,15 +46,15 @@ async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, an intelligent assistant created for Rishikesh. "
-            "Deliver direct, helpful responses in Hindi, Hinglish, or English. "
-            "Be context-aware and reference earlier messages in this conversation."
+            "You are Rishova AI, a brilliant and helpful AI assistant created for Rishikesh. "
+            "Respond directly and clearly. Seamlessly support Hindi, Hinglish, and English. "
+            "Be context-aware and reference previous messages in this conversation naturally."
         )
     }
 
     groq_messages = [system_message]
 
-    # Clean history: omit system errors and empty strings
+    # Clean history: remove error messages and empty lines
     if req.messages and len(req.messages) > 0:
         for m in req.messages[-6:]:
             text = m.content.strip()
@@ -64,21 +64,21 @@ async def handle_universal_prompt(req: UniversalRequest):
     else:
         groq_messages.append({"role": "user", "content": req.prompt.strip()})
 
-    valid_ids = [m["id"] for m in AVAILABLE_MODELS]
-    target_model = req.model if req.model in valid_ids else "llama-3.3-70b-versatile"
+    chosen_model = req.model if req.model in ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"] else "llama-3.3-70b-versatile"
 
     def generate():
         stream = None
-        attempt_models = [target_model] + [m["id"] for m in AVAILABLE_MODELS if m["id"] != target_model]
+        # Try chosen model first, then fallback to the other active model
+        candidates = [chosen_model] + [m["id"] for m in AVAILABLE_MODELS if m["id"] != chosen_model]
         last_error = ""
 
-        for m_name in attempt_models:
+        for m_name in candidates:
             try:
                 stream = client.chat.completions.create(
                     model=m_name,
                     messages=groq_messages,
                     temperature=0.4,
-                    max_tokens=1000,
+                    max_tokens=1200,
                     stream=True
                 )
                 break

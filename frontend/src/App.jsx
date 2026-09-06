@@ -9,8 +9,7 @@ const BACKEND_URL = "https://rishova-ai-backend.onrender.com";
 
 const AVAILABLE_MODELS = [
   { id: "llama-3.3-70b-versatile", label: "Llama 3.3 (70B Smart)" },
-  { id: "llama3-70b-8192", label: "Llama 3 (70B Deep)" },
-  { id: "llama3-8b-8192", label: "Llama 3 (8B Fast)" }
+  { id: "mixtral-8x7b-32768", label: "Mixtral 8x7B (Ultra Fast)" }
 ];
 
 export default function App() {
