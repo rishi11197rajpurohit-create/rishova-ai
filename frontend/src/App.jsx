@@ -8,7 +8,6 @@ import "./App.css";
 const BACKEND_URL = "https://rishova-ai-backend.onrender.com";
 
 export default function App() {
-  // Always create a fresh new chat on fresh visit, but retain past chats in history
   const [sessions, setSessions] = useState(() => {
     try {
       const saved = localStorage.getItem("rishova_chat_sessions");
@@ -16,7 +15,6 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // If first chat is already empty, reuse it, otherwise prepend fresh chat
           if (parsed[0].messages.length === 0) return parsed;
           return [initialChat, ...parsed];
         }
@@ -33,10 +31,13 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [copiedKey, setCopiedKey] = useState(null);
 
-  // Multiple files support & side-by-side preview
+  // Theme settings: "system" | "light" | "dark"
+  const [themePreference, setThemePreference] = useState(() => localStorage.getItem("rishova_theme_pref") || "dark");
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+
+  // File Upload & On-demand Viewer
   const [attachedFiles, setAttachedFiles] = useState([]);
-  const [previewPdfUrl, setPreviewPdfUrl] = useState(null);
-  const [previewPdfName, setPreviewPdfName] = useState("");
+  const [previewFile, setPreviewFile] = useState(null); // { name, url, isPdf }
   const [uploadingFile, setUploadingFile] = useState(false);
 
   // Voice & Edit
@@ -53,6 +54,20 @@ export default function App() {
   const baseInputRef = useRef("");
 
   const currentSession = sessions.find((s) => s.id === currentId) || sessions[0];
+
+  // Theme calculation
+  const getEffectiveTheme = () => {
+    if (themePreference === "system") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return themePreference;
+  };
+
+  const effectiveTheme = getEffectiveTheme();
+
+  useEffect(() => {
+    localStorage.setItem("rishova_theme_pref", themePreference);
+  }, [themePreference]);
 
   useEffect(() => {
     try {
@@ -128,7 +143,7 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Upload Multiple Files
+  // Upload Files - DO NOT auto open side preview
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -137,13 +152,11 @@ export default function App() {
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
 
-    // Also store local object URL for instant side preview
-    const firstPdf = files.find((f) => f.type === "application/pdf");
-    if (firstPdf) {
-      const url = URL.createObjectURL(firstPdf);
-      setPreviewPdfUrl(url);
-      setPreviewPdfName(firstPdf.name);
-    }
+    const fileObjects = files.map((f) => ({
+      name: f.name,
+      url: URL.createObjectURL(f),
+      isPdf: f.type === "application/pdf"
+    }));
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/upload`, {
@@ -152,7 +165,14 @@ export default function App() {
       });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
-      setAttachedFiles((prev) => [...prev, ...data.files]);
+
+      const combined = data.files.map((df, idx) => ({
+        ...df,
+        url: fileObjects[idx]?.url || "",
+        isPdf: fileObjects[idx]?.isPdf || false
+      }));
+
+      setAttachedFiles((prev) => [...prev, ...combined]);
     } catch (err) {
       alert("Files upload karne me dikkat aayi. Kripya dobara try karein.");
     } finally {
@@ -166,7 +186,7 @@ export default function App() {
     window.speechSynthesis?.cancel();
     setSpeakingIndex(null);
     setAttachedFiles([]);
-    setPreviewPdfUrl(null);
+    setPreviewFile(null);
     const newId = String(Date.now());
     const newSession = { id: newId, title: "New chat", messages: [] };
     setSessions((prev) => [newSession, ...prev]);
@@ -210,6 +230,15 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const downloadFileLocally = (fileUrl, fileName) => {
+    const a = document.createElement("a");
+    a.href = fileUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const handleSend = async (overrideText = null, customHistory = null) => {
     const rawText = (overrideText || input).trim();
     if ((!rawText && attachedFiles.length === 0) || loading) return;
@@ -221,16 +250,23 @@ export default function App() {
 
     let fullPrompt = rawText;
     let displayPrompt = rawText;
+    let messageFiles = [];
 
     if (attachedFiles.length > 0) {
+      messageFiles = [...attachedFiles];
       const docsSummary = attachedFiles.map((f) => `--- FILE: "${f.filename}" ---\n${f.text}`).join("\n\n");
       const fileNames = attachedFiles.map((f) => f.filename).join(", ");
       fullPrompt = `[Attached Documents: ${fileNames}]\n${docsSummary}\n\nUser Question: ${rawText || "Please explain and summarize these documents."}`;
-      displayPrompt = `📎 [Attached: ${fileNames}]\n\n${rawText || "In documents ke baare me batao."}`;
+      displayPrompt = rawText || `📎 [Attached: ${fileNames}]`;
       setAttachedFiles([]);
     }
 
-    const userMsg = { role: "user", content: fullPrompt, display: displayPrompt };
+    const userMsg = { 
+      role: "user", 
+      content: fullPrompt, 
+      display: displayPrompt,
+      files: messageFiles 
+    };
     const initialAiMsg = { role: "assistant", content: "" };
 
     const baseHistory = customHistory !== null 
@@ -322,7 +358,7 @@ export default function App() {
   };
 
   return (
-    <div className="chatgpt-container dark">
+    <div className={`chatgpt-container ${effectiveTheme}`}>
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="sidebar-header">
@@ -352,6 +388,41 @@ export default function App() {
         </div>
 
         <div className="sidebar-footer">
+          {/* Theme flyout menu */}
+          <div className="theme-wrapper">
+            <button className="theme-toggle-btn" onClick={() => setShowThemeMenu(!showThemeMenu)}>
+              <span className="theme-icon">☼</span>
+              <span>Theme</span>
+              <span className="theme-arrow">›</span>
+            </button>
+
+            {showThemeMenu && (
+              <div className="theme-flyout">
+                <button
+                  className={`theme-opt ${themePreference === "system" ? "active" : ""}`}
+                  onClick={() => { setThemePreference("system"); setShowThemeMenu(false); }}
+                >
+                  <span>System</span>
+                  {themePreference === "system" && <span>✓</span>}
+                </button>
+                <button
+                  className={`theme-opt ${themePreference === "light" ? "active" : ""}`}
+                  onClick={() => { setThemePreference("light"); setShowThemeMenu(false); }}
+                >
+                  <span>Light</span>
+                  {themePreference === "light" && <span>✓</span>}
+                </button>
+                <button
+                  className={`theme-opt ${themePreference === "dark" ? "active" : ""}`}
+                  onClick={() => { setThemePreference("dark"); setShowThemeMenu(false); }}
+                >
+                  <span>Dark</span>
+                  {themePreference === "dark" && <span>✓</span>}
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="user-profile">
             <div className="avatar user-avatar">R</div>
             <span>Rishikesh</span>
@@ -359,7 +430,7 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Main Workspace Area (Split Screen if PDF Open) */}
+      {/* Main Workspace Layout */}
       <div className="workspace-layout">
         <main className="main-area">
           <header className="topbar">
@@ -371,9 +442,9 @@ export default function App() {
             </div>
 
             <div className="topbar-right">
-              {previewPdfUrl && (
-                <button className="export-btn" onClick={() => setPreviewPdfUrl(null)}>
-                  ✕ Close PDF
+              {previewFile && (
+                <button className="export-btn" onClick={() => setPreviewFile(null)}>
+                  ✕ Close View
                 </button>
               )}
               {currentSession.messages.length > 0 && (
@@ -423,7 +494,38 @@ export default function App() {
                           </div>
                         ) : (
                           <div className="user-text-container">
-                            <div className="user-text">{m.display || m.content}</div>
+                            <div className="user-content-block">
+                              {/* Render attached files with View & Download */}
+                              {m.files && m.files.length > 0 && (
+                                <div className="bubble-files-tray">
+                                  {m.files.map((file, fIdx) => (
+                                    <div key={fIdx} className="bubble-file-card">
+                                      <span className="file-name">📄 {file.filename}</span>
+                                      <div className="file-actions">
+                                        {file.url && (
+                                          <button
+                                            className="file-btn"
+                                            onClick={() => setPreviewFile({ name: file.filename, url: file.url, isPdf: file.isPdf })}
+                                          >
+                                            👁 View
+                                          </button>
+                                        )}
+                                        {file.url && (
+                                          <button
+                                            className="file-btn"
+                                            onClick={() => downloadFileLocally(file.url, file.filename)}
+                                          >
+                                            ⬇ Download
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="user-text">{m.display || m.content}</div>
+                            </div>
+
                             <button
                               className="edit-trigger-btn"
                               title="Edit message"
@@ -513,13 +615,40 @@ export default function App() {
 
           {/* Input Dock */}
           <div className="input-dock-container">
-            {/* Multi-file preview tag list */}
             {attachedFiles.length > 0 && (
               <div className="multi-file-tray">
                 {attachedFiles.map((f, i) => (
                   <div key={i} className="file-chip">
                     <span>📄 {f.filename}</span>
-                    <button onClick={() => setAttachedFiles((prev) => prev.filter((_, idx) => idx !== i))}>✕</button>
+                    <div className="chip-btns">
+                      {f.url && (
+                        <button
+                          type="button"
+                          className="chip-action-btn"
+                          title="View file"
+                          onClick={() => setPreviewFile({ name: f.filename, url: f.url, isPdf: f.isPdf })}
+                        >
+                          👁
+                        </button>
+                      )}
+                      {f.url && (
+                        <button
+                          type="button"
+                          className="chip-action-btn"
+                          title="Download file"
+                          onClick={() => downloadFileLocally(f.url, f.filename)}
+                        >
+                          ⬇
+                        </button>
+                      )}
+                      <button 
+                        type="button"
+                        className="chip-action-btn remove" 
+                        onClick={() => setAttachedFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -531,14 +660,14 @@ export default function App() {
                 ref={fileInputRef}
                 style={{ display: "none" }}
                 multiple
-                accept=".pdf,.txt,.py,.js,.html,.json,.md"
+                accept=".pdf,.txt,.py,.js,.html,.json,.md,.png,.jpg,.jpeg"
                 onChange={handleFileUpload}
               />
 
               <button
                 className="attach-btn"
                 onClick={() => fileInputRef.current?.click()}
-                title="Upload multiple PDFs or text files"
+                title="Upload files or PDFs"
                 disabled={uploadingFile}
               >
                 {uploadingFile ? "⏳" : "📎"}
@@ -586,14 +715,22 @@ export default function App() {
           </div>
         </main>
 
-        {/* ChatGPT Style Side-by-Side PDF Viewer */}
-        {previewPdfUrl && (
+        {/* Side-by-Side File/PDF Viewer (Opens ONLY when requested) */}
+        {previewFile && (
           <aside className="pdf-side-viewer">
             <div className="pdf-viewer-header">
-              <span>📄 {previewPdfName}</span>
-              <button onClick={() => setPreviewPdfUrl(null)}>✕</button>
+              <span>📄 {previewFile.name}</span>
+              <div className="viewer-header-btns">
+                <button 
+                  className="viewer-download-btn"
+                  onClick={() => downloadFileLocally(previewFile.url, previewFile.name)}
+                >
+                  ⬇ Download
+                </button>
+                <button onClick={() => setPreviewFile(null)}>✕</button>
+              </div>
             </div>
-            <iframe src={previewPdfUrl} title="Document Preview" className="pdf-iframe" />
+            <iframe src={previewFile.url} title="Document Preview" className="pdf-iframe" />
           </aside>
         )}
       </div>

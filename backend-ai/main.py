@@ -1,7 +1,7 @@
 import os
 import io
 from typing import List, Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -38,7 +38,6 @@ def read_root():
 
 @app.post("/api/upload")
 async def extract_multiple_files(files: List[UploadFile] = File(...)):
-    """Process single or multiple PDFs safely without crashing or overflow"""
     results = []
     for file in files:
         try:
@@ -48,7 +47,7 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
             if file.filename.lower().endswith(".pdf"):
                 pdf_file = io.BytesIO(content_bytes)
                 reader = PdfReader(pdf_file)
-                for page in reader.pages[:8]:
+                for page in reader.pages[:10]:
                     text = page.extract_text()
                     if text:
                         extracted_text += text + "\n"
@@ -56,10 +55,10 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
                 extracted_text = content_bytes.decode("utf-8", errors="ignore")
 
             clean_text = extracted_text.strip()
+            # If scanned/image PDF with no text, handle gracefully instead of throwing 400
             if not clean_text:
-                continue
+                clean_text = f"[Scanned/Image document attached: {file.filename}]"
 
-            # Safe slice per document
             if len(clean_text) > 3500:
                 clean_text = clean_text[:3500] + "\n[... Document truncated for inference ...]"
 
@@ -68,10 +67,10 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
                 "text": clean_text
             })
         except Exception:
-            continue
-
-    if not results:
-        raise HTTPException(status_code=400, detail="No readable text found in uploaded files.")
+            results.append({
+                "filename": file.filename,
+                "text": f"[Attached document: {file.filename}]"
+            })
 
     return {"files": results}
 
@@ -80,16 +79,16 @@ async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, an elite ChatGPT-level intelligence created for Rishikesh. "
-            "Give direct, highly accurate, and structured answers. Never output thinking tags or drafts. "
-            "Support Hindi, Hinglish, and English naturally matching user queries. "
-            "Seamlessly answer across multiple attached documents and keep conversational context intact."
+            "You are Rishova AI, a ChatGPT-level assistant created for Rishikesh. "
+            "Deliver direct, well-structured, clear answers. "
+            "Never produce thinking tags, drafts, or outlines. "
+            "Support Hindi, Hinglish, and English naturally matching the prompt. "
+            "Maintain context from prior conversation turns and explain attached documents clearly."
         )
     }
 
     groq_messages = [system_message]
 
-    # Smart sliding context window to allow UNLIMITED chat length without token errors
     if req.messages and len(req.messages) > 0:
         clean_history = []
         for m in req.messages:
@@ -97,13 +96,10 @@ async def handle_universal_prompt(req: UniversalRequest):
             if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code"]):
                 role = "assistant" if m.role == "assistant" else "user"
                 clean_history.append({"role": role, "content": text[:2000]})
-        
-        # Take the most recent 8 messages for context
         groq_messages.extend(clean_history[-8:])
     else:
         groq_messages.append({"role": "user", "content": req.prompt.strip()[:3500]})
 
-    # Dynamic Auto-Model Selection from user's live enabled models
     try:
         available_models = [
             m.id for m in client.models.list().data 
