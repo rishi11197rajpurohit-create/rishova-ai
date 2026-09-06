@@ -1,4 +1,5 @@
 import os
+from typing import List, Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -26,10 +27,15 @@ CANDIDATE_MODELS = [
     "allam-2-7b"
 ]
 
+class MessageItem(BaseModel):
+    role: str
+    content: str
+
 class UniversalRequest(BaseModel):
     prompt: str
-    model: str = ""
-    user_email: str = "guest"
+    messages: List[MessageItem] = []
+    model: str = "qwen/qwen3.6-27b"
+    user_email: str = "Rishikesh"
 
 @app.get("/")
 def read_root():
@@ -37,30 +43,42 @@ def read_root():
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
-    user_prompt = req.prompt.strip()
+    system_message = {
+        "role": "system",
+        "content": (
+            "You are Rishova AI, an advanced, highly intelligent AI assistant identical to ChatGPT. "
+            "STRICT RULES:\n"
+            "1. Jump straight into the helpful answer without showing draft notes, internal reasoning, or thinking outlines.\n"
+            "2. For code, provide clean, indented multi-line code blocks with language identifiers.\n"
+            "3. Seamlessly support English, Hindi, and Hinglish based on how the user writes.\n"
+            "4. Be context-aware and reference previous messages in this conversation naturally."
+        )
+    }
+
+    # Build conversation context (keep last 8 turns to stay safe within token limits)
+    groq_messages = [system_message]
+    if req.messages:
+        recent_history = req.messages[-8:]
+        for m in recent_history:
+            if m.content.strip():
+                groq_messages.append({"role": m.role, "content": m.content})
+    else:
+        groq_messages.append({"role": "user", "content": req.prompt.strip()})
+
+    chosen_model = req.model if req.model in CANDIDATE_MODELS else CANDIDATE_MODELS[0]
 
     def generate():
         stream = None
-        for model_name in CANDIDATE_MODELS:
+        # Try requested model first, fallback to candidates
+        try_models = [chosen_model] + [m for m in CANDIDATE_MODELS if m != chosen_model]
+        
+        for m_name in try_models:
             try:
                 stream = client.chat.completions.create(
-                    model=model_name,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are Rishova AI, a brilliant assistant identical to ChatGPT. "
-                                "CRITICAL INSTRUCTIONS:\n"
-                                "- Jump directly into the final helpful response.\n"
-                                "- NEVER output your internal thoughts, outlines, planning steps, or 'Draft:' notes.\n"
-                                "- Provide clean, properly indented multi-line code blocks.\n"
-                                "- Answer in the user's preferred language (Hindi, Hinglish, or English) naturally."
-                            )
-                        },
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=0.2,
-                    max_tokens=800,
+                    model=m_name,
+                    messages=groq_messages,
+                    temperature=0.3,
+                    max_tokens=850,
                     stream=True
                 )
                 break

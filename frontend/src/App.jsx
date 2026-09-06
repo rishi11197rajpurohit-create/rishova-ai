@@ -84,7 +84,8 @@ export default function App() {
 
     const userMsg = { role: "user", content: text };
     const initialAiMsg = { role: "assistant", content: "" };
-    const updatedMessages = [...currentSession.messages, userMsg, initialAiMsg];
+    const historyBeforeThis = [...currentSession.messages];
+    const updatedMessages = [...historyBeforeThis, userMsg, initialAiMsg];
 
     const isFirst = currentSession.messages.length === 0;
     const newTitle = isFirst ? (text.slice(0, 26) + (text.length > 26 ? "..." : "")) : currentSession.title;
@@ -100,16 +101,22 @@ export default function App() {
     abortControllerRef.current = new AbortController();
 
     try {
+      // Send conversation history so Rishova remembers previous queries
+      const conversationPayload = [...historyBeforeThis, userMsg];
+
       const res = await fetch(`${BACKEND_URL}/api/ai/universal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, user_email: "Rishikesh" }),
+        body: JSON.stringify({
+          prompt: text,
+          messages: conversationPayload,
+          user_email: "Rishikesh"
+        }),
         signal: abortControllerRef.current.signal
       });
 
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-      // If streaming response
       if (res.body && res.body.getReader) {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -148,7 +155,7 @@ export default function App() {
           prev.map((s) => {
             if (s.id !== currentId) return s;
             const msgs = [...s.messages];
-            msgs[msgs.length - 1] = { role: "assistant", content: "Backend abhi awake ho raha hai. Kripya 10 second baad dobara message bhejein." };
+            msgs[msgs.length - 1] = { role: "assistant", content: "Backend se connect nahi ho paya. Kripya dobara try karein." };
             return { ...s, messages: msgs };
           })
         );
