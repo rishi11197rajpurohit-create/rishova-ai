@@ -48,7 +48,7 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
             if file.filename.lower().endswith(".pdf"):
                 pdf_file = io.BytesIO(content_bytes)
                 reader = PdfReader(pdf_file)
-                for page in reader.pages[:10]:
+                for page in reader.pages[:8]:
                     text = page.extract_text()
                     if text:
                         extracted_text += text + "\n"
@@ -57,10 +57,10 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
 
             clean_text = extracted_text.strip()
             if not clean_text:
-                clean_text = f"[Scanned/Image document attached: {file.filename}]"
+                clean_text = f"[Image/Scanned document: {file.filename}]"
 
-            if len(clean_text) > 4000:
-                clean_text = clean_text[:4000] + "\n[... Document truncated ...]"
+            if len(clean_text) > 3500:
+                clean_text = clean_text[:3500] + "\n[... Content truncated ...]"
 
             results.append({
                 "filename": file.filename,
@@ -79,13 +79,13 @@ async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, identical in capability and style to ChatGPT Plus. "
-            "CRITICAL RULES:\n"
-            "1. NEVER output internal thoughts, chain-of-thought, or <think>...</think> tags. Jump directly to the formatted response.\n"
-            "2. When presenting data, Excel sheets, or statistics, ALWAYS format them as structured Markdown Tables with clear column headers.\n"
-            "3. Use bold headings, bullet points, and numbered lists to make the answer clean, aesthetic, and scannable.\n"
-            "4. Respond naturally in Hindi, Hinglish, or English matching the user's input.\n"
-            "5. If asked to create an Excel file/table from PDFs, organize the data into rows and columns in a Markdown table."
+            "You are Rishova AI, a world-class AI assistant identical in intelligence, formatting, and precision to ChatGPT Plus. "
+            "STRICT INSTRUCTIONS:\n"
+            "1. NEVER repeat phrases or get stuck in repetitive token loops.\n"
+            "2. NEVER output internal thoughts or <think> tags. Provide only the direct answer.\n"
+            "3. Format all tabular or spreadsheet data into clean Markdown Tables with proper column headers.\n"
+            "4. Respond naturally in clear, grammatical Hindi, Hinglish, or English depending on user input.\n"
+            "5. Use bold text, bullet points, and concise summaries."
         )
     }
 
@@ -95,35 +95,36 @@ async def handle_universal_prompt(req: UniversalRequest):
         clean_history = []
         for m in req.messages:
             text = m.content.strip()
-            # Strip any past think tags stored in history
             text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code"]):
+            # Drop previous loop/error outputs from polluting history
+            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code"]) and "पॉपस्टेम" not in text and "प्रतिलिपि" not in text:
                 role = "assistant" if m.role == "assistant" else "user"
-                clean_history.append({"role": role, "content": text[:2000]})
-        groq_messages.extend(clean_history[-8:])
+                clean_history.append({"role": role, "content": text[:1500]})
+        groq_messages.extend(clean_history[-6:])
     else:
         clean_prompt = re.sub(r'<think>.*?</think>', '', req.prompt, flags=re.DOTALL).strip()
-        groq_messages.append({"role": "user", "content": clean_prompt[:3500]})
+        groq_messages.append({"role": "user", "content": clean_prompt[:3000]})
 
-    try:
-        available_models = [
-            m.id for m in client.models.list().data 
-            if not any(b in m.id for b in ["whisper", "guard", "compound", "safeguard", "embed"])
-        ]
-    except Exception:
-        available_models = ["openai/gpt-oss-20b"]
+    # Prioritize standard Llama 3.3 / Llama 3.1 high-coherence models first
+    preferred_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "openai/gpt-oss-20b"
+    ]
 
     def generate():
         stream = None
         error_log = ""
 
-        for model_id in available_models:
+        for model_id in preferred_models:
             try:
                 stream = client.chat.completions.create(
                     model=model_id,
                     messages=groq_messages,
-                    temperature=0.2,
-                    max_tokens=2000,
+                    temperature=0.6,          # Optimal for natural, diverse generation
+                    presence_penalty=0.4,     # Prevents repeating topics/tokens
+                    frequency_penalty=0.5,    # Prevents repeating identical words
+                    max_tokens=1800,
                     stream=True
                 )
                 break
@@ -132,7 +133,7 @@ async def handle_universal_prompt(req: UniversalRequest):
                 continue
 
         if not stream:
-            yield f"Service busy. Details: {error_log[:100]}"
+            yield f"Service busy. Please retry: {error_log[:100]}"
             return
 
         in_think_block = False
@@ -146,13 +147,11 @@ async def handle_universal_prompt(req: UniversalRequest):
 
                 buffer += token
 
-                # Clean <think> tags dynamically during stream
                 if "<think>" in buffer:
                     in_think_block = True
                 
                 if in_think_block:
                     if "</think>" in buffer:
-                        # Extract everything after </think>
                         parts = buffer.split("</think>", 1)
                         clean_tail = parts[1].lstrip()
                         in_think_block = False
