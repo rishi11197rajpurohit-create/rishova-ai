@@ -7,6 +7,12 @@ import "./App.css";
 
 const BACKEND_URL = "https://rishova-ai-backend.onrender.com";
 
+const AVAILABLE_MODELS = [
+  { id: "qwen/qwen3.6-27b", label: "Qwen 3.6 (27B)" },
+  { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 (27B)" },
+  { id: "allam-2-7b", label: "Allam 2 (7B Fast)" }
+];
+
 export default function App() {
   const [sessions, setSessions] = useState(() => {
     try {
@@ -23,11 +29,18 @@ export default function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectedModel, setSelectedModel] = useState("qwen/qwen3.6-27b");
   const [copiedKey, setCopiedKey] = useState(null);
+  
+  // Voice & Edit states
+  const [isListening, setIsListening] = useState(false);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editText, setEditText] = useState("");
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const currentSession = sessions.find((s) => s.id === currentId) || sessions[0];
 
@@ -48,10 +61,43 @@ export default function App() {
     }
   }, [input]);
 
-  const handleNewChat = () => {
-    if (loading && abortControllerRef.current) {
-      abortControllerRef.current.abort();
+  // Speech to text setup
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recog = new SpeechRecognition();
+      recog.continuous = false;
+      recog.interimResults = false;
+      recog.lang = "hi-IN";
+
+      recog.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setInput((prev) => (prev ? prev + " " + transcript : transcript));
+        setIsListening(false);
+      };
+
+      recog.onerror = () => setIsListening(false);
+      recog.onend = () => setIsListening(false);
+      recognitionRef.current = recog;
     }
+  }, []);
+
+  const toggleVoiceInput = () => {
+    if (!recognitionRef.current) {
+      alert("Aapke browser me speech recognition support nahi hai. Chrome ya Edge use karein.");
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
+
+  const handleNewChat = () => {
+    if (loading && abortControllerRef.current) abortControllerRef.current.abort();
     const newId = String(Date.now());
     const newSession = { id: newId, title: "New chat", messages: [] };
     setSessions((prev) => [newSession, ...prev]);
@@ -78,19 +124,38 @@ export default function App() {
     }
   };
 
-  const handleSend = async (overrideText = null) => {
+  const exportChat = () => {
+    if (!currentSession.messages || currentSession.messages.length === 0) return;
+    let exportContent = `# ${currentSession.title}\nExported from Rishova AI\n\n---\n\n`;
+    currentSession.messages.forEach((m) => {
+      const speaker = m.role === "user" ? "### 👤 User" : "### 🤖 Rishova AI";
+      exportContent += `${speaker}\n\n${m.content}\n\n---\n\n`;
+    });
+
+    const blob = new Blob([exportContent], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${currentSession.title.replace(/[^a-zA-Z0-9]/g, "_")}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSend = async (overrideText = null, customHistory = null) => {
     const text = (overrideText || input).trim();
     if (!text || loading) return;
 
     const userMsg = { role: "user", content: text };
     const initialAiMsg = { role: "assistant", content: "" };
 
-    // Build the full context including previous messages
-    const previousHistory = currentSession.messages.filter(m => m.content.trim() !== "");
-    const conversationPayload = [...previousHistory, userMsg];
-    const updatedMessages = [...previousHistory, userMsg, initialAiMsg];
+    const baseHistory = customHistory !== null 
+      ? customHistory 
+      : currentSession.messages.filter((m) => m.content.trim() !== "");
 
-    const isFirst = previousHistory.length === 0;
+    const conversationPayload = [...baseHistory, userMsg];
+    const updatedMessages = [...baseHistory, userMsg, initialAiMsg];
+
+    const isFirst = baseHistory.length === 0;
     const newTitle = isFirst ? (text.slice(0, 26) + (text.length > 26 ? "..." : "")) : currentSession.title;
 
     setSessions((prev) =>
@@ -110,6 +175,7 @@ export default function App() {
         body: JSON.stringify({
           prompt: text,
           messages: conversationPayload,
+          model: selectedModel,
           user_email: "Rishikesh"
         }),
         signal: abortControllerRef.current.signal
@@ -150,6 +216,19 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Edit Message trigger
+  const triggerEdit = (idx, currentMsg) => {
+    setEditingIndex(idx);
+    setEditText(currentMsg);
+  };
+
+  const submitEdit = (idx) => {
+    if (!editText.trim()) return;
+    const trimmedHistory = currentSession.messages.slice(0, idx);
+    setEditingIndex(null);
+    handleSend(editText, trimmedHistory);
   };
 
   const copyToClipboard = (text, key) => {
@@ -204,7 +283,27 @@ export default function App() {
               ☰
             </button>
             <span className="brand-name">Rishova AI</span>
-            <span className="model-badge">Qwen 3 (27B Engine)</span>
+            
+            {/* Model Switcher Dropdown */}
+            <select
+              className="model-select-dropdown"
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+            >
+              {AVAILABLE_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="topbar-right">
+            {currentSession.messages.length > 0 && (
+              <button className="export-btn" onClick={exportChat} title="Download chat as Markdown">
+                📥 Export
+              </button>
+            )}
           </div>
         </header>
 
@@ -233,7 +332,30 @@ export default function App() {
 
                   <div className="bubble">
                     {m.role === "user" ? (
-                      <div className="user-text">{m.content}</div>
+                      editingIndex === idx ? (
+                        <div className="edit-box-wrapper">
+                          <textarea
+                            className="edit-textarea"
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                          />
+                          <div className="edit-buttons">
+                            <button className="edit-btn save" onClick={() => submitEdit(idx)}>Save & Submit</button>
+                            <button className="edit-btn cancel" onClick={() => setEditingIndex(null)}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="user-text-container">
+                          <div className="user-text">{m.content}</div>
+                          <button
+                            className="edit-trigger-btn"
+                            title="Edit message"
+                            onClick={() => triggerEdit(idx, m.content)}
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                      )
                     ) : (
                       <div className="markdown-body">
                         {m.content === "" && loading ? (
@@ -321,6 +443,16 @@ export default function App() {
               }}
               placeholder="Message Rishova AI..."
             />
+
+            {/* Voice Input Button */}
+            <button
+              className={`mic-btn ${isListening ? "listening" : ""}`}
+              onClick={toggleVoiceInput}
+              title={isListening ? "Listening... click to stop" : "Speak (Voice input)"}
+            >
+              🎤
+            </button>
+
             {loading ? (
               <button className="stop-btn" onClick={stopGenerating} title="Stop generating">
                 ■

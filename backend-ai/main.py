@@ -22,10 +22,10 @@ app.add_middleware(
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-CANDIDATE_MODELS = [
-    "qwen/qwen3.6-27b",
-    "qwen/qwen3.8-27b",
-    "allam-2-7b"
+AVAILABLE_MODELS = [
+    {"id": "qwen/qwen3.6-27b", "name": "Qwen 3.6 (27B) - Smart & Fast"},
+    {"id": "qwen/qwen3.8-27b", "name": "Qwen 3.8 (27B) - Deep Reasoner"},
+    {"id": "allam-2-7b", "name": "Allam 2 (7B) - Ultra Fast"}
 ]
 
 class MessageItem(BaseModel):
@@ -40,7 +40,7 @@ class UniversalRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"status": "RISHOVA AI Studio is Live", "models": CANDIDATE_MODELS}
+    return {"status": "RISHOVA AI Studio is Live", "models": AVAILABLE_MODELS}
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
@@ -58,21 +58,21 @@ async def handle_universal_prompt(req: UniversalRequest):
 
     groq_messages = [system_message]
 
-    # Clean and append conversation history
     if req.messages and len(req.messages) > 0:
         for m in req.messages[-10:]:
-            # Filter out empty or thinking tokens from history
             clean_content = re.sub(r"<think>[\s\S]*?</think>", "", m.content).strip()
             if clean_content:
                 groq_messages.append({"role": m.role, "content": clean_content})
     else:
         groq_messages.append({"role": "user", "content": req.prompt.strip()})
 
-    chosen_model = req.model if req.model in CANDIDATE_MODELS else CANDIDATE_MODELS[0]
+    chosen_model = req.model if any(m["id"] == req.model for m in AVAILABLE_MODELS) else AVAILABLE_MODELS[0]["id"]
 
     def generate():
         stream = None
-        for m_name in [chosen_model] + [m for m in CANDIDATE_MODELS if m != chosen_model]:
+        candidate_ids = [chosen_model] + [m["id"] for m in AVAILABLE_MODELS if m["id"] != chosen_model]
+        
+        for m_name in candidate_ids:
             try:
                 stream = client.chat.completions.create(
                     model=m_name,
@@ -100,13 +100,11 @@ async def handle_universal_prompt(req: UniversalRequest):
 
                 buffer += token
 
-                # If <think> tag starts, suppress it
                 if "<think>" in buffer:
                     in_think_block = True
                 
                 if in_think_block:
                     if "</think>" in buffer:
-                        # Extract everything after </think>
                         parts = buffer.split("</think>", 1)
                         clean_part = parts[1].lstrip()
                         in_think_block = False

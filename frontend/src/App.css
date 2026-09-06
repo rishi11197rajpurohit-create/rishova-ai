@@ -503,4 +503,136 @@ body, html {
 .code-block-wrapper code {
   white-space: pre !important;
   display: block !important;
+}/* Topbar right items & Model selector */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.model-select-dropdown {
+  background: #f0f0f0;
+  border: 1px solid #dcdcdc;
+  color: #0d0d0d;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+.export-btn {
+  background: transparent;
+  border: 1px solid #dcdcdc;
+  color: #555;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.export-btn:hover {
+  background: #f0f0f0;
+  color: #0d0d0d;
+}
+
+/* Voice input mic button */
+.mic-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.15rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+
+.mic-btn:hover {
+  transform: scale(1.1);
+}
+
+.mic-btn.listening {
+  background: #ffebeb;
+  border-radius: 50%;
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* User text edit container */
+.user-text-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-trigger-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.message-row.user:hover .edit-trigger-btn {
+  opacity: 0.7;
+}
+
+.edit-trigger-btn:hover {
+  opacity: 1 !important;
+}
+
+.edit-box-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.edit-textarea {
+  width: 100%;
+  min-height: 70px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  outline: none;
+  resize: vertical;
+}
+
+.edit-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.edit-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.edit-btn.save {
+  background: #0d0d0d;
+  color: #fff;
+  border: none;
+}
+
+.edit-btn.cancel {
+  background: #f0f0f0;
+  color: #555;
+  border: 1px solid #ccc;
 }
