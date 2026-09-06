@@ -8,9 +8,9 @@ import "./App.css";
 const BACKEND_URL = "https://rishova-ai-backend.onrender.com";
 
 const AVAILABLE_MODELS = [
-  { id: "qwen/qwen3.6-27b", label: "Qwen 3.6 (27B)" },
-  { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 (27B)" },
-  { id: "allam-2-7b", label: "Allam 2 (7B Fast)" }
+  { id: "llama-3.3-70b-versatile", label: "Llama 3.3 (70B Smart)" },
+  { id: "llama-3.1-8b-instant", label: "Llama 3.1 (8B Fast)" },
+  { id: "qwen/qwen3.6-27b", label: "Qwen 3.6 (27B)" }
 ];
 
 export default function App() {
@@ -29,7 +29,7 @@ export default function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [selectedModel, setSelectedModel] = useState("qwen/qwen3.6-27b");
+ const [selectedModel, setSelectedModel] = useState("llama-3.3-70b-versatile");
   const [copiedKey, setCopiedKey] = useState(null);
 
   const [isListening, setIsListening] = useState(false);

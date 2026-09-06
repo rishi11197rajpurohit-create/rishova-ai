@@ -23,9 +23,9 @@ app.add_middleware(
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 AVAILABLE_MODELS = [
-    {"id": "qwen/qwen3.6-27b", "name": "Qwen 3.6 (27B) - Smart & Fast"},
-    {"id": "qwen/qwen3.8-27b", "name": "Qwen 3.8 (27B) - Deep Reasoner"},
-    {"id": "allam-2-7b", "name": "Allam 2 (7B) - Ultra Fast"}
+    {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 (70B) - Ultra Smart"},
+    {"id": "llama-3.1-8b-instant", "name": "Llama 3.1 (8B) - Super Fast"},
+    {"id": "qwen/qwen3.6-27b", "name": "Qwen 3.6 (27B)"}
 ]
 
 class MessageItem(BaseModel):
@@ -35,7 +35,7 @@ class MessageItem(BaseModel):
 class UniversalRequest(BaseModel):
     prompt: str
     messages: Optional[List[MessageItem]] = None
-    model: str = "qwen/qwen3.6-27b"
+    model: str = "llama-3.3-70b-versatile"
     user_email: str = "Rishikesh"
 
 @app.get("/")
@@ -47,21 +47,22 @@ async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, a brilliant, professional, and helpful AI assistant created for Rishikesh. "
-            "CRITICAL OPERATIONAL RULES:\n"
-            "1. NEVER output <think> tags, chain-of-thought, draft outlines, or planning steps. Always jump straight into the direct answer.\n"
-            "2. Seamlessly remember and reference previous turns of the ongoing conversation.\n"
-            "3. Provide clean markdown with proper syntax highlighting for code blocks.\n"
-            "4. Respond naturally in Hindi, Hinglish, or English based on the user's language."
+            "You are Rishova AI, a world-class AI assistant created for Rishikesh. "
+            "Follow these rules strictly:\n"
+            "1. Deliver clear, detailed, and directly helpful answers.\n"
+            "2. Never output reasoning drafts, outlines, or <think> tags.\n"
+            "3. Seamlessly support Hindi, Hinglish, and English matching the user's prompt.\n"
+            "4. Remember the context of earlier conversation messages."
         )
     }
 
     groq_messages = [system_message]
 
+    # Keep last 6 clean messages to prevent token overflow
     if req.messages and len(req.messages) > 0:
-        for m in req.messages[-10:]:
+        for m in req.messages[-6:]:
             clean_content = re.sub(r"<think>[\s\S]*?</think>", "", m.content).strip()
-            if clean_content:
+            if clean_content and clean_content != "Kripya dobara message bhejein.":
                 groq_messages.append({"role": m.role, "content": clean_content})
     else:
         groq_messages.append({"role": "user", "content": req.prompt.strip()})
@@ -71,22 +72,24 @@ async def handle_universal_prompt(req: UniversalRequest):
     def generate():
         stream = None
         candidate_ids = [chosen_model] + [m["id"] for m in AVAILABLE_MODELS if m["id"] != chosen_model]
-        
+        last_error = ""
+
         for m_name in candidate_ids:
             try:
                 stream = client.chat.completions.create(
                     model=m_name,
                     messages=groq_messages,
-                    temperature=0.3,
-                    max_tokens=850,
+                    temperature=0.4,
+                    max_tokens=1500,
                     stream=True
                 )
                 break
-            except Exception:
+            except Exception as e:
+                last_error = str(e)
                 continue
 
         if not stream:
-            yield "Service is currently busy. Please try again in a few seconds."
+            yield f"Service busy or rate limit reached. Details: {last_error[:120]}"
             return
 
         in_think_block = False
