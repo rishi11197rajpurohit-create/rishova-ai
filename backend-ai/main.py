@@ -38,7 +38,41 @@ class UniversalRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"status": "Rishova AI Live"}
+    return {"status": "Rishova AI Dynamic Engine Live"}
+
+def get_available_chat_models() -> List[str]:
+    """Dynamically fetches all currently active and valid text-generation models from your Groq account"""
+    try:
+        model_list = client.models.list().data
+        # Exclude audio, embeddings, safety, and vision-only models
+        exclude_keywords = ["whisper", "guard", "safeguard", "embed", "vision", "compound"]
+        usable = [
+            m.id for m in model_list 
+            if not any(bad in m.id.lower() for bad in exclude_keywords)
+        ]
+        
+        # Sort so flagship/larger models are prioritized first
+        def model_rank(m_id: str):
+            mid = m_id.lower()
+            if "70b" in mid:
+                return 1
+            if "llama-3.3" in mid:
+                return 2
+            if "llama-3" in mid:
+                return 3
+            if "gemma" in mid:
+                return 4
+            if "mixtral" in mid:
+                return 5
+            return 10
+
+        usable.sort(key=model_rank)
+        if usable:
+            return usable
+    except Exception:
+        pass
+    # Safe universal fallbacks
+    return ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
 
 def run_vision_ocr(image_bytes: bytes) -> str:
     try:
@@ -59,7 +93,7 @@ def run_vision_ocr(image_bytes: bytes) -> str:
                     "content": [
                         {
                             "type": "text", 
-                            "text": "Extract all text accurately: Student/Candidate Name, Course Name, Organization, Issue Date, Certificate ID."
+                            "text": "Extract all text accurately: Student/Candidate Name, Course, Issuing Body, Date, Certificate ID."
                         },
                         {
                             "type": "image_url",
@@ -143,7 +177,7 @@ REAL_PHOTO_DATABASE = {
     "hawa mahal": {
         "title": "हवा महल, जयपुर (Hawa Mahal)",
         "url": "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=1200&q=80",
-        "desc": "1799 में सवाई प्रताप सिंह द्वारा निर्मित 953 खिड़कियों (झरोखों) वाला पाँच मंजिला गुलाबी स्थापत्य।"
+        "desc": "1799 में सवाई प्रताप सिंह द्वारा निर्मित 953 खिड़कियों वाला पाँच मंजिला गुलाबी महल।"
     }
 }
 
@@ -177,18 +211,18 @@ async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, an elite AI assistant comparable to ChatGPT-4o and Claude 3.5 Sonnet.\n\n"
+            "You are Rishova AI, a world-class AI assistant comparable to ChatGPT-4o and Claude 3.5 Sonnet.\n\n"
             "MANDATORY HISTORICAL & FACTUAL ACCURACY:\n"
-            "1. STRICT HISTORICAL TRUTH: Never fabricate facts, dates, or figures.\n"
+            "1. ZERO HALLUCINATIONS: Strict historical grounding. Key historical truths:\n"
             "   - Chittorgarh Fort: Built in the 7th century by Chitrangada Mori (Mauryan ruler). Famous for 3 major Jauhars:\n"
             "     * 1st Jauhar (1303): Alauddin Khalji vs Rana Ratan Singh; Rani Padmini led the Jauhar.\n"
             "     * 2nd Jauhar (1535): Bahadur Shah of Gujarat attacked; Rani Karnavati led the Jauhar.\n"
             "     * 3rd Jauhar (1567-68): Mughal Emperor Akbar attacked; defended heroically by Jaimal Rathore and Patta Chundawat.\n"
-            "     * Major monuments: Vijay Stambha (built by Maharana Kumbha), Kirti Stambha, Padmini Palace, Gaumukh Reservoir, Meerabai Temple.\n"
+            "     * Major structures: Vijay Stambha (built by Maharana Kumbha), Kirti Stambha, Padmini Palace, Gaumukh Reservoir, Meerabai Temple.\n"
             "   - Mehrangarh Fort: Founded in 1459 by Rao Jodha on Chidiyatunk hill.\n"
-            "2. EXCELLENT STRUCTURE: Present answers with clean Markdown headings, bullet points, and neat tables where appropriate. Never loop words or repeat phrases.\n"
-            "3. REGIONAL DIALECTS: Speak Marwari, Rajasthani, Hindi, and English natively matching the user's inquiry.\n"
-            "4. NO METADATA: Provide the direct final answer cleanly."
+            "2. STRUCTURE & DEPTH: Provide comprehensive, well-formatted answers using clear Markdown headings, bullet points, and neat tables. Never repeat looped phrases.\n"
+            "3. REGIONAL DIALECTS: Speak Marwari, Rajasthani, Hindi, and English natively.\n"
+            "4. NO METADATA: Output only the direct answer cleanly."
         )
     }
 
@@ -206,17 +240,15 @@ async def handle_universal_prompt(req: UniversalRequest):
 
     groq_messages.append({"role": "user", "content": user_input})
 
-    # Only currently active Groq models (Removed decommissioned 3.1-70b)
-    preferred_models = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant"
-    ]
+    # AUTO-DISCOVERY: Fetch all active models dynamically from Groq account
+    active_models = get_available_chat_models()
 
     def generate():
         stream = None
         last_error = ""
 
-        for model_name in preferred_models:
+        # Loop through every active model available in your account
+        for model_name in active_models:
             try:
                 stream = client.chat.completions.create(
                     model=model_name,
@@ -233,7 +265,7 @@ async def handle_universal_prompt(req: UniversalRequest):
                 continue
 
         if not stream:
-            yield f"AI Server Busy: {last_error[:100]}. Kripya 5 second baad dobara bhein."
+            yield f"AI Server Busy: {last_error[:100]}. Kripya 5 second baad dobara try karein."
             return
 
         in_think_block = False
