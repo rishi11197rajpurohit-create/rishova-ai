@@ -4,6 +4,5 @@ groq
 pydantic
 python-dotenv
 pypdf
-PyMuPDF
 Pillow
 python-multipart
