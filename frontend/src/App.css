@@ -839,4 +839,19 @@ body {
 
 .markdown-body tr:hover {
   background-color: rgba(128, 128, 128, 0.1);
+}/* ================= AI GENERATED IMAGE STYLING ================= */
+.markdown-body img {
+  max-width: 100%;
+  width: 520px;
+  height: auto;
+  border-radius: 14px;
+  margin: 14px 0;
+  display: block;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.markdown-body img:hover {
+  transform: scale(1.01);
 }

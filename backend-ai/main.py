@@ -1,7 +1,9 @@
 import os
 import io
 import re
+import base64
 import urllib.request
+import urllib.parse
 import json
 from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File
@@ -40,13 +42,13 @@ def read_root():
     return {"status": "Rishova AI Universal Engine Live"}
 
 def get_quick_facts(query: str) -> str:
-    """Instant, non-blocking facts from Wikipedia without external dependencies"""
+    """Instant facts from Wikipedia without external delays"""
     try:
         clean = re.sub(r'[^\w\s]', '', query).strip()
-        stop_words = ["btao", "kya", "hai", "ke", "bare", "me", "ri", "ra", "ro", "mhane", "batavo", "batao"]
+        stop_words = ["btao", "kya", "hai", "ke", "bare", "me", "ri", "ra", "ro", "mhane", "batavo", "batao", "image", "photo", "bnao", "generate"]
         words = [w for w in clean.split() if w.lower() not in stop_words]
         search_term = " ".join(words[:2]) if words else clean
-        if not search_term:
+        if not search_term or len(search_term) < 3:
             return ""
 
         url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(search_term)}"
@@ -55,10 +57,40 @@ def get_quick_facts(query: str) -> str:
             data = json.loads(response.read().decode('utf-8'))
             extract = data.get("extract", "")
             if extract:
-                return f"\n[VERIFIED HISTORICAL FACTS FOR REFERENCE]:\n{extract}\n"
+                return f"\n[VERIFIED HISTORICAL FACTS]:\n{extract}\n"
     except Exception:
         pass
     return ""
+
+def run_vision_ocr(image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
+    """Extract full readable text and data from scanned certificate/image using Groq Vision"""
+    try:
+        b64_img = base64.b64encode(image_bytes).decode("utf-8")
+        data_url = f"data:{mime_type};base64,{b64_img}"
+
+        response = client.chat.completions.create(
+            model="llama-3.2-11b-vision-preview",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text", 
+                            "text": "Perform exact OCR extraction: Read and list all text, names, dates, certificate IDs, titles, issuing organizations, and tabular figures clearly."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": data_url}
+                        }
+                    ]
+                }
+            ],
+            temperature=0.1,
+            max_tokens=800
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return ""
 
 @app.post("/api/upload")
 async def extract_multiple_files(files: List[UploadFile] = File(...)):
@@ -67,20 +99,38 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
         try:
             content_bytes = await file.read()
             extracted_text = ""
+            filename_lower = file.filename.lower()
 
-            if file.filename.lower().endswith(".pdf"):
+            if filename_lower.endswith(".pdf"):
                 pdf_file = io.BytesIO(content_bytes)
                 reader = PdfReader(pdf_file)
+                # 1. Try standard text extraction
                 for page in reader.pages[:8]:
-                    text = page.extract_text()
-                    if text:
-                        extracted_text += text + "\n"
+                    t = page.extract_text()
+                    if t:
+                        extracted_text += t + "\n"
+
+                # 2. If scanned / empty text, extract image from first page and run Vision OCR
+                if not extracted_text.strip():
+                    for page in reader.pages[:2]:
+                        if hasattr(page, "images") and len(page.images) > 0:
+                            first_img = page.images[0]
+                            ocr_result = run_vision_ocr(first_img.data, mime_type="image/png")
+                            if ocr_result:
+                                extracted_text += f"\n[OCR Vision Extracted Content]:\n{ocr_result}\n"
+                                break
+
+            elif any(filename_lower.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp"]):
+                mime = "image/png" if filename_lower.endswith(".png") else "image/jpeg"
+                ocr_result = run_vision_ocr(content_bytes, mime_type=mime)
+                if ocr_result:
+                    extracted_text = f"[OCR Image Content]:\n{ocr_result}"
             else:
                 extracted_text = content_bytes.decode("utf-8", errors="ignore")
 
             clean_text = extracted_text.strip()
             if not clean_text:
-                clean_text = f"[Document: {file.filename}]"
+                clean_text = f"[Document Attached: {file.filename}]"
 
             if len(clean_text) > 3500:
                 clean_text = clean_text[:3500] + "\n[... Truncated ...]"
@@ -106,12 +156,19 @@ async def handle_universal_prompt(req: UniversalRequest):
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, a polyglot, highly intelligent assistant identical to ChatGPT Plus.\n\n"
-            "RULES:\n"
-            "1. FACTUAL HONESTY: Never fabricate historical figures or details. (E.g. Mehrangarh Fort was built by Rao Jodha in 1459 on Chidiyatunk hill; Famous gates: Jai Pol, Fateh Pol, Dedh Kangra Pol, Loha Pol; Palaces: Moti Mahal, Phool Mahal, Sheesh Mahal; Maharana Pratap belonged to Sisodia dynasty of Mewar).\n"
-            "2. REGIONAL DIALECTS: If asked in Marwari/Rajasthani (e.g. 'म्हाने बताओ', 'किला री खास बातां'), reply purely in authentic Marwari language with polite cultural warmth (खम्मा घणी, सा). If in Hindi, reply in Hindi.\n"
-            "3. NO THINKING TAGS: Do not include drafts, thoughts, or <think> tags. Jump directly to the final answer.\n"
-            "4. BEAUTIFUL LAYOUT: Use Markdown tables and clean formatting."
+            "You are Rishova AI, an elite AI assistant comparable to ChatGPT Plus and Gemini.\n\n"
+            "MANDATORY CAPABILITIES:\n"
+            "1. AI IMAGE GENERATION (DALL-E 3 Equivalent):\n"
+            "   When the user requests to generate, create, draw, or make an image/photo/artwork (e.g., 'generate image of...', 'ek photo banao', 'tasveer banao'):\n"
+            "   Translate the subject into a rich, detailed English prompt and output a Markdown image EXACTLY like this:\n"
+            "   ![Generated Image](https://image.pollinations.ai/prompt/<URL_ENCODED_ENGLISH_PROMPT>?width=1024&height=1024&nologo=true&seed=42)\n"
+            "   Followed by a polite, brief caption in the user's language.\n\n"
+            "2. ACCURACY & DOCUMENT INTELLIGENCE:\n"
+            "   When analyzing attached documents or OCR extractions, accurately cite the person's name, certificate title, dates, and institutions without guessing.\n\n"
+            "3. REGIONAL DIALECTS & LANGUAGES:\n"
+            "   Fluently speak Marwari, Mewari, Rajasthani, Hindi, Hinglish, English, and all global languages. Mirror the user's language naturally.\n\n"
+            "4. CLEAN PRESENTATION:\n"
+            "   Never leak <think> tags or internal notes. Use Markdown tables and clean bullet points."
         )
     }
 
@@ -130,8 +187,8 @@ async def handle_universal_prompt(req: UniversalRequest):
     final_user_content = user_input + (facts if facts else "")
     groq_messages.append({"role": "user", "content": final_user_content})
 
-    # Dynamically fetch ALL active models from user's live Groq account (No hardcoding)
-    banned = ["whisper", "guard", "compound", "safeguard", "embed"]
+    # Available text models
+    banned = ["whisper", "guard", "compound", "safeguard", "embed", "vision"]
     try:
         models_data = client.models.list().data
         active_models = [m.id for m in models_data if not any(b in m.id for b in banned)]
@@ -142,7 +199,6 @@ async def handle_universal_prompt(req: UniversalRequest):
         stream = None
         error_msg = ""
 
-        # Auto-fallback across live available models
         for model_name in active_models:
             try:
                 stream = client.chat.completions.create(
