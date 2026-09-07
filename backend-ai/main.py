@@ -38,41 +38,7 @@ class UniversalRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"status": "Rishova AI Dynamic Engine Live"}
-
-def get_available_chat_models() -> List[str]:
-    """Dynamically fetches all currently active and valid text-generation models from your Groq account"""
-    try:
-        model_list = client.models.list().data
-        # Exclude audio, embeddings, safety, and vision-only models
-        exclude_keywords = ["whisper", "guard", "safeguard", "embed", "vision", "compound"]
-        usable = [
-            m.id for m in model_list 
-            if not any(bad in m.id.lower() for bad in exclude_keywords)
-        ]
-        
-        # Sort so flagship/larger models are prioritized first
-        def model_rank(m_id: str):
-            mid = m_id.lower()
-            if "70b" in mid:
-                return 1
-            if "llama-3.3" in mid:
-                return 2
-            if "llama-3" in mid:
-                return 3
-            if "gemma" in mid:
-                return 4
-            if "mixtral" in mid:
-                return 5
-            return 10
-
-        usable.sort(key=model_rank)
-        if usable:
-            return usable
-    except Exception:
-        pass
-    # Safe universal fallbacks
-    return ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
+    return {"status": "Rishova AI Active"}
 
 def run_vision_ocr(image_bytes: bytes) -> str:
     try:
@@ -93,7 +59,7 @@ def run_vision_ocr(image_bytes: bytes) -> str:
                     "content": [
                         {
                             "type": "text", 
-                            "text": "Extract all text accurately: Student/Candidate Name, Course, Issuing Body, Date, Certificate ID."
+                            "text": "Extract all text accurately: Student/Candidate Name, Course, Issuing Organization, Date, Certificate ID."
                         },
                         {
                             "type": "image_url",
@@ -157,7 +123,7 @@ REAL_PHOTO_DATABASE = {
     "jaisalmer": {
         "title": "जैसलमेर का सोनार किला (Jaisalmer Fort)",
         "url": "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?auto=format&fit=crop&w=1200&q=80",
-        "desc": "जैसलमेर का सोनार किला पीले बलुआ पत्थर से निर्मित यूनेस्को विश्व धरोहर स्थल है, जो थार रेगिस्तान की त्रिकूट पहाड़ी पर स्थित है।"
+        "desc": "जैसलमेर का सोनार किला पीले बलुआ पत्थर से निर्मित यूनेस्को विश्व धरोहर स्थल है।"
     },
     "mehrangarh": {
         "title": "मेहरानगढ़ किला, जोधपुर (Mehrangarh Fort)",
@@ -167,12 +133,12 @@ REAL_PHOTO_DATABASE = {
     "chittorgarh": {
         "title": "चित्तौड़गढ़ दुर्ग (Chittorgarh Fort)",
         "url": "https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=1200&q=80",
-        "desc": "चित्तौड़गढ़ दुर्ग भारत का सबसे विशाल किला है, जो तीन ऐतिहासिक जौहर, विजय स्तम्भ और मीरा बाई के मंदिर के लिए प्रसिद्ध है।"
+        "desc": "चित्तौड़गढ़ दुर्ग भारत का सबसे विशाल किला है, जो तीन ऐतिहासिक जौहर और विजय स्तम्भ के लिए प्रसिद्ध है।"
     },
     "aamer": {
         "title": "आमेर का किला, जयपुर (Amer Fort)",
         "url": "https://images.unsplash.com/photo-1599661046827-dacff0c0f09a?auto=format&fit=crop&w=1200&q=80",
-        "desc": "जयपुर का आमेर दुर्ग हिन्दू-राजपूत स्थापत्य कला का उत्कृष्ट उदाहरण है, जो अपने शीश महल और भव्य द्वारों के लिए प्रसिद्ध है।"
+        "desc": "जयपुर का आमेर दुर्ग हिन्दू-राजपूत स्थापत्य कला का उत्कृष्ट उदाहरण है।"
     },
     "hawa mahal": {
         "title": "हवा महल, जयपुर (Hawa Mahal)",
@@ -208,23 +174,25 @@ async def handle_universal_prompt(req: UniversalRequest):
             yield f"![{title}]({photo_url})\n\n### 🏛️ {title}\n\n{caption}"
         return StreamingResponse(send_photo(), media_type="text/plain")
 
+    # Strict ChatGPT-4o Persona with Uncompromising Factual Accuracy
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, modeled directly after ChatGPT-4o by OpenAI.\n\n"
-            "RESPONSE STYLE & TONE GUIDELINES:\n"
-            "1. CHATGPT ARCHITECTURE:\n"
-            "   - Start directly with an engaging, well-formatted title (using emojis like 🏰, 📍, 📜).\n"
-            "   - Begin with a 2-3 line strong introduction paragraph.\n"
-            "   - Divide the explanation into clear numbered sections with bold headings (e.g., '### 📍 1. चित्तौड़गढ़ किला कहाँ स्थित है?', '### 📜 2. चित्तौड़गढ़ किले का इतिहास').\n"
-            "   - Use clean, well-spaced bullet points for key features and events.\n"
-            "2. NATURAL LANGUAGE MIRRORING:\n"
-            "   - If the user asks in Hinglish (e.g., 'vistar se samjhao'), reply in clear, professional, natural Hindi mixed with familiar English terms—exactly like ChatGPT.\n"
-            "   - Do NOT force arbitrary dialect translations (like 'भाषा मिश्रण' or forced Marwari) unless specifically requested by the user.\n"
-            "3. HISTORICAL TRUTH:\n"
-            "   - Chittorgarh: Built in the 7th century by Chitrangada Mori. Famous for 3 Jauhars (1303 - Alauddin Khalji vs Rana Ratan Singh / Rani Padmini; 1535 - Bahadur Shah vs Rani Karnavati; 1567-68 - Akbar vs Jaimal & Patta).\n"
-            "   - Monuments: Vijay Stambha, Kirti Stambha, Padmini Palace, Gaumukh Reservoir.\n"
-            "4. NO METADATA: Deliver the clean response immediately without internal logs."
+            "You are Rishova AI, an elite AI assistant comparable to ChatGPT-4o and Claude 3.5 Sonnet.\n\n"
+            "ACCURACY & FACTUAL ENFORCEMENT:\n"
+            "1. NO FICTION OR HALLUCINATIONS: You must provide strictly verified, authentic historical and general facts. Never invent names or words (like 'जलसेना', 'सिंहासन-सिंह', 'राणा केसरी सिंह').\n"
+            "2. CHITTORGARH GROUND TRUTH:\n"
+            "   - Built in the 7th century by Mauryan ruler Chitrangada Mori (चित्रांगद मौर्य).\n"
+            "   - Governed by the Guhila / Sisodia dynasty of Mewar.\n"
+            "   - 1st Saka/Jauhar (1303): Alauddin Khalji attacked Rana Ratan Singh. Rani Padmini led the Jauhar.\n"
+            "   - 2nd Saka/Jauhar (1535): Sultan Bahadur Shah of Gujarat attacked. Rani Karnavati led the Jauhar while Rawat Bagh Singh led the defense.\n"
+            "   - 3rd Saka/Jauhar (1567-1568): Mughal Emperor Akbar besieged the fort. Defended heroically by Jaimal Rathore and Patta Chundawat (Maharana Udai Singh II had shifted to the hills).\n"
+            "   - Key landmarks: Vijay Stambha (built by Maharana Kumbha), Kirti Stambha, Gaumukh Reservoir, Padmini Palace, Meerabai Temple.\n"
+            "3. RESPONSE FORMAT:\n"
+            "   - Clean, professional, well-structured output just like ChatGPT Classic.\n"
+            "   - Clear emoji subheadings (e.g. '### 📍 1. भौगोलिक स्थिति', '### 📜 2. ऐतिहासिक पृष्ठभूमि', '### ⚔️ 3. तीन प्रमुख साके व जौहर').\n"
+            "   - Bullet points for crisp readability.\n"
+            "4. NATURAL TONE: Respond in fluent, natural, grammatically correct Hindi or English according to the user prompt. Do not add forced Marwari translations unless explicitly asked."
         )
     }
 
@@ -242,35 +210,38 @@ async def handle_universal_prompt(req: UniversalRequest):
 
     groq_messages.append({"role": "user", "content": user_input})
 
-    # AUTO-DISCOVERY: Fetch all active models dynamically from Groq account
-    active_models = get_available_chat_models()
+    # High-accuracy primary model list
+    target_models = [
+        "llama-3.3-70b-versatile",
+        "llama3-70b-8192",
+        "llama-3.1-8b-instant"
+    ]
 
     def generate():
         stream = None
-        last_error = ""
+        last_err = ""
 
-        # Loop through every active model available in your account
-        for model_name in active_models:
+        for model_name in target_models:
             try:
                 stream = client.chat.completions.create(
                     model=model_name,
                     messages=groq_messages,
-                    temperature=0.3,
-                    presence_penalty=0.1,
-                    frequency_penalty=0.1,
-                    max_tokens=2500,
+                    temperature=0.15,  # Low temperature eliminates hallucinated words
+                    presence_penalty=0.0,
+                    frequency_penalty=0.0,
+                    max_tokens=2200,
                     stream=True
                 )
                 break
             except Exception as e:
-                last_error = str(e)
+                last_err = str(e)
                 continue
 
         if not stream:
-            yield f"AI Server Busy: {last_error[:100]}. Kripya 5 second baad dobara try karein."
+            yield f"AI Server Busy: {last_err[:100]}. Kripya 5 second baad dobara bhein."
             return
 
-        in_think_block = False
+        in_think = False
         buffer = ""
 
         try:
@@ -282,13 +253,13 @@ async def handle_universal_prompt(req: UniversalRequest):
                 buffer += token
 
                 if "<think>" in buffer:
-                    in_think_block = True
+                    in_think = True
                 
-                if in_think_block:
+                if in_think:
                     if "</think>" in buffer:
                         parts = buffer.split("</think>", 1)
                         clean_tail = parts[1].lstrip()
-                        in_think_block = False
+                        in_think = False
                         buffer = ""
                         if clean_tail:
                             yield clean_tail
