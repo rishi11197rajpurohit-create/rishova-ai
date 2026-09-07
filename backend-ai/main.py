@@ -3,6 +3,8 @@ import io
 import re
 import base64
 import urllib.parse
+import urllib.request
+import json
 from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,8 +42,38 @@ class UniversalRequest(BaseModel):
 def read_root():
     return {"status": "Rishova AI Engine Live"}
 
+def get_real_web_image(query: str):
+    """Fetches 100% real, authentic photo directly from Wikipedia/Web just like Gemini"""
+    try:
+        # Extract the core entity (e.g., Jaisalmer Fort, Mehrangarh, Thar Desert)
+        clean = re.sub(r'(ek|ki|sundar|photo|image|tasveer|tasvir|chitra|picture|banao|bnao|dikhao|batao|dikhaye|de|kile|kila|fort)', '', query, flags=re.IGNORECASE).strip()
+        words = clean.split()
+        entity = " ".join(words[:2]) if words else clean
+        
+        # Search Wikipedia Image API
+        search_url = f"https://en.wikipedia.org/w/api.php?action=query&titles={urllib.parse.quote(entity)}&prop=pageimages&format=json&pithumbsize=1000"
+        req = urllib.request.Request(search_url, headers={'User-Agent': 'RishovaAI/1.0'})
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            pages = data.get("query", {}).get("pages", {})
+            for pid, page in pages.items():
+                if "thumbnail" in page:
+                    return page["thumbnail"]["source"], page.get("title", entity)
+
+        # Secondary search with 'fort' or entity attached
+        search_url2 = f"https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(query)}&gsrlimit=1&prop=pageimages&format=json&pithumbsize=1000"
+        req2 = urllib.request.Request(search_url2, headers={'User-Agent': 'RishovaAI/1.0'})
+        with urllib.request.urlopen(req2, timeout=1.5) as resp2:
+            data2 = json.loads(resp2.read().decode('utf-8'))
+            pages2 = data2.get("query", {}).get("pages", {})
+            for pid, page in pages2.items():
+                if "thumbnail" in page:
+                    return page["thumbnail"]["source"], page.get("title", entity)
+    except Exception:
+        pass
+    return None, None
+
 def run_vision_ocr(image_bytes: bytes) -> str:
-    """Accurate OCR using Groq Vision"""
     try:
         img = Image.open(io.BytesIO(image_bytes))
         if img.mode != "RGB":
@@ -126,55 +158,40 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
 
     return {"files": results}
 
-def build_dslr_prompt(user_text: str) -> str:
-    """Instant translation to DSLR camera photography prompt without any waiting"""
-    t = user_text.lower()
-    
-    # Check subjects instantly
-    if any(w in t for w in ["kile", "kila", "fort", "mahal", "palace"]):
-        core = "Authentic Mehrangarh Jodhpur fort Rajasthan, towering historic yellow sandstone architecture, massive battlements, natural sunny day blue sky"
-    elif any(w in t for w in ["registan", "thar", "desert", "camel", "oont"]):
-        core = "Thar desert Rajasthan sand dunes, camel rider in traditional poshak, golden afternoon light"
-    elif any(w in t for w in ["car", "gaadi"]):
-        core = "Modern sports luxury car on desert highway, cinematic angle"
-    else:
-        # Generic clean extraction
-        clean = re.sub(r'(ek|ki|sundar|photo|image|tasveer|tasvir|chitra|picture|banao|bnao|bana do|bna do|generate|create|make|draw|dikhao|ye|एक|की|सुंदर|फोटो|तस्वीर|चित्र|बनाओ|दिखाओ)', '', user_text, flags=re.IGNORECASE).strip()
-        core = clean if len(clean) > 2 else "historic rajasthan royal fort"
-
-    # DSLR RAW camera realism parameters
-    return f"A real authentic documentary DSLR photograph of {core}, shot on Canon EOS R5 with 35mm lens, natural daylight, real stone textures, genuine sharp shadows, authentic heritage details, high shutter speed, National Geographic travel documentary photography style, no CGI, no painting, no illustration, pure reality"
-
-def is_image_generation_intent(prompt: str) -> bool:
+def is_image_request(prompt: str) -> bool:
     p = prompt.lower().strip()
     img_words = ["photo", "image", "tasveer", "tasvir", "chitra", "picture", "फोटो", "तस्वीर", "चित्र"]
-    act_words = ["banao", "bnao", "bana do", "bna do", "generate", "create", "make", "draw", "dikhao", "बनाओ", "बना दो", "दिखाओ"]
-    return any(w in p for w in img_words) and any(w in p for w in act_words)
+    return any(w in p for w in img_words)
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
     user_input = req.prompt.strip()
 
-    # INSTANT REAL-PHOTO GENERATION (0.01 sec execution - No LLM delay)
-    if is_image_generation_intent(user_input):
-        dslr_prompt = build_dslr_prompt(user_input)
-        encoded = urllib.parse.quote(dslr_prompt)
-        # Using Flux Realism & photorealistic engine with high-speed delivery
-        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1200&height=800&model=flux-realism&nologo=true&enhance=true"
+    # REAL PHOTO RETRIEVAL (Just like Gemini Web Grounding)
+    if is_image_request(user_input):
+        real_img_url, title = get_real_web_image(user_input)
+        if real_img_url:
+            def send_real_photo():
+                yield f"![{title}]({real_img_url})\n\nयह रही **{title}** की असली (Original) तस्वीर।"
+            return StreamingResponse(send_real_photo(), media_type="text/plain")
 
-        def stream_photo():
-            yield f"![{dslr_prompt}]({image_url})\n\n📷 **असली कैमरे (DSLR High-Resolution) द्वारा ली गई प्रामाणिक फ़ोटो प्रस्तुत है!**"
-        return StreamingResponse(stream_photo(), media_type="text/plain")
+        # Fallback to AI Generation if no real-world entity found
+        clean_subj = re.sub(r'(ek|ki|sundar|photo|image|tasveer|banao|bnao|dikhao)', '', user_input, flags=re.IGNORECASE).strip()
+        encoded = urllib.parse.quote(clean_subj or "Rajasthan fort architecture")
+        gen_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1200&height=800&nologo=true"
+        def send_gen_photo():
+            yield f"![{clean_subj}]({gen_url})\n\nयह रही तस्वीर।"
+        return StreamingResponse(send_gen_photo(), media_type="text/plain")
 
     # Standard LLM Chat Handler
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, built for Rishikesh with high factual precision.\n\n"
+            "You are Rishova AI, an elite assistant with ChatGPT Plus factual precision.\n\n"
             "RULES:\n"
-            "1. CERTIFICATE / OCR: Extract exact student name and course details from attached documents.\n"
-            "2. REGIONAL DIALECTS: Speak Marwari, Rajasthani, Hindi, English natively.\n"
-            "3. NO LEAKS: No internal thoughts or think tags."
+            "1. CERTIFICATE DETAILS: Accurate name, roll number, course info from uploaded documents.\n"
+            "2. REGIONAL DIALECTS: Speak Marwari, Rajasthani, Hindi natively.\n"
+            "3. NO LEAKS: No internal thinking tags."
         )
     }
 
