@@ -169,7 +169,7 @@ export default function App() {
 
       setAttachedFiles((prev) => [...prev, ...combined]);
     } catch (err) {
-      alert("Files upload karne me दिक्कत aayi. Kripya dobara try karein.");
+      alert("Files upload karne me dikkat aayi. Kripya dobara try karein.");
     } finally {
       setUploadingFile(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -234,6 +234,32 @@ export default function App() {
     document.body.removeChild(a);
   };
 
+  // Direct Frontend Image Intent Detector
+  const checkDirectImageRequest = (text) => {
+    const t = text.toLowerCase().trim();
+    const imgWords = ["photo", "image", "tasveer", "tasvir", "picture", "chitra", "फोटो", "तस्वीर", "चित्र"];
+    const actWords = ["banao", "bnao", "bana do", "bna do", "generate", "create", "make", "draw", "dikhao", "बनाओ", "दिखाओ"];
+
+    const hasImg = imgWords.some((w) => t.includes(w));
+    const hasAct = actWords.some((w) => t.includes(w));
+
+    if (hasImg && hasAct) {
+      // Clean query
+      let promptQuery = text
+        .replace(/["']/g, "")
+        .replace(/(ek|ki|sundar|photo|image|tasveer|tasvir|picture|chitra|banao|bnao|bana do|bna do|generate|create|make|draw|dikhao|ye|एक|की|सुंदर|फोटो|तस्वीर|चित्र|बनाओ|दिखाओ)/gi, "")
+        .trim();
+
+      if (!promptQuery || promptQuery.length < 3) {
+        promptQuery = "Grand royal Rajasthani heritage fort palace golden hour 8k photorealistic";
+      } else {
+        promptQuery = `${promptQuery}, photorealistic, ultra detailed, 8k resolution, cinematic lighting`;
+      }
+      return promptQuery;
+    }
+    return null;
+  };
+
   const handleSend = async (overrideText = null, customHistory = null) => {
     const rawText = (overrideText || input).trim();
     if ((!rawText && attachedFiles.length === 0) || loading) return;
@@ -242,6 +268,9 @@ export default function App() {
       recognitionRef.current.stop();
       setIsListening(false);
     }
+
+    // Direct Image Generator Check
+    const imageSubject = checkDirectImageRequest(rawText);
 
     let fullPrompt = rawText;
     let displayPrompt = rawText;
@@ -262,18 +291,35 @@ export default function App() {
       display: displayPrompt,
       files: messageFiles 
     };
-    const initialAiMsg = { role: "assistant", content: "" };
 
     const baseHistory = customHistory !== null 
       ? customHistory.filter((m) => m.content && m.content.trim() !== "")
       : currentSession.messages.filter((m) => m.content && m.content.trim() !== "");
 
-    const conversationPayload = [...baseHistory, { role: "user", content: fullPrompt }];
-    const updatedMessages = [...baseHistory, userMsg, initialAiMsg];
-
     const isFirst = baseHistory.length === 0;
     const titleSeed = displayPrompt.replace(/\[Attached.*?\]/g, "").trim() || "Chat";
     const newTitle = isFirst ? (titleSeed.slice(0, 26) + (titleSeed.length > 26 ? "..." : "")) : currentSession.title;
+
+    // IF IMAGE REQUEST: Return instantly with generated picture!
+    if (imageSubject) {
+      const encoded = encodeURIComponent(imageSubject);
+      const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 10000)}`;
+      const aiImageMsg = {
+        role: "assistant",
+        content: `![${imageSubject}](${imageUrl})\n\n**यहाँ आपकी माँगी गई फ़ोटो प्रस्तुत है!**`
+      };
+
+      setSessions((prev) =>
+        prev.map((s) => (s.id === currentId ? { ...s, title: newTitle, messages: [...baseHistory, userMsg, aiImageMsg] } : s))
+      );
+      setInput("");
+      return;
+    }
+
+    // Regular LLM conversation stream
+    const initialAiMsg = { role: "assistant", content: "" };
+    const conversationPayload = [...baseHistory, { role: "user", content: fullPrompt }];
+    const updatedMessages = [...baseHistory, userMsg, initialAiMsg];
 
     setSessions((prev) =>
       prev.map((s) => (s.id === currentId ? { ...s, title: newTitle, messages: updatedMessages } : s))
@@ -453,11 +499,11 @@ export default function App() {
                 <div className="empty-logo">R</div>
                 <h2>Rishova AI se aap kya poochna chahte hain?</h2>
                 <div className="preset-grid">
-                  <button onClick={() => handleSend("Python me quick sort algorithm samjhao code ke sath")}>
-                    💡 Python me quick sort algorithm
+                  <button onClick={() => handleSend("एक शाही राजस्थानी किले की सुंदर फोटो बनाओ")}>
+                    🎨 शाही राजस्थानी किले की फोटो
                   </button>
-                  <button onClick={() => handleSend("Ek professional leave application email likho")}>
-                    ✍️ Professional leave email
+                  <button onClick={() => handleSend("Python me quick sort algorithm samjhao code ke sath")}>
+                    💡 Python me quick sort
                   </button>
                   <button onClick={() => handleSend("Rishova AI kya kya kar sakta hai?")}>
                     ⚡ Rishova AI ke capabilities
