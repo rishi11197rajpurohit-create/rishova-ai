@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import "./App.css";
@@ -31,16 +32,13 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [copiedKey, setCopiedKey] = useState(null);
 
-  // Theme settings: "system" | "light" | "dark"
   const [themePreference, setThemePreference] = useState(() => localStorage.getItem("rishova_theme_pref") || "dark");
   const [showThemeMenu, setShowThemeMenu] = useState(false);
 
-  // File Upload & On-demand Viewer
   const [attachedFiles, setAttachedFiles] = useState([]);
-  const [previewFile, setPreviewFile] = useState(null); // { name, url, isPdf }
+  const [previewFile, setPreviewFile] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
 
-  // Voice & Edit
   const [isListening, setIsListening] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
@@ -55,7 +53,6 @@ export default function App() {
 
   const currentSession = sessions.find((s) => s.id === currentId) || sessions[0];
 
-  // Theme calculation
   const getEffectiveTheme = () => {
     if (themePreference === "system") {
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -86,7 +83,6 @@ export default function App() {
     }
   }, [input]);
 
-  // Voice setup
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -133,7 +129,7 @@ export default function App() {
       return;
     }
     window.speechSynthesis.cancel();
-    const cleanSpeech = text.replace(/[*#`_~\[\]]/g, "");
+    const cleanSpeech = text.replace(/[*#`_~\[\]]/g, "").replace(/<[^>]*>/g, "");
     const utterance = new SpeechSynthesisUtterance(cleanSpeech);
     utterance.lang = "hi-IN";
     utterance.rate = 1.0;
@@ -143,7 +139,6 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Upload Files - DO NOT auto open side preview
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -174,7 +169,7 @@ export default function App() {
 
       setAttachedFiles((prev) => [...prev, ...combined]);
     } catch (err) {
-      alert("Files upload karne me dikkat aayi. Kripya dobara try karein.");
+      alert("Files upload karne me दिक्कत aayi. Kripya dobara try karein.");
     } finally {
       setUploadingFile(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -359,7 +354,6 @@ export default function App() {
 
   return (
     <div className={`chatgpt-container ${effectiveTheme}`}>
-      {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="sidebar-header">
           <button className="new-chat-btn" onClick={handleNewChat}>
@@ -388,7 +382,6 @@ export default function App() {
         </div>
 
         <div className="sidebar-footer">
-          {/* Theme flyout menu */}
           <div className="theme-wrapper">
             <button className="theme-toggle-btn" onClick={() => setShowThemeMenu(!showThemeMenu)}>
               <span className="theme-icon">☼</span>
@@ -430,7 +423,6 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Main Workspace Layout */}
       <div className="workspace-layout">
         <main className="main-area">
           <header className="topbar">
@@ -495,7 +487,6 @@ export default function App() {
                         ) : (
                           <div className="user-text-container">
                             <div className="user-content-block">
-                              {/* Render attached files with View & Download */}
                               {m.files && m.files.length > 0 && (
                                 <div className="bubble-files-tray">
                                   {m.files.map((file, fIdx) => (
@@ -542,6 +533,7 @@ export default function App() {
                           ) : (
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
+                              rehypePlugins={[rehypeRaw]}
                               components={{
                                 code({ node, inline, className, children, ...props }) {
                                   const match = /language-(\w+)/.exec(className || "");
@@ -613,7 +605,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Input Dock */}
           <div className="input-dock-container">
             {attachedFiles.length > 0 && (
               <div className="multi-file-tray">
@@ -715,7 +706,6 @@ export default function App() {
           </div>
         </main>
 
-        {/* Side-by-Side File/PDF Viewer (Opens ONLY when requested) */}
         {previewFile && (
           <aside className="pdf-side-viewer">
             <div className="pdf-viewer-header">
