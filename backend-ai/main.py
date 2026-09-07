@@ -59,7 +59,7 @@ def run_vision_ocr(image_bytes: bytes) -> str:
                     "content": [
                         {
                             "type": "text", 
-                            "text": "Extract all text accurately: Student/Candidate Name, Course, Issuing Body, Date, Certificate ID."
+                            "text": "Extract all text precisely: Student Name, Course, Issuing Body, Date, Certificate ID."
                         },
                         {
                             "type": "image_url",
@@ -119,32 +119,31 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
 
     return {"files": results}
 
-# Reliable Real-Place Photo Catalog (Guaranteed High-Res Authentic Photos)
 REAL_PHOTO_DATABASE = {
     "jaisalmer": {
         "title": "जैसलमेर का सोनार किला (Jaisalmer Fort)",
         "url": "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?auto=format&fit=crop&w=1200&q=80",
-        "desc": "जैसलमेर का सोनार किला पीले बलुआ पत्थर से बना विश्व धरोहर स्थल है, जो थार रेगिस्तान के बीच त्रिकूट पहाड़ी पर स्थित है।"
+        "desc": "जैसलमेर का सोनार किला पीले बलुआ पत्थर से निर्मित यूनेस्को विश्व धरोहर स्थल है, जो थार रेगिस्तान की त्रिकूट पहाड़ी पर स्थित है।"
     },
     "mehrangarh": {
         "title": "मेहरानगढ़ किला, जोधपुर (Mehrangarh Fort)",
         "url": "https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?auto=format&fit=crop&w=1200&q=80",
-        "desc": "जोधपुर का मेहरानगढ़ किला 1459 ईस्वी में राव जोधा द्वारा चिड़ियाटूँक पहाड़ी पर निर्मित राजस्थान के सबसे भव्य किलों में से एक है।"
+        "desc": "जोधपुर का मेहरानगढ़ दुर्ग 1459 ईस्वी में राव जोधा द्वारा चिड़ियाटूँक पहाड़ी पर बनवाया गया था।"
     },
     "chittorgarh": {
-        "title": "चित्तौड़गढ़ किला (Chittorgarh Fort)",
+        "title": "चित्तौड़गढ़ दुर्ग (Chittorgarh Fort)",
         "url": "https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=1200&q=80",
-        "desc": "चित्तौड़गढ़ का दुर्ग राजपूत शौर्य, त्याग और जौहर का अमर प्रतीक है, जिसमें विजय स्तम्भ और कीर्ति स्तम्भ स्थित हैं।"
+        "desc": "चित्तौड़गढ़ दुर्ग भारत का सबसे विशाल किला है, जो तीन ऐतिहासिक जौहर, विजय स्तम्भ और मीरा बाई के मंदिर के लिए प्रसिद्ध है।"
     },
     "aamer": {
         "title": "आमेर का किला, जयपुर (Amer Fort)",
         "url": "https://images.unsplash.com/photo-1599661046827-dacff0c0f09a?auto=format&fit=crop&w=1200&q=80",
-        "desc": "जयपुर का आमेर दुर्ग हिन्दू-राजपूत स्थापत्य कला का अनुपम उदाहरण है, जो अपने शीश महल और भव्य दरवाजों के लिए प्रसिद्ध है।"
+        "desc": "जयपुर का आमेर दुर्ग हिन्दू-राजपूत स्थापत्य कला का उत्कृष्ट उदाहरण है, जो अपने शीश महल और भव्य द्वारों के लिए प्रसिद्ध है।"
     },
     "hawa mahal": {
         "title": "हवा महल, जयपुर (Hawa Mahal)",
         "url": "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&w=1200&q=80",
-        "desc": "1799 में सवाई प्रताप सिंह द्वारा निर्मित 953 झरोखों वाला पाँच मंजिला गुलाबी महल।"
+        "desc": "1799 में सवाई प्रताप सिंह द्वारा निर्मित 953 खिड़कियों (झरोखों) वाला पाँच मंजिला गुलाबी स्थापत्य।"
     }
 }
 
@@ -154,9 +153,8 @@ def get_curated_or_generated_photo(query: str):
         if key in q:
             return data["url"], data["title"], data["desc"]
 
-    # Natural FLUX photography generation fallback
     clean = re.sub(r'(ek|ki|sundar|photo|image|tasveer|banao|bnao|dikhao|batao|chahiye|picture)', '', query, flags=re.IGNORECASE).strip()
-    prompt_subject = f"Documentary realistic travel photograph of {clean or 'Rajasthan Heritage'}, authentic natural daylight, 35mm lens DSLR, no CGI"
+    prompt_subject = f"Documentary realistic travel photograph of {clean or 'Rajasthan Heritage'}, authentic daylight, 35mm lens DSLR"
     encoded = urllib.parse.quote(prompt_subject)
     gen_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1200&height=800&nologo=true"
     return gen_url, clean.title() or "राजस्थान धरोहर", "यहाँ आपकी माँगी गई प्रामाणिक फ़ोटो प्रस्तुत है।"
@@ -170,24 +168,28 @@ def is_image_request(prompt: str) -> bool:
 async def handle_universal_prompt(req: UniversalRequest):
     user_input = req.prompt.strip()
 
-    # REAL PHOTO HANDLER: 100% Reliable, never shows wrong people or broken images
     if is_image_request(user_input):
         photo_url, title, caption = get_curated_or_generated_photo(user_input)
         def send_photo():
             yield f"![{title}]({photo_url})\n\n### 🏛️ {title}\n\n{caption}"
         return StreamingResponse(send_photo(), media_type="text/plain")
 
-    # ChatGPT Plus High-Performance System Persona
+    # High-Intelligence System Prompt with strict historical grounding
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, a world-class AI equivalent to ChatGPT-4o and Claude 3.5 Sonnet.\n\n"
-            "BEHAVIOR & RESPONSE EXCELLENCE:\n"
-            "1. CHATGPT-LIKE DEPTH: Provide rich, insightful, engaging, and well-structured answers. Do not give shallow or robotic 2-line replies.\n"
-            "2. ACCURACY & AUTHORITY: Keep all historical facts, technological concepts, and analyses 100% verified and true to history.\n"
-            "3. REGIONAL DIALECT EXPERTISE: If the user speaks in Marwari or Rajasthani, write fluently, culturally, and respectfully in rich Marwari. If Hindi, write clear, natural Hindi.\n"
-            "4. NEVER APOLOGIZE REPETITIVELY: Never begin with robotic phrases like 'Apologies for confusion' or 'As an AI'. Answer directly with confidence.\n"
-            "5. BEAUTIFUL PRESENTATION: Structure responses with bold headers, tidy bullet points, and neat Markdown tables when comparing or presenting details."
+            "You are Rishova AI, an elite AI assistant comparable to ChatGPT Plus and Claude 3.5 Sonnet.\n\n"
+            "MANDATORY HISTORICAL & FACTUAL STANDARDS:\n"
+            "1. ABSOLUTE HISTORICAL ACCURACY: You must never hallucinate dates, names, or events. Examples of verified historical ground truth:\n"
+            "   - Chittorgarh Fort: Built in the 7th century by Chitrangada Mori (Mauryan ruler). Famous for 3 major Jauhars/sieges:\n"
+            "     * 1st Jauhar (1303): Alauddin Khalji attacked Rana Ratan Singh; Rani Padmini led the Jauhar.\n"
+            "     * 2nd Jauhar (1535): Bahadur Shah of Gujarat attacked; Rani Karnavati led the Jauhar.\n"
+            "     * 3rd Jauhar (1567-68): Mughal Emperor Akbar attacked; defended heroically by Jaimal Rathore and Patta Chundawat.\n"
+            "     * Key structures: Vijay Stambha (built by Maharana Kumbha), Kirti Stambha, Padmini Palace, Gaumukh Reservoir, Kalika Mata Temple.\n"
+            "   - Mehrangarh Fort: Founded in 1459 by Rao Jodha on Chidiyatunk hill.\n"
+            "2. QUALITY & STRUCTURE: Provide detailed, engaging, and comprehensive answers formatted with clear headings, organized markdown tables, and bullet points. Never repeat repetitive phrases or tokens like 'शहज़ादी शहज़ादी'.\n"
+            "3. REGIONAL TONE: If asked in Marwari, write naturally in rich, polite Marwari. If Hindi, write clear, grammatically precise Hindi.\n"
+            "4. NO METADATA: Output only the final structured response directly."
         )
     }
 
@@ -198,42 +200,41 @@ async def handle_universal_prompt(req: UniversalRequest):
         for m in req.messages:
             text = m.content.strip()
             text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Apologies for", "I don't have"]):
+            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code", "I don't have", "Apologies for"]):
                 role = "assistant" if m.role == "assistant" else "user"
                 clean_history.append({"role": role, "content": text[:1500]})
-        groq_messages.extend(clean_history[-5:])
+        groq_messages.extend(clean_history[-4:])
 
     groq_messages.append({"role": "user", "content": user_input})
 
-    # Prioritize flagship Llama 3.3 70B for ChatGPT-level reasoning
-    preferred_models = [
+    # Strict Flagship Model Hierarchy (Eliminates low-tier models that hallucinate)
+    flagship_models = [
         "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "openai/gpt-oss-20b"
+        "llama-3.1-70b-versatile"
     ]
 
     def generate():
         stream = None
-        error_msg = ""
+        last_error = ""
 
-        for model_name in preferred_models:
+        for model_name in flagship_models:
             try:
                 stream = client.chat.completions.create(
                     model=model_name,
                     messages=groq_messages,
-                    temperature=0.4,
+                    temperature=0.2,
                     presence_penalty=0.1,
                     frequency_penalty=0.1,
-                    max_tokens=2200,
+                    max_tokens=2500,
                     stream=True
                 )
                 break
             except Exception as e:
-                error_msg = str(e)
+                last_error = str(e)
                 continue
 
         if not stream:
-            yield f"Connection busy: {error_msg[:100]}. Please retry."
+            yield f"AI Server Busy: {last_error[:100]}. Kripya 5 second baad dobara bhein."
             return
 
         in_think_block = False
