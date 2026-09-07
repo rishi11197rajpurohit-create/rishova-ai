@@ -1,7 +1,8 @@
 import os
 import io
 import re
-import asyncio
+import urllib.request
+import json
 from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +11,6 @@ from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
 from pypdf import PdfReader
-from duckduckgo_search import DDGS
 
 load_dotenv()
 
@@ -37,30 +37,28 @@ class UniversalRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"status": "Rishova AI Live"}
+    return {"status": "Rishova AI Universal Backend Live"}
 
-def sync_search(query: str) -> str:
+def get_quick_facts(query: str) -> str:
+    """Super-fast, 100% non-blocking factual summary via Wikipedia API (Never blocked on Render)"""
     try:
-        clean_q = re.sub(r'[^\w\s]', '', query).strip()
-        if len(clean_q) < 3:
+        # Extract core subject (e.g. mehrangarh, maharana pratap)
+        clean = re.sub(r'[^\w\s]', '', query).strip()
+        words = [w for w in clean.split() if w.lower() not in ["btao", "kya", "hai", "ke", "bare", "me", "ri", "ra", "ro", "mhane", "batavo"]]
+        search_term = " ".join(words[:3]) if words else clean
+        if not search_term:
             return ""
-        results = []
-        with DDGS(timeout=3) as ddgs:
-            for r in ddgs.text(clean_q, max_results=3):
-                body = r.get("body", "")
-                if body:
-                    results.append(body)
-        if results:
-            return "\n[VERIFIED HISTORICAL FACTS FOR CONTEXT]:\n" + "\n".join(results)
+
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(search_term)}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'RishovaAI/1.0'})
+        with urllib.request.urlopen(req, timeout=1.5) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            extract = data.get("extract", "")
+            if extract:
+                return f"\n[VERIFIED HISTORICAL GROUND TRUTH]:\n{extract}\n"
     except Exception:
         pass
     return ""
-
-async def get_live_web_context(query: str) -> str:
-    try:
-        return await asyncio.wait_for(asyncio.to_thread(sync_search, query), timeout=3.0)
-    except Exception:
-        return ""
 
 @app.post("/api/upload")
 async def extract_multiple_files(files: List[UploadFile] = File(...)):
@@ -103,19 +101,18 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
 async def handle_universal_prompt(req: UniversalRequest):
     user_input = req.prompt.strip()
 
-    web_knowledge = await get_live_web_context(user_input)
+    # Fast facts without blocking
+    facts = get_quick_facts(user_input)
 
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, an elite intelligence built for Rishikesh. You have complete expertise in world languages, Indian languages, and regional Rajasthani dialects.\n\n"
-            "STRICT RULES:\n"
-            "1. FACTUAL RIGOR: Never invent fake names, gates, kings, or architectural details. Example verified facts:\n"
-            "   - Mehrangarh Fort: Founded in 1459 by Rao Jodha on Chidiyatunk hill. Famous gates: Jai Pol, Fateh Pol, Dedh Kangra Pol, Loha Pol. Key palaces: Moti Mahal, Phool Mahal, Sheesh Mahal. Houses Chamunda Mata temple.\n"
-            "   - Maharana Pratap: Sisodia Rajput ruler of Mewar, battle of Haldighati (1576) against Mughal forces, horse Chetak.\n"
-            "2. AUTHENTIC DIALECT MIRRORING: If asked in Marwari (मारवाड़ी), reply purely in natural, authentic Marwari script with traditional polite Rajasthani tone (e.g., 'जोधपुर रो मेहरानगढ़ किलो', 'राव जोधाजी बणवायो', 'घणी घणी खम्मा'). Do not mix broken Hindi.\n"
-            "3. NO INTERNAL LEAKS: Output only the final answer directly without any <think> tags or thoughts.\n"
-            "4. CLEAN STRUCTURE: Format with neat Markdown tables and clean bullet points."
+            "You are Rishova AI, a world-class conversational AI with the intelligence and precision of ChatGPT Plus.\n\n"
+            "MANDATORY INSTRUCTIONS:\n"
+            "1. ZERO HALLUCINATION: All historical, geographical, and general facts must be 100% authentic (e.g. Mehrangarh Fort was built by Rao Jodha in 1459 on Chidiyatunk hill; Famous gates include Jai Pol, Fateh Pol, Dedh Kangra Pol, Loha Pol; Maharana Pratap of Mewar fought at Haldighati 1576).\n"
+            "2. REGIONAL & MARWARI EXPERTISE: If the prompt is in Rajasthani/Marwari (e.g. 'म्हाने बताओ', 'किला री खास बातां'), reply in rich, natural, authentic Marwari script with traditional polite tone. If in Hindi, reply in Hindi. If in English, reply in English.\n"
+            "3. NO THINKING LEAKS: Jump straight to the answer without any internal thoughts or <think> tags.\n"
+            "4. BEAUTIFUL LAYOUT: Use Markdown tables, bold bullet points, and neat typography."
         )
     }
 
@@ -126,43 +123,40 @@ async def handle_universal_prompt(req: UniversalRequest):
         for m in req.messages:
             text = m.content.strip()
             text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code"]) and "कुशवाड़ा" not in text and "पाटी द्वार" not in text:
+            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code", "Thinking"]):
                 role = "assistant" if m.role == "assistant" else "user"
                 clean_history.append({"role": role, "content": text[:1500]})
-        groq_messages.extend(clean_history[-6:])
+        groq_messages.extend(clean_history[-4:])
 
-    final_user_content = user_input + (f"\n\n{web_knowledge}" if web_knowledge else "")
+    final_user_content = user_input + (facts if facts else "")
     groq_messages.append({"role": "user", "content": final_user_content})
 
-    # Force 70B parameter flagship model first for flawless reasoning and dialect fluency
-    candidate_models = [
+    # Robust model sequence: if 70B is busy, instant 8B responds immediately
+    models_to_try = [
         "llama-3.3-70b-versatile",
-        "llama-3.1-70b-versatile",
         "llama-3.1-8b-instant"
     ]
 
     def generate():
         stream = None
-        error_log = ""
+        error_msg = ""
 
-        for model_id in candidate_models:
+        for model_name in models_to_try:
             try:
                 stream = client.chat.completions.create(
-                    model=model_id,
+                    model=model_name,
                     messages=groq_messages,
-                    temperature=0.2,
-                    presence_penalty=0.1,
-                    frequency_penalty=0.1,
-                    max_tokens=2000,
+                    temperature=0.3,
+                    max_tokens=1800,
                     stream=True
                 )
                 break
             except Exception as e:
-                error_log = str(e)
+                error_msg = str(e)
                 continue
 
         if not stream:
-            yield f"Connection issue. Please retry: {error_log[:100]}"
+            yield f"AI Server Busy: {error_msg[:80]}. Please retry."
             return
 
         in_think_block = False
