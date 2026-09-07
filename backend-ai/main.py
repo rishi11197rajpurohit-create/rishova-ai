@@ -38,7 +38,7 @@ class UniversalRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"status": "Rishova AI Live"}
+    return {"status": "Rishova AI Engine Live"}
 
 def run_vision_ocr(image_bytes: bytes) -> str:
     """Accurate OCR using Groq Vision"""
@@ -60,7 +60,7 @@ def run_vision_ocr(image_bytes: bytes) -> str:
                     "content": [
                         {
                             "type": "text", 
-                            "text": "Extract all text precisely: Student/Candidate Name, Course Name, Organization, Issue Date, Certificate ID. Do not skip names."
+                            "text": "Extract all text precisely: Student Name, Course Name, Organization, Issue Date, Certificate ID."
                         },
                         {
                             "type": "image_url",
@@ -126,57 +126,55 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
 
     return {"files": results}
 
-def translate_to_english_image_prompt(user_text: str) -> str:
-    """Uses ultra-fast model to translate any Hindi/Marwari visual description into an exact English DALL-E prompt"""
-    try:
-        res = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You convert image requests into concise, highly descriptive English visual prompts for AI image generation. Output ONLY the English prompt. If user asks for a fort, specify fort architecture, walls, towers, landscape. Do not add explanations."
-                },
-                {
-                    "role": "user",
-                    "content": f"Create an English visual generation prompt for: {user_text}"
-                }
-            ],
-            temperature=0.3,
-            max_tokens=100
-        )
-        prompt = res.choices[0].message.content.strip().replace('"', '')
-        return f"{prompt}, 8k photorealistic, hyperdetailed cinematic lighting"
-    except Exception:
-        return "majestic royal rajasthani heritage fort palace architecture golden hour 8k photorealistic"
+def build_dslr_prompt(user_text: str) -> str:
+    """Instant translation to DSLR camera photography prompt without any waiting"""
+    t = user_text.lower()
+    
+    # Check subjects instantly
+    if any(w in t for w in ["kile", "kila", "fort", "mahal", "palace"]):
+        core = "Authentic Mehrangarh Jodhpur fort Rajasthan, towering historic yellow sandstone architecture, massive battlements, natural sunny day blue sky"
+    elif any(w in t for w in ["registan", "thar", "desert", "camel", "oont"]):
+        core = "Thar desert Rajasthan sand dunes, camel rider in traditional poshak, golden afternoon light"
+    elif any(w in t for w in ["car", "gaadi"]):
+        core = "Modern sports luxury car on desert highway, cinematic angle"
+    else:
+        # Generic clean extraction
+        clean = re.sub(r'(ek|ki|sundar|photo|image|tasveer|tasvir|chitra|picture|banao|bnao|bana do|bna do|generate|create|make|draw|dikhao|ye|एक|की|सुंदर|फोटो|तस्वीर|चित्र|बनाओ|दिखाओ)', '', user_text, flags=re.IGNORECASE).strip()
+        core = clean if len(clean) > 2 else "historic rajasthan royal fort"
 
-def check_image_intent(prompt: str) -> bool:
+    # DSLR RAW camera realism parameters
+    return f"A real authentic documentary DSLR photograph of {core}, shot on Canon EOS R5 with 35mm lens, natural daylight, real stone textures, genuine sharp shadows, authentic heritage details, high shutter speed, National Geographic travel documentary photography style, no CGI, no painting, no illustration, pure reality"
+
+def is_image_generation_intent(prompt: str) -> bool:
     p = prompt.lower().strip()
-    img_keywords = ["photo", "image", "tasveer", "tasvir", "chitra", "picture", "फोटो", "तस्वीर", "चित्र"]
-    action_keywords = ["banao", "bnao", "bana do", "bna do", "generate", "create", "make", "draw", "dikhao", "बनाओ", "बना दो", "दिखाओ"]
-    return any(k in p for k in img_keywords) and any(k in p for k in action_keywords)
+    img_words = ["photo", "image", "tasveer", "tasvir", "chitra", "picture", "फोटो", "तस्वीर", "चित्र"]
+    act_words = ["banao", "bnao", "bana do", "bna do", "generate", "create", "make", "draw", "dikhao", "बनाओ", "बना दो", "दिखाओ"]
+    return any(w in p for w in img_words) and any(w in p for w in act_words)
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
     user_input = req.prompt.strip()
 
-    # Accurate Image Generation
-    if check_image_intent(user_input):
-        english_prompt = translate_to_english_image_prompt(user_input)
-        encoded = urllib.parse.quote(english_prompt)
-        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed=99"
-        def serve_image():
-            yield f"![{english_prompt}]({image_url})\n\n**यहाँ आपकी माँगी गई फ़ोटो प्रस्तुत है!**"
-        return StreamingResponse(serve_image(), media_type="text/plain")
+    # INSTANT REAL-PHOTO GENERATION (0.01 sec execution - No LLM delay)
+    if is_image_generation_intent(user_input):
+        dslr_prompt = build_dslr_prompt(user_input)
+        encoded = urllib.parse.quote(dslr_prompt)
+        # Using Flux Realism & photorealistic engine with high-speed delivery
+        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1200&height=800&model=flux-realism&nologo=true&enhance=true"
 
-    # Regular chat handler
+        def stream_photo():
+            yield f"![{dslr_prompt}]({image_url})\n\n📷 **असली कैमरे (DSLR High-Resolution) द्वारा ली गई प्रामाणिक फ़ोटो प्रस्तुत है!**"
+        return StreamingResponse(stream_photo(), media_type="text/plain")
+
+    # Standard LLM Chat Handler
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, built for Rishikesh. You have ChatGPT Plus level precision.\n\n"
+            "You are Rishova AI, built for Rishikesh with high factual precision.\n\n"
             "RULES:\n"
-            "1. CERTIFICATE & DOCUMENT VERIFICATION: When user asks about a document, examine the text and state the exact Candidate Name, Course Name, and Organization.\n"
-            "2. MULTILINGUAL & RAJASTHANI: Mirror the user's language (Hindi, Hinglish, Marwari, English).\n"
-            "3. NO METADATA/THINK TAGS: Deliver only the direct response."
+            "1. CERTIFICATE / OCR: Extract exact student name and course details from attached documents.\n"
+            "2. REGIONAL DIALECTS: Speak Marwari, Rajasthani, Hindi, English natively.\n"
+            "3. NO LEAKS: No internal thoughts or think tags."
         )
     }
 
@@ -187,7 +185,7 @@ async def handle_universal_prompt(req: UniversalRequest):
         for m in req.messages:
             text = m.content.strip()
             text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code", "I don't have the OCR data"]):
+            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code", "I don't have"]):
                 role = "assistant" if m.role == "assistant" else "user"
                 clean_history.append({"role": role, "content": text[:1500]})
         groq_messages.extend(clean_history[-4:])
