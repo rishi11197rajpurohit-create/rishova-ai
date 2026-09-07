@@ -59,7 +59,7 @@ def run_vision_ocr(image_bytes: bytes) -> str:
                     "content": [
                         {
                             "type": "text", 
-                            "text": "Extract all text precisely: Student Name, Course, Issuing Body, Date, Certificate ID."
+                            "text": "Extract all text accurately: Student/Candidate Name, Course Name, Organization, Issue Date, Certificate ID."
                         },
                         {
                             "type": "image_url",
@@ -174,22 +174,21 @@ async def handle_universal_prompt(req: UniversalRequest):
             yield f"![{title}]({photo_url})\n\n### 🏛️ {title}\n\n{caption}"
         return StreamingResponse(send_photo(), media_type="text/plain")
 
-    # High-Intelligence System Prompt with strict historical grounding
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, an elite AI assistant comparable to ChatGPT Plus and Claude 3.5 Sonnet.\n\n"
-            "MANDATORY HISTORICAL & FACTUAL STANDARDS:\n"
-            "1. ABSOLUTE HISTORICAL ACCURACY: You must never hallucinate dates, names, or events. Examples of verified historical ground truth:\n"
-            "   - Chittorgarh Fort: Built in the 7th century by Chitrangada Mori (Mauryan ruler). Famous for 3 major Jauhars/sieges:\n"
-            "     * 1st Jauhar (1303): Alauddin Khalji attacked Rana Ratan Singh; Rani Padmini led the Jauhar.\n"
+            "You are Rishova AI, an elite AI assistant comparable to ChatGPT-4o and Claude 3.5 Sonnet.\n\n"
+            "MANDATORY HISTORICAL & FACTUAL ACCURACY:\n"
+            "1. STRICT HISTORICAL TRUTH: Never fabricate facts, dates, or figures.\n"
+            "   - Chittorgarh Fort: Built in the 7th century by Chitrangada Mori (Mauryan ruler). Famous for 3 major Jauhars:\n"
+            "     * 1st Jauhar (1303): Alauddin Khalji vs Rana Ratan Singh; Rani Padmini led the Jauhar.\n"
             "     * 2nd Jauhar (1535): Bahadur Shah of Gujarat attacked; Rani Karnavati led the Jauhar.\n"
             "     * 3rd Jauhar (1567-68): Mughal Emperor Akbar attacked; defended heroically by Jaimal Rathore and Patta Chundawat.\n"
-            "     * Key structures: Vijay Stambha (built by Maharana Kumbha), Kirti Stambha, Padmini Palace, Gaumukh Reservoir, Kalika Mata Temple.\n"
+            "     * Major monuments: Vijay Stambha (built by Maharana Kumbha), Kirti Stambha, Padmini Palace, Gaumukh Reservoir, Meerabai Temple.\n"
             "   - Mehrangarh Fort: Founded in 1459 by Rao Jodha on Chidiyatunk hill.\n"
-            "2. QUALITY & STRUCTURE: Provide detailed, engaging, and comprehensive answers formatted with clear headings, organized markdown tables, and bullet points. Never repeat repetitive phrases or tokens like 'शहज़ादी शहज़ादी'.\n"
-            "3. REGIONAL TONE: If asked in Marwari, write naturally in rich, polite Marwari. If Hindi, write clear, grammatically precise Hindi.\n"
-            "4. NO METADATA: Output only the final structured response directly."
+            "2. EXCELLENT STRUCTURE: Present answers with clean Markdown headings, bullet points, and neat tables where appropriate. Never loop words or repeat phrases.\n"
+            "3. REGIONAL DIALECTS: Speak Marwari, Rajasthani, Hindi, and English natively matching the user's inquiry.\n"
+            "4. NO METADATA: Provide the direct final answer cleanly."
         )
     }
 
@@ -200,29 +199,29 @@ async def handle_universal_prompt(req: UniversalRequest):
         for m in req.messages:
             text = m.content.strip()
             text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code", "I don't have", "Apologies for"]):
+            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code", "I don't have", "AI Server Busy"]):
                 role = "assistant" if m.role == "assistant" else "user"
                 clean_history.append({"role": role, "content": text[:1500]})
         groq_messages.extend(clean_history[-4:])
 
     groq_messages.append({"role": "user", "content": user_input})
 
-    # Strict Flagship Model Hierarchy (Eliminates low-tier models that hallucinate)
-    flagship_models = [
+    # Only currently active Groq models (Removed decommissioned 3.1-70b)
+    preferred_models = [
         "llama-3.3-70b-versatile",
-        "llama-3.1-70b-versatile"
+        "llama-3.1-8b-instant"
     ]
 
     def generate():
         stream = None
         last_error = ""
 
-        for model_name in flagship_models:
+        for model_name in preferred_models:
             try:
                 stream = client.chat.completions.create(
                     model=model_name,
                     messages=groq_messages,
-                    temperature=0.2,
+                    temperature=0.3,
                     presence_penalty=0.1,
                     frequency_penalty=0.1,
                     max_tokens=2500,
