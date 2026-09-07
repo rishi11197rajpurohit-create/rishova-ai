@@ -854,4 +854,144 @@ body {
 
 .markdown-body img:hover {
   transform: scale(1.01);
+}/* ================= IMAGE CARD & LIGHTBOX STYLING ================= */
+.chat-image-card {
+  max-width: 540px;
+  margin: 12px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+
+.chat-photo-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.chat-photo-img:hover {
+  opacity: 0.95;
+  transform: scale(1.005);
+}
+
+.chat-photo-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(25, 25, 25, 0.85);
+  border-top: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.photo-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.photo-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.photo-btn.download {
+  background: #10a37f;
+  color: #fff;
+  border-color: #10a37f;
+}
+
+.photo-btn.download:hover {
+  background: #0e8e6e;
+}
+
+/* Modal Lightbox */
+.image-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(5px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.image-lightbox-content {
+  background: #1e1e1e;
+  border-radius: 12px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+  border: 1px solid #333;
+}
+
+.lightbox-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  background: #252525;
+  color: #eee;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #333;
+}
+
+.lightbox-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.lightbox-dl-btn {
+  background: #10a37f;
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.lightbox-dl-btn:hover {
+  background: #0e8e6e;
+}
+
+.lightbox-close-btn {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.lightbox-close-btn:hover {
+  color: #fff;
+}
+
+.lightbox-body {
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: auto;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 75vh;
+  object-fit: contain;
+  border-radius: 6px;
 }

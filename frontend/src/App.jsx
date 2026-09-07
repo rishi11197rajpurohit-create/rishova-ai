@@ -39,6 +39,9 @@ export default function App() {
   const [previewFile, setPreviewFile] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
 
+  // High-Resolution Image Lightbox modal
+  const [activeImageModal, setActiveImageModal] = useState(null);
+
   const [isListening, setIsListening] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
@@ -225,6 +228,23 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const downloadImageDirectly = async (imgSrc, altName) => {
+    try {
+      const res = await fetch(imgSrc);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `${(altName || "Rishova_Photo").replace(/[^a-zA-Z0-9]/g, "_")}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      window.open(imgSrc, "_blank");
+    }
+  };
+
   const downloadFileLocally = (fileUrl, fileName) => {
     const a = document.createElement("a");
     a.href = fileUrl;
@@ -232,32 +252,6 @@ export default function App() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  };
-
-  // Direct Frontend Image Intent Detector
-  const checkDirectImageRequest = (text) => {
-    const t = text.toLowerCase().trim();
-    const imgWords = ["photo", "image", "tasveer", "tasvir", "picture", "chitra", "फोटो", "तस्वीर", "चित्र"];
-    const actWords = ["banao", "bnao", "bana do", "bna do", "generate", "create", "make", "draw", "dikhao", "बनाओ", "दिखाओ"];
-
-    const hasImg = imgWords.some((w) => t.includes(w));
-    const hasAct = actWords.some((w) => t.includes(w));
-
-    if (hasImg && hasAct) {
-      // Clean query
-      let promptQuery = text
-        .replace(/["']/g, "")
-        .replace(/(ek|ki|sundar|photo|image|tasveer|tasvir|picture|chitra|banao|bnao|bana do|bna do|generate|create|make|draw|dikhao|ye|एक|की|सुंदर|फोटो|तस्वीर|चित्र|बनाओ|दिखाओ)/gi, "")
-        .trim();
-
-      if (!promptQuery || promptQuery.length < 3) {
-        promptQuery = "Grand royal Rajasthani heritage fort palace golden hour 8k photorealistic";
-      } else {
-        promptQuery = `${promptQuery}, photorealistic, ultra detailed, 8k resolution, cinematic lighting`;
-      }
-      return promptQuery;
-    }
-    return null;
   };
 
   const handleSend = async (overrideText = null, customHistory = null) => {
@@ -268,9 +262,6 @@ export default function App() {
       recognitionRef.current.stop();
       setIsListening(false);
     }
-
-    // Direct Image Generator Check
-    const imageSubject = checkDirectImageRequest(rawText);
 
     let fullPrompt = rawText;
     let displayPrompt = rawText;
@@ -292,18 +283,17 @@ export default function App() {
       files: messageFiles 
     };
 
+    const initialAiMsg = { role: "assistant", content: "" };
     const baseHistory = customHistory !== null 
       ? customHistory.filter((m) => m.content && m.content.trim() !== "")
       : currentSession.messages.filter((m) => m.content && m.content.trim() !== "");
 
+    const conversationPayload = [...baseHistory, { role: "user", content: fullPrompt }];
+    const updatedMessages = [...baseHistory, userMsg, initialAiMsg];
+
     const isFirst = baseHistory.length === 0;
     const titleSeed = displayPrompt.replace(/\[Attached.*?\]/g, "").trim() || "Chat";
     const newTitle = isFirst ? (titleSeed.slice(0, 26) + (titleSeed.length > 26 ? "..." : "")) : currentSession.title;
-
-    // Regular LLM conversation stream
-    const initialAiMsg = { role: "assistant", content: "" };
-    const conversationPayload = [...baseHistory, { role: "user", content: fullPrompt }];
-    const updatedMessages = [...baseHistory, userMsg, initialAiMsg];
 
     setSessions((prev) =>
       prev.map((s) => (s.id === currentId ? { ...s, title: newTitle, messages: updatedMessages } : s))
@@ -483,8 +473,8 @@ export default function App() {
                 <div className="empty-logo">R</div>
                 <h2>Rishova AI se aap kya poochna chahte hain?</h2>
                 <div className="preset-grid">
-                  <button onClick={() => handleSend("एक शाही राजस्थानी किले की सुंदर फोटो बनाओ")}>
-                    🎨 शाही राजस्थानी किले की फोटो
+                  <button onClick={() => handleSend("jaisalmer ke fort ki photo")}>
+                    📷 जैसलमेर किले की असली फोटो
                   </button>
                   <button onClick={() => handleSend("Python me quick sort algorithm samjhao code ke sath")}>
                     💡 Python me quick sort
@@ -565,6 +555,35 @@ export default function App() {
                               remarkPlugins={[remarkGfm]}
                               rehypePlugins={[rehypeRaw]}
                               components={{
+                                img({ node, src, alt, ...props }) {
+                                  return (
+                                    <div className="chat-image-card">
+                                      <img
+                                        src={src}
+                                        alt={alt || "Photo"}
+                                        className="chat-photo-img"
+                                        title="Click to view full photo"
+                                        onClick={() => setActiveImageModal({ src, alt: alt || "Photo" })}
+                                      />
+                                      <div className="chat-photo-toolbar">
+                                        <button
+                                          type="button"
+                                          className="photo-btn"
+                                          onClick={() => setActiveImageModal({ src, alt: alt || "Photo" })}
+                                        >
+                                          🔍 Open View
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="photo-btn download"
+                                          onClick={() => downloadImageDirectly(src, alt)}
+                                        >
+                                          ⬇ Download Photo
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                },
                                 code({ node, inline, className, children, ...props }) {
                                   const match = /language-(\w+)/.exec(className || "");
                                   const codeString = String(children).replace(/\n$/, "");
@@ -752,6 +771,29 @@ export default function App() {
             </div>
             <iframe src={previewFile.url} title="Document Preview" className="pdf-iframe" />
           </aside>
+        )}
+
+        {/* High-Resolution Click to Open Image Modal */}
+        {activeImageModal && (
+          <div className="image-lightbox-overlay" onClick={() => setActiveImageModal(null)}>
+            <div className="image-lightbox-content" onClick={(e) => e.stopPropagation()}>
+              <div className="lightbox-header">
+                <span>📷 {activeImageModal.alt}</span>
+                <div className="lightbox-actions">
+                  <button 
+                    className="lightbox-dl-btn"
+                    onClick={() => downloadImageDirectly(activeImageModal.src, activeImageModal.alt)}
+                  >
+                    ⬇ Download Full HD
+                  </button>
+                  <button className="lightbox-close-btn" onClick={() => setActiveImageModal(null)}>✕</button>
+                </div>
+              </div>
+              <div className="lightbox-body">
+                <img src={activeImageModal.src} alt={activeImageModal.alt} className="lightbox-img" />
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

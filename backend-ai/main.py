@@ -40,38 +40,57 @@ class UniversalRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"status": "Rishova AI Engine Live"}
+    return {"status": "Rishova AI Universal Engine Active"}
 
-def get_real_web_image(query: str):
-    """Fetches 100% real, authentic photo directly from Wikipedia/Web just like Gemini"""
+def fetch_real_web_image(query: str):
+    """Fetches high-resolution authentic camera photos from Wikimedia Commons / Wikipedia API"""
     try:
-        # Extract the core entity (e.g., Jaisalmer Fort, Mehrangarh, Thar Desert)
         clean = re.sub(r'(ek|ki|sundar|photo|image|tasveer|tasvir|chitra|picture|banao|bnao|dikhao|batao|dikhaye|de|kile|kila|fort)', '', query, flags=re.IGNORECASE).strip()
-        words = clean.split()
-        entity = " ".join(words[:2]) if words else clean
-        
-        # Search Wikipedia Image API
-        search_url = f"https://en.wikipedia.org/w/api.php?action=query&titles={urllib.parse.quote(entity)}&prop=pageimages&format=json&pithumbsize=1000"
-        req = urllib.request.Request(search_url, headers={'User-Agent': 'RishovaAI/1.0'})
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
+        words = [w for w in clean.split() if w.lower() not in ["ke", "ka", "ra", "ri", "ro", "hai", "me"]]
+        search_term = " ".join(words[:2]) if words else clean
+
+        # 1. Search Wikipedia page image
+        wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&generator=search&gsrsearch={urllib.parse.quote(search_term + ' fort')}&gsrlimit=1&pithumbsize=1200"
+        req = urllib.request.Request(wiki_url, headers={'User-Agent': 'RishovaAI/1.0 (contact@rishova.ai)'})
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             pages = data.get("query", {}).get("pages", {})
-            for pid, page in pages.items():
+            for _, page in pages.items():
                 if "thumbnail" in page:
-                    return page["thumbnail"]["source"], page.get("title", entity)
+                    return page["thumbnail"]["source"], page.get("title", search_term)
 
-        # Secondary search with 'fort' or entity attached
-        search_url2 = f"https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(query)}&gsrlimit=1&prop=pageimages&format=json&pithumbsize=1000"
-        req2 = urllib.request.Request(search_url2, headers={'User-Agent': 'RishovaAI/1.0'})
-        with urllib.request.urlopen(req2, timeout=1.5) as resp2:
+        # 2. Direct Commons Search fallback
+        comm_url = f"https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrsearch={urllib.parse.quote(search_term)}&gsrnamespace=6&prop=imageinfo&iiprop=url&gsrlimit=1"
+        req2 = urllib.request.Request(comm_url, headers={'User-Agent': 'RishovaAI/1.0'})
+        with urllib.request.urlopen(req2, timeout=2.0) as resp2:
             data2 = json.loads(resp2.read().decode('utf-8'))
             pages2 = data2.get("query", {}).get("pages", {})
-            for pid, page in pages2.items():
-                if "thumbnail" in page:
-                    return page["thumbnail"]["source"], page.get("title", entity)
+            for _, page in pages2.items():
+                if "imageinfo" in page and len(page["imageinfo"]) > 0:
+                    return page["imageinfo"][0]["url"], search_term
     except Exception:
         pass
     return None, None
+
+def get_live_web_facts(query: str) -> str:
+    """Live web search grounding to ensure 100% factual accuracy in text answers"""
+    try:
+        clean = re.sub(r'[^\w\s]', '', query).strip()
+        words = [w for w in clean.split() if len(w) > 2 and w.lower() not in ["btao", "kya", "hai", "ke", "bare", "me", "photo", "image"]]
+        term = " ".join(words[:2]) if words else clean
+        if not term:
+            return ""
+
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(term)}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'RishovaAI/1.0'})
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            extract = data.get("extract", "")
+            if extract:
+                return f"\n[LIVE WEB SEARCH FACTS]:\n{extract}\n"
+    except Exception:
+        pass
+    return ""
 
 def run_vision_ocr(image_bytes: bytes) -> str:
     try:
@@ -92,7 +111,7 @@ def run_vision_ocr(image_bytes: bytes) -> str:
                     "content": [
                         {
                             "type": "text", 
-                            "text": "Extract all text precisely: Student Name, Course Name, Organization, Issue Date, Certificate ID."
+                            "text": "Extract all text precisely: Student/Candidate Name, Course Name, Organization, Issue Date, Certificate ID."
                         },
                         {
                             "type": "image_url",
@@ -167,31 +186,26 @@ def is_image_request(prompt: str) -> bool:
 async def handle_universal_prompt(req: UniversalRequest):
     user_input = req.prompt.strip()
 
-    # REAL PHOTO RETRIEVAL (Just like Gemini Web Grounding)
+    # REAL WEB PHOTO RETRIEVAL (No fake cartoon AI generation)
     if is_image_request(user_input):
-        real_img_url, title = get_real_web_image(user_input)
+        real_img_url, title = fetch_real_web_image(user_input)
         if real_img_url:
             def send_real_photo():
-                yield f"![{title}]({real_img_url})\n\nयह रही **{title}** की असली (Original) तस्वीर।"
+                yield f"![{title}]({real_img_url})\n\n📷 यह रही **{title}** की असली (Original Camera Web) तस्वीर।"
             return StreamingResponse(send_real_photo(), media_type="text/plain")
 
-        # Fallback to AI Generation if no real-world entity found
-        clean_subj = re.sub(r'(ek|ki|sundar|photo|image|tasveer|banao|bnao|dikhao)', '', user_input, flags=re.IGNORECASE).strip()
-        encoded = urllib.parse.quote(clean_subj or "Rajasthan fort architecture")
-        gen_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1200&height=800&nologo=true"
-        def send_gen_photo():
-            yield f"![{clean_subj}]({gen_url})\n\nयह रही तस्वीर।"
-        return StreamingResponse(send_gen_photo(), media_type="text/plain")
+    # Live web facts attached to avoid hallucinations
+    web_facts = get_live_web_facts(user_input)
 
-    # Standard LLM Chat Handler
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, an elite assistant with ChatGPT Plus factual precision.\n\n"
+            "You are Rishova AI, an elite assistant with live web grounding and ChatGPT Plus factual precision.\n\n"
             "RULES:\n"
-            "1. CERTIFICATE DETAILS: Accurate name, roll number, course info from uploaded documents.\n"
-            "2. REGIONAL DIALECTS: Speak Marwari, Rajasthani, Hindi natively.\n"
-            "3. NO LEAKS: No internal thinking tags."
+            "1. STRICT FACTUAL TRUTH: Always use [LIVE WEB SEARCH FACTS] for dates, history, and places. Never fabricate.\n"
+            "2. REGIONAL DIALECTS: Speak Marwari, Rajasthani, Hindi, and English natively.\n"
+            "3. NO LEAKS: No internal thoughts or thinking tags.\n"
+            "4. NO LINKS: Do not give random hyperlinks in text."
         )
     }
 
@@ -207,7 +221,7 @@ async def handle_universal_prompt(req: UniversalRequest):
                 clean_history.append({"role": role, "content": text[:1500]})
         groq_messages.extend(clean_history[-4:])
 
-    groq_messages.append({"role": "user", "content": user_input})
+    groq_messages.append({"role": "user", "content": f"{user_input}\n{web_facts}"})
 
     banned = ["whisper", "guard", "compound", "safeguard", "embed", "vision"]
     try:
