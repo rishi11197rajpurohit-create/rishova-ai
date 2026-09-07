@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
-from pypdf import PdfReader
+import pdfplumber
 from PIL import Image
 
 load_dotenv()
@@ -41,18 +41,15 @@ def read_root():
     return {"status": "Rishova AI Live"}
 
 def run_vision_ocr(image_bytes: bytes) -> str:
-    """Robust OCR using Groq Vision without triggering 400 Bad Request"""
+    """Accurate OCR using Groq Vision"""
     try:
         img = Image.open(io.BytesIO(image_bytes))
         if img.mode != "RGB":
             img = img.convert("RGB")
-        # Resize to standard size optimal for vision LLMs
-        img.thumbnail((1200, 1200))
+        img.thumbnail((1024, 1024))
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=80)
-        jpeg_data = buf.getvalue()
-
-        b64_str = base64.b64encode(jpeg_data).decode("utf-8")
+        img.save(buf, format="JPEG", quality=85)
+        b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
         data_url = f"data:image/jpeg;base64,{b64_str}"
 
         completion = client.chat.completions.create(
@@ -63,22 +60,20 @@ def run_vision_ocr(image_bytes: bytes) -> str:
                     "content": [
                         {
                             "type": "text", 
-                            "text": "Read this certificate or document very carefully. Extract and list the EXACT full name of the student/recipient, course name, organization, certificate ID, and issue date."
+                            "text": "Extract all text precisely: Student/Candidate Name, Course Name, Organization, Issue Date, Certificate ID. Do not skip names."
                         },
                         {
                             "type": "image_url",
-                            "image_url": {
-                                "url": data_url
-                            }
+                            "image_url": {"url": data_url}
                         }
                     ]
                 }
             ],
-            temperature=0.1,
-            max_tokens=500
+            temperature=0.0,
+            max_tokens=600
         )
         return completion.choices[0].message.content.strip()
-    except Exception as e:
+    except Exception:
         return ""
 
 @app.post("/api/upload")
@@ -91,40 +86,34 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
             fname = file.filename.lower()
 
             if fname.endswith(".pdf"):
-                pdf_stream = io.BytesIO(content_bytes)
-                reader = PdfReader(pdf_stream)
-                
-                # Step 1: Try reading native text
-                for page in reader.pages[:6]:
-                    t = page.extract_text()
-                    if t:
-                        extracted_text += t + "\n"
+                with pdfplumber.open(io.BytesIO(content_bytes)) as pdf:
+                    for page in pdf.pages[:6]:
+                        text = page.extract_text()
+                        if text:
+                            extracted_text += text + "\n"
 
-                # Step 2: If scanned / image PDF, extract image and run Vision OCR
-                if len(extracted_text.strip()) < 40:
-                    for page in reader.pages[:2]:
-                        if hasattr(page, "images") and len(page.images) > 0:
-                            for img_obj in page.images:
-                                ocr_res = run_vision_ocr(img_obj.data)
-                                if ocr_res:
-                                    extracted_text += f"\n[HIGH-ACCURACY OCR CERTIFICATE DATA]:\n{ocr_res}\n"
-                                    break
-                            if extracted_text:
-                                break
+                    # If scanned/no selectable text, render first page to image for Vision OCR
+                    if len(extracted_text.strip()) < 25 and len(pdf.pages) > 0:
+                        pix = pdf.pages[0].to_image(resolution=150).original
+                        buf = io.BytesIO()
+                        pix.save(buf, format="JPEG")
+                        ocr_data = run_vision_ocr(buf.getvalue())
+                        if ocr_data:
+                            extracted_text = f"[OCR READ DATA]:\n{ocr_data}\n"
 
             elif any(fname.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp"]):
-                ocr_res = run_vision_ocr(content_bytes)
-                if ocr_res:
-                    extracted_text = f"\n[HIGH-ACCURACY OCR CERTIFICATE DATA]:\n{ocr_res}\n"
+                ocr_data = run_vision_ocr(content_bytes)
+                if ocr_data:
+                    extracted_text = f"[OCR READ DATA]:\n{ocr_data}\n"
             else:
                 extracted_text = content_bytes.decode("utf-8", errors="ignore")
 
             clean_text = extracted_text.strip()
             if not clean_text:
-                clean_text = f"[Attached document: {file.filename}]"
+                clean_text = f"[Document Attached: {file.filename}]"
 
-            if len(clean_text) > 3500:
-                clean_text = clean_text[:3500] + "\n[... Content truncated ...]"
+            if len(clean_text) > 4000:
+                clean_text = clean_text[:4000] + "\n[... Content truncated ...]"
 
             results.append({
                 "filename": file.filename,
@@ -133,28 +122,27 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
         except Exception:
             results.append({
                 "filename": file.filename,
-                "text": f"[Attached document: {file.filename}]"
+                "text": f"[Document Attached: {file.filename}]"
             })
 
     return {"files": results}
 
-def is_image_generation_request(prompt: str) -> Optional[str]:
-    """Catches all variations of image/photo generation in Hindi, Hinglish, & English"""
+def check_image_intent(prompt: str) -> Optional[str]:
+    """Catches all variations of image/photo generation requests"""
     p = prompt.lower().strip()
-    keywords = [
-        "photo banao", "photo bnao", "photo bna do", "photo bana do",
-        "image banao", "image bnao", "image bna do", "image bana do",
-        "tasveer banao", "tasveer bnao", "chitra banao",
-        "generate image", "create image", "make an image", "draw an image",
-        "ki photo", "ki image"
-    ]
-    if any(k in p for k in keywords):
-        # Extract core visual subject
-        clean = re.sub(r'(ek|ki|sundar|photo|image|tasveer|tasvir|chitra|banao|bnao|bna do|bana do|generate|create|make|draw|dikhao)', '', prompt, flags=re.IGNORECASE).strip()
+    img_keywords = ["photo", "image", "tasveer", "tasvir", "chitra", "picture"]
+    action_keywords = ["banao", "bnao", "bana do", "bna do", "generate", "create", "make", "draw", "dikhao"]
+
+    has_img = any(k in p for k in img_keywords)
+    has_action = any(k in p for k in action_keywords)
+
+    if has_img and has_action:
+        # Strip generation commands
+        clean = re.sub(r'(ek|ki|sundar|photo|image|tasveer|tasvir|chitra|picture|banao|bnao|bana do|bna do|generate|create|make|draw|dikhao|ye)', '', prompt, flags=re.IGNORECASE).strip()
         if len(clean) < 3:
-            clean = "grand royal rajasthani heritage fort palace golden hour cinematic"
+            clean = "majestic royal rajasthani heritage fort golden hour cinematic architecture"
         else:
-            clean = f"{clean}, cinematic lighting, highly detailed 8k photography"
+            clean = f"{clean}, ultra detailed, photorealistic, 8k resolution, cinematic lighting"
         return clean
     return None
 
@@ -162,24 +150,24 @@ def is_image_generation_request(prompt: str) -> Optional[str]:
 async def handle_universal_prompt(req: UniversalRequest):
     user_input = req.prompt.strip()
 
-    # Instant Image Generation handler (Never delegates to text model)
-    img_topic = is_image_generation_request(user_input)
-    if img_topic:
-        encoded = urllib.parse.quote(img_topic)
+    # Direct Image Generation
+    img_prompt = check_image_intent(user_input)
+    if img_prompt:
+        encoded = urllib.parse.quote(img_prompt)
         image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
         def serve_image():
-            yield f"![{img_topic}]({image_url})\n\n**यहाँ आपकी माँगी गई फ़ोटो प्रस्तुत है!**"
+            yield f"![{img_prompt}]({image_url})\n\n**यहाँ आपकी माँगी गई फ़ोटो प्रस्तुत है!**"
         return StreamingResponse(serve_image(), media_type="text/plain")
 
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, created for Rishikesh. You have ChatGPT Plus level precision.\n\n"
+            "You are Rishova AI, built for Rishikesh. You have ChatGPT Plus level precision.\n\n"
             "RULES:\n"
-            "1. DOCUMENT & CERTIFICATE ANALYSIS: When the user asks about an attached certificate, extract and state the EXACT recipient name, course name, issuing organization, and dates from the [HIGH-ACCURACY OCR CERTIFICATE DATA]. NEVER invent names or apologize.\n"
-            "2. REGIONAL DIALECTS: Reply fluently in Hindi, Hinglish, Marwari (Rajasthani), or English matching user tone.\n"
-            "3. NO LINKS: Never return external search links like Unsplash. Provide direct answers.\n"
-            "4. CLEAN MARKDOWN: Format details into neat bullet points or tables without leaking <think> tags."
+            "1. CERTIFICATE & DOCUMENT VERIFICATION: When user asks about a document, examine the text and state the exact Candidate Name, Course Name, and Organization. Never state that you don't have the data.\n"
+            "2. MULTILINGUAL & RAJASTHANI: Mirror the user's language (Hindi, Hinglish, Marwari, English).\n"
+            "3. NO METADATA/THINK TAGS: Deliver only the direct response.\n"
+            "4. NO LINKS: Do not give search links."
         )
     }
 
@@ -190,14 +178,13 @@ async def handle_universal_prompt(req: UniversalRequest):
         for m in req.messages:
             text = m.content.strip()
             text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code", "Here’s a beautiful", "दिए गए PDF को पढ़ने"]):
+            if text and not any(text.startswith(p) for p in ["Service", "Kripya", "API Error", "Error code", "I don't have the OCR data"]):
                 role = "assistant" if m.role == "assistant" else "user"
                 clean_history.append({"role": role, "content": text[:1500]})
         groq_messages.extend(clean_history[-4:])
 
     groq_messages.append({"role": "user", "content": user_input})
 
-    # Available dynamic models
     banned = ["whisper", "guard", "compound", "safeguard", "embed", "vision"]
     try:
         models_data = client.models.list().data
