@@ -1,6 +1,7 @@
 import os
 import io
 import re
+import asyncio
 from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,27 +37,33 @@ class UniversalRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"status": "Rishova AI Universal Backend Live"}
+    return {"status": "Rishova AI Live"}
 
-def get_live_web_context(query: str) -> str:
-    """Silently fetch live web search facts to eliminate hallucinations without user intervention."""
-    # Check if query likely needs factual verification (history, places, current events, facts)
-    clean_q = re.sub(r'[^\w\s]', '', query).strip()
-    if len(clean_q) < 4:
-        return ""
+def sync_search(query: str) -> str:
+    """Non-blocking quick search with hard limits"""
     try:
+        clean_q = re.sub(r'[^\w\s]', '', query).strip()
+        if len(clean_q) < 4:
+            return ""
         results = []
-        with DDGS() as ddgs:
-            # Search top 3 authoritative search results
-            for r in ddgs.text(clean_q, max_results=3):
+        with DDGS(timeout=3) as ddgs:
+            for r in ddgs.text(clean_q, max_results=2):
                 title = r.get("title", "")
                 body = r.get("body", "")
-                results.append(f"Source [{title}]: {body}")
+                if body:
+                    results.append(f"Fact: {body}")
         if results:
-            return "\n\n[LIVE VERIFIED WEB CONTEXT - USE THIS AS ABSOLUTE GROUND TRUTH FOR FACTS]:\n" + "\n".join(results)
+            return "\n[VERIFIED GROUND TRUTH FACTS]:\n" + "\n".join(results)
     except Exception:
         pass
     return ""
+
+async def get_live_web_context(query: str) -> str:
+    """Run search with a strict 3-second hard timeout so it NEVER hangs the request"""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(sync_search, query), timeout=3.5)
+    except Exception:
+        return ""
 
 @app.post("/api/upload")
 async def extract_multiple_files(files: List[UploadFile] = File(...)):
@@ -81,7 +88,7 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
                 clean_text = f"[Image/Scanned document: {file.filename}]"
 
             if len(clean_text) > 3500:
-                clean_text = clean_text[:3500] + "\n[... Content truncated ...]"
+                clean_text = clean_text[:3500] + "\n[... Truncated ...]"
 
             results.append({
                 "filename": file.filename,
@@ -90,7 +97,7 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
         except Exception:
             results.append({
                 "filename": file.filename,
-                "text": f"[Attached document: {file.filename}]"
+                "text": f"[Document: {file.filename}]"
             })
 
     return {"files": results}
@@ -99,21 +106,19 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
 async def handle_universal_prompt(req: UniversalRequest):
     user_input = req.prompt.strip()
 
-    # Step 1: Automatically gather live web facts in the background (Silent Web Grounding)
-    web_knowledge = get_live_web_context(user_input)
+    # Fetch web context with hard timeout - will NEVER freeze
+    web_knowledge = await get_live_web_context(user_input)
 
-    # Step 2: System prompt with complete Rajasthani dialect suite & strict factuality
     system_message = {
         "role": "system",
         "content": (
-            "You are Rishova AI, a world-class assistant with the reasoning depth and factual precision of ChatGPT Plus and Gemini.\n\n"
-            "STRICT RULES OF ACCURACY & DIALECTS:\n"
-            "1. ZERO HALLUCINATIONS: Historical facts, dynasties, rulers, and dates MUST be 100% accurate (e.g. Mehrangarh Fort was founded in 1459 by Rao Jodha; Maharana Pratap fought Akbar/Man Singh at Haldighati in 1576 and was of the Sisodia dynasty of Mewar). Strictly adhere to the verified web context provided.\n"
-            "2. COMPLETE RAJASTHANI & GLOBAL LANGUAGE MASTERY: Fluently speak and understand all dialects of Rajasthan including Marwari (जोधपुर/बीकानेर/बाड़मेर), Mewari (उदयपुर/चित्तौड़गढ़), Dhundhari (जयपुर/दौसा), Shekhawati (सीकर/झुंझुनूं/चुरू), Hadoti (कोटा/बूंदी), Wagdi (डूंगरपुर/बांसवाड़ा), along with Hindi, Hinglish, English, and all Indian & world languages.\n"
-            "3. MIRROR THE USER'S EXACT TONE: If the user asks in Marwari/Rajasthani, respond in pure, authentic Rajasthani/Marwari while keeping all historical facts impeccably accurate.\n"
-            "4. SEAMLESS OPERATION: Never disclose or announce that you used web search or background browsing. Give the answer directly and naturally.\n"
-            "5. NO THINKING LEAKS: Never print internal notes, planning, drafts, or <think> tags.\n"
-            "6. CLEAN FORMATTING: Structure answers with neat Markdown tables, bold headers, and crisp bullet points."
+            "You are Rishova AI, an ultra-fast, world-class AI assistant.\n\n"
+            "ACCURACY & DIALECT REQUIREMENTS:\n"
+            "1. FACTUAL HONESTY: Mehrangarh Fort was built by Rao Jodha in 1459 on Chidiyatunk hill in Jodhpur. Maharana Pratap belonged to the Sisodia dynasty of Mewar. Always keep historical and general facts 100% accurate.\n"
+            "2. REGIONAL & GLOBAL LANGUAGES: Expertly understand and write in Marwari (मारवाड़ी), Mewari, Dhundhari, Shekhawati, Hadoti, Wagdi, Hindi, Hinglish, English, and all Indian/global languages.\n"
+            "3. MIRROR THE USER'S TONE: If the user asks in Marwari/Rajasthani, respond warmly and fluently in pure Marwari script or Rajasthani style.\n"
+            "4. NO INTERNAL TAGS: Jump straight to the answer without any thought traces or <think> tags.\n"
+            "5. BEAUTIFUL FORMATTING: Present structured details using clean Markdown tables, bullet points, and bold terms."
         )
     }
 
@@ -129,10 +134,10 @@ async def handle_universal_prompt(req: UniversalRequest):
                 clean_history.append({"role": role, "content": text[:1500]})
         groq_messages.extend(clean_history[-6:])
 
-    # Inject live web context directly into the prompt without breaking conversation flow
-    final_user_content = user_input + web_knowledge
+    final_user_content = user_input + (f"\n\n{web_knowledge}" if web_knowledge else "")
     groq_messages.append({"role": "user", "content": final_user_content})
 
+    # Prioritize fastest reliable active models
     preferred_models = [
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
@@ -148,7 +153,7 @@ async def handle_universal_prompt(req: UniversalRequest):
                 stream = client.chat.completions.create(
                     model=model_id,
                     messages=groq_messages,
-                    temperature=0.2,          # Low temperature ensures strict fact adherence
+                    temperature=0.3,
                     presence_penalty=0.1,
                     frequency_penalty=0.1,
                     max_tokens=2000,
@@ -160,7 +165,7 @@ async def handle_universal_prompt(req: UniversalRequest):
                 continue
 
         if not stream:
-            yield f"Service busy. Please retry in a moment: {error_log[:100]}"
+            yield f"Connection issue. Details: {error_log[:100]}"
             return
 
         in_think_block = False
