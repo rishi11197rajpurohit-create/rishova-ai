@@ -92,7 +92,6 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
                         if text:
                             extracted_text += text + "\n"
 
-                    # If scanned/no selectable text, render first page to image for Vision OCR
                     if len(extracted_text.strip()) < 25 and len(pdf.pages) > 0:
                         pix = pdf.pages[0].to_image(resolution=150).original
                         buf = io.BytesIO()
@@ -127,47 +126,57 @@ async def extract_multiple_files(files: List[UploadFile] = File(...)):
 
     return {"files": results}
 
-def check_image_intent(prompt: str) -> Optional[str]:
-    """Catches all variations of image/photo generation requests"""
+def translate_to_english_image_prompt(user_text: str) -> str:
+    """Uses ultra-fast model to translate any Hindi/Marwari visual description into an exact English DALL-E prompt"""
+    try:
+        res = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You convert image requests into concise, highly descriptive English visual prompts for AI image generation. Output ONLY the English prompt. If user asks for a fort, specify fort architecture, walls, towers, landscape. Do not add explanations."
+                },
+                {
+                    "role": "user",
+                    "content": f"Create an English visual generation prompt for: {user_text}"
+                }
+            ],
+            temperature=0.3,
+            max_tokens=100
+        )
+        prompt = res.choices[0].message.content.strip().replace('"', '')
+        return f"{prompt}, 8k photorealistic, hyperdetailed cinematic lighting"
+    except Exception:
+        return "majestic royal rajasthani heritage fort palace architecture golden hour 8k photorealistic"
+
+def check_image_intent(prompt: str) -> bool:
     p = prompt.lower().strip()
-    img_keywords = ["photo", "image", "tasveer", "tasvir", "chitra", "picture"]
-    action_keywords = ["banao", "bnao", "bana do", "bna do", "generate", "create", "make", "draw", "dikhao"]
-
-    has_img = any(k in p for k in img_keywords)
-    has_action = any(k in p for k in action_keywords)
-
-    if has_img and has_action:
-        # Strip generation commands
-        clean = re.sub(r'(ek|ki|sundar|photo|image|tasveer|tasvir|chitra|picture|banao|bnao|bana do|bna do|generate|create|make|draw|dikhao|ye)', '', prompt, flags=re.IGNORECASE).strip()
-        if len(clean) < 3:
-            clean = "majestic royal rajasthani heritage fort golden hour cinematic architecture"
-        else:
-            clean = f"{clean}, ultra detailed, photorealistic, 8k resolution, cinematic lighting"
-        return clean
-    return None
+    img_keywords = ["photo", "image", "tasveer", "tasvir", "chitra", "picture", "फोटो", "तस्वीर", "चित्र"]
+    action_keywords = ["banao", "bnao", "bana do", "bna do", "generate", "create", "make", "draw", "dikhao", "बनाओ", "बना दो", "दिखाओ"]
+    return any(k in p for k in img_keywords) and any(k in p for k in action_keywords)
 
 @app.post("/api/ai/universal")
 async def handle_universal_prompt(req: UniversalRequest):
     user_input = req.prompt.strip()
 
-    # Direct Image Generation
-    img_prompt = check_image_intent(user_input)
-    if img_prompt:
-        encoded = urllib.parse.quote(img_prompt)
-        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
+    # Accurate Image Generation
+    if check_image_intent(user_input):
+        english_prompt = translate_to_english_image_prompt(user_input)
+        encoded = urllib.parse.quote(english_prompt)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed=99"
         def serve_image():
-            yield f"![{img_prompt}]({image_url})\n\n**यहाँ आपकी माँगी गई फ़ोटो प्रस्तुत है!**"
+            yield f"![{english_prompt}]({image_url})\n\n**यहाँ आपकी माँगी गई फ़ोटो प्रस्तुत है!**"
         return StreamingResponse(serve_image(), media_type="text/plain")
 
+    # Regular chat handler
     system_message = {
         "role": "system",
         "content": (
             "You are Rishova AI, built for Rishikesh. You have ChatGPT Plus level precision.\n\n"
             "RULES:\n"
-            "1. CERTIFICATE & DOCUMENT VERIFICATION: When user asks about a document, examine the text and state the exact Candidate Name, Course Name, and Organization. Never state that you don't have the data.\n"
+            "1. CERTIFICATE & DOCUMENT VERIFICATION: When user asks about a document, examine the text and state the exact Candidate Name, Course Name, and Organization.\n"
             "2. MULTILINGUAL & RAJASTHANI: Mirror the user's language (Hindi, Hinglish, Marwari, English).\n"
-            "3. NO METADATA/THINK TAGS: Deliver only the direct response.\n"
-            "4. NO LINKS: Do not give search links."
+            "3. NO METADATA/THINK TAGS: Deliver only the direct response."
         )
     }
 

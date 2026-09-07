@@ -300,22 +300,6 @@ export default function App() {
     const titleSeed = displayPrompt.replace(/\[Attached.*?\]/g, "").trim() || "Chat";
     const newTitle = isFirst ? (titleSeed.slice(0, 26) + (titleSeed.length > 26 ? "..." : "")) : currentSession.title;
 
-    // IF IMAGE REQUEST: Return instantly with generated picture!
-    if (imageSubject) {
-      const encoded = encodeURIComponent(imageSubject);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 10000)}`;
-      const aiImageMsg = {
-        role: "assistant",
-        content: `![${imageSubject}](${imageUrl})\n\n**यहाँ आपकी माँगी गई फ़ोटो प्रस्तुत है!**`
-      };
-
-      setSessions((prev) =>
-        prev.map((s) => (s.id === currentId ? { ...s, title: newTitle, messages: [...baseHistory, userMsg, aiImageMsg] } : s))
-      );
-      setInput("");
-      return;
-    }
-
     // Regular LLM conversation stream
     const initialAiMsg = { role: "assistant", content: "" };
     const conversationPayload = [...baseHistory, { role: "user", content: fullPrompt }];
